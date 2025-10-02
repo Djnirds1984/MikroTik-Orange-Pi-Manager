@@ -5,41 +5,38 @@ const { RouterOSClient } = require('node-routeros');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const { ROUTER_HOST, ROUTER_USER, ROUTER_PASSWORD, ROUTER_PORT } = process.env;
-
-if (!ROUTER_HOST || !ROUTER_USER) {
-    console.error("Router configuration (HOST, USER) is missing in .env file.");
-    process.exit(1);
-}
 
 app.use(cors());
 app.use(express.json());
 
-const connectToRouter = async () => {
+const connectToRouter = async ({ host, user, password, port }) => {
+    if (!host || !user) {
+        throw new Error("Router configuration (host, user) is missing in the request.");
+    }
     const client = new RouterOSClient({
-        host: ROUTER_HOST,
-        user: ROUTER_USER,
-        password: ROUTER_PASSWORD || '',
-        port: ROUTER_PORT || 8728,
+        host,
+        user,
+        password: password || '',
+        port: port || 8728,
         timeout: 10 // seconds
     });
     try {
         await client.connect();
         return client;
     } catch (err) {
-        console.error("Failed to connect to router:", err.message);
-        throw new Error("Could not connect to the MikroTik router. Check connection details in .env and ensure the router's API service is enabled.");
+        console.error(`Failed to connect to router at ${host}:`, err.message);
+        throw new Error(`Could not connect to the MikroTik router. Check connection details and ensure the router's API service is enabled at ${host}.`);
     }
 };
 
-const handleRequest = async (res, callback) => {
+const handleRequest = async (req, res, callback) => {
     let client;
     try {
-        client = await connectToRouter();
+        client = await connectToRouter(req.body);
         const data = await callback(client);
         res.json(data);
     } catch (err) {
-        console.error("Error during API request processing:", err);
+        console.error("Error during API request processing:", err.message);
         res.status(500).json({ error: err.message });
     } finally {
         if (client && client.connected) {
@@ -48,8 +45,8 @@ const handleRequest = async (res, callback) => {
     }
 };
 
-app.get('/api/system-info', (req, res) => {
-    handleRequest(res, async (client) => {
+app.post('/api/system-info', (req, res) => {
+    handleRequest(req, res, async (client) => {
         const [resource, routerboard] = await Promise.all([
             client.write('/system/resource/print'),
             client.write('/system/routerboard/print')
@@ -77,8 +74,8 @@ app.get('/api/system-info', (req, res) => {
     });
 });
 
-app.get('/api/interfaces', (req, res) => {
-    handleRequest(res, async (client) => {
+app.post('/api/interfaces', (req, res) => {
+    handleRequest(req, res, async (client) => {
         const interfaces = await client.write('/interface/print');
         if (!interfaces || interfaces.length === 0) {
             return [];
@@ -102,27 +99,23 @@ app.get('/api/interfaces', (req, res) => {
     });
 });
 
-app.get('/api/hotspot-clients', (req, res) => {
-    handleRequest(res, async (client) => {
+app.post('/api/hotspot-clients', (req, res) => {
+    handleRequest(req, res, async (client) => {
         let clients = [];
         try {
-            // This command can fail if the hotspot package is not installed or enabled.
-            // We catch the error and return an empty array instead of crashing.
             clients = await client.write('/ip/hotspot/active/print');
         } catch (err) {
             console.warn("Could not fetch hotspot clients. This is normal if hotspot is not configured. Error:", err.message);
-            // Intentionally returning an empty array on failure.
         }
         
         return clients.map(client => ({
             macAddress: client['mac-address'],
             uptime: client.uptime,
-            signal: client['signal-strength'] || 'N/A', // Signal strength is not always available
+            signal: client['signal-strength'] || 'N/A',
         }));
     });
 });
 
 app.listen(PORT, () => {
-    console.log(`MikroTik proxy server listening on port ${PORT}`);
-    console.log(`Attempting to connect to router at ${ROUTER_HOST}:${ROUTER_PORT || 8728}`);
+    console.log(`MikroTik stateless proxy server listening on port ${PORT}`);
 });

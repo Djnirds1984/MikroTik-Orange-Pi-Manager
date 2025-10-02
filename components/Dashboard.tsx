@@ -7,8 +7,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService';
-import type { SystemInfo, InterfaceWithHistory, HotspotClient, Interface } from '../types';
-import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon } from '../constants';
+import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types';
+import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants';
 import { Loader } from './Loader';
 
 
@@ -56,7 +56,11 @@ const formatRate = (bps: number): string => {
     return `${(bps / 1000000000).toFixed(2)} Gbit/s`;
 };
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  selectedRouter: RouterConfigWithId | null;
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
     const [hotspotClients, setHotspotClients] = useState<HotspotClient[]>([]);
@@ -64,11 +68,17 @@ export const Dashboard: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
 
     const initialFetch = useCallback(async () => {
+        if (!selectedRouter) {
+            setIsLoading(false);
+            return;
+        }
+        setIsLoading(true);
+        setError(null);
         try {
             const [sysInfoData, interfacesData, hotspotData] = await Promise.all([
-              getSystemInfo(),
-              getInterfaces(),
-              getHotspotClients(),
+              getSystemInfo(selectedRouter),
+              getInterfaces(selectedRouter),
+              getHotspotClients(selectedRouter),
             ]);
     
             setSystemInfo(sysInfoData);
@@ -86,22 +96,22 @@ export const Dashboard: React.FC = () => {
     
           } catch (err) {
             console.error("Failed to fetch dashboard data:", err);
-            setError("Could not connect to the router. Please ensure the backend proxy is running and configured correctly.");
+            setError(`Could not connect to router "${selectedRouter.name}". Check its configuration and ensure the backend proxy is running.`);
           } finally {
             setIsLoading(false);
           }
-    }, []);
+    }, [selectedRouter]);
 
     useEffect(() => {
         initialFetch();
     }, [initialFetch]);
 
     useEffect(() => {
-        if (isLoading || error || interfaces.length === 0) return;
+        if (!selectedRouter || isLoading || error || interfaces.length === 0) return;
 
         const interval = setInterval(async () => {
             try {
-                const updatedInterfacesData = await getInterfaces();
+                const updatedInterfacesData = await getInterfaces(selectedRouter);
                 setInterfaces(currentInterfaces =>
                     currentInterfaces.map(currentIface => {
                         const updatedData = updatedInterfacesData.find(u => u.name === currentIface.name);
@@ -122,18 +132,28 @@ export const Dashboard: React.FC = () => {
                 );
             } catch (err) {
                 console.error("Failed to poll interface data:", err);
-                // Optionally set an error state for polling failures
             }
-        }, 2000); // Poll for new data every 2 seconds
+        }, 2000);
 
         return () => clearInterval(interval);
-    }, [isLoading, error, interfaces]);
+    }, [isLoading, error, interfaces, selectedRouter]);
+
+  if (!selectedRouter) {
+    return (
+        <div className="flex flex-col items-center justify-center h-96 text-center bg-slate-800 rounded-lg border border-slate-700">
+            <RouterIcon className="w-16 h-16 text-slate-600 mb-4" />
+            <h2 className="text-2xl font-bold text-slate-200">Welcome to the Dashboard</h2>
+            <p className="mt-2 text-slate-400">Please select a router from the dropdown in the header to view its status.</p>
+            <p className="mt-1 text-slate-500 text-sm">If you haven't added any routers yet, go to the 'Routers' page.</p>
+        </div>
+    );
+  }
 
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <Loader />
-        <p className="mt-4 text-orange-400">Connecting to router...</p>
+        <p className="mt-4 text-orange-400">Connecting to {selectedRouter.name}...</p>
       </div>
     );
   }

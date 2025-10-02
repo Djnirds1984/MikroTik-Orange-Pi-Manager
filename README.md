@@ -1,25 +1,26 @@
 # MikroTik Orange Pi Manager
 
-A modern, responsive web dashboard for managing your MikroTik router, specifically designed to be lightweight enough to run on an Orange Pi or similar single-board computer. It features a real-time monitoring dashboard and a powerful AI Script Assistant powered by the Google Gemini API.
+A modern, responsive web dashboard for managing your MikroTik routers, specifically designed to be lightweight enough to run on an Orange Pi or similar single-board computer. It features a real-time monitoring dashboard and a powerful AI Script Assistant powered by the Google Gemini API.
 
 ![Screenshot of the MikroTik Orange Pi Manager Dashboard](./screenshot.png) <!-- Assuming a screenshot will be added later -->
 
 ## Features
 
-- **Real-time Dashboard:** Connects to your router to monitor system information, resource usage (CPU/Memory), and live interface traffic with dynamic graphs.
-- **Live Data:** Fetches all data directly from your router via a secure backend proxy.
-- **Hotspot Client List:** See currently connected hotspot clients at a glance.
-- **AI Script Assistant:** Describe a networking task in plain English (e.g., "Block Facebook for the guest network"), and the AI will generate the corresponding RouterOS terminal script.
-- **Updater (Simulated):** Check for new versions of the management panel from a GitHub repository.
-- **Responsive Design:** A clean, modern UI that works on both desktop and mobile browsers.
+-   **Multi-Router Support:** Add, edit, and switch between multiple router configurations seamlessly.
+-   **Real-time Dashboard:** Connects to your selected router to monitor system information, resource usage (CPU/Memory), and live interface traffic with dynamic graphs.
+-   **Live Data:** Fetches all data directly from your router via a secure, stateless backend proxy.
+-   **Hotspot Client List:** See currently connected hotspot clients at a glance.
+-   **AI Script Assistant:** Describe a networking task in plain English (e.g., "Block Facebook for the guest network"), and the AI will generate the corresponding RouterOS terminal script.
+-   **Updater (Simulated):** Check for new versions of the management panel from a GitHub repository.
+-   **Responsive Design:** A clean, modern UI that works on both desktop and mobile browsers.
 
 ## Technical Architecture
 
 This project consists of two main parts: a frontend web application and a backend proxy server.
 
-1.  **Frontend (This Application):** A static web application built with React and TypeScript. It provides the user interface and is served from a web server on your Orange Pi. It does **not** connect to the router directly.
+1.  **Frontend (This Application):** A static web application built with React and TypeScript. It provides the user interface where you configure and manage your routers. Router details are stored in your browser's local storage.
 
-2.  **Backend Proxy (`/proxy` directory):** A simple Node.js server that you run on your Orange Pi. Its only job is to act as a secure bridge between the frontend and the router. It receives simple web requests from the frontend, connects to the MikroTik API to fetch real data, and sends it back to the frontend.
+2.  **Backend Proxy (`/proxy` directory):** A simple, **stateless** Node.js server that you run on your Orange Pi. It acts as a secure bridge between the frontend and your routers. It receives requests from the frontend (including the credentials for the target router) and makes the API connection on its behalf.
 
 This separation is necessary because web browsers, for security reasons, cannot make the type of direct network connection required to talk to the MikroTik API.
 
@@ -31,8 +32,6 @@ This separation is necessary because web browsers, for security reasons, cannot 
 
 ## Setup and Installation
 
-You will need to set up and run both the **Backend Proxy** and the **Frontend**.
-
 ### Prerequisites
 
 -   Node.js and `npm` installed on your Orange Pi (or development machine).
@@ -40,20 +39,20 @@ You will need to set up and run both the **Backend Proxy** and the **Frontend**.
 
 ### Part 1: MikroTik Router Configuration
 
-Before running the proxy, you need to enable the API service on your router.
+For **each router** you want to manage, you need to enable the API service.
 
 1.  Log in to your MikroTik router (using WinBox or the web interface).
 2.  Go to **IP -> Services**.
-3.  Find the service named `api` (or `api-ssl` for encrypted connections). Make sure it is enabled. Note the port number (default is `8728` for `api` and `8729` for `api-ssl`).
+3.  Find the service named `api`. Make sure it is enabled. Note the port number (default is `8728`).
 4.  It's highly recommended to create a dedicated user for the API with limited permissions. Go to **System -> Users**.
     -   Click 'Add New'.
     -   Give it a username (e.g., `api-user`).
-    -   Assign it to a group. The `read` group is sufficient for this dashboard.
+    -   Assign it to the `read` group (this is sufficient for the dashboard).
     -   Set a strong password.
 
 ### Part 2: Backend Proxy Setup
 
-The backend proxy is located in the `/proxy` directory.
+The backend proxy is located in the `/proxy` directory. Its setup is very simple as it no longer stores router credentials.
 
 1.  **Navigate to the proxy directory:**
     ```bash
@@ -65,27 +64,17 @@ The backend proxy is located in the `/proxy` directory.
     npm install
     ```
 
-3.  **Configure Environment Variables:**
-    -   Copy the example environment file:
-        ```bash
-        cp .env.example .env
+3.  **Configure the Port (Optional):**
+    -   If you want the proxy to run on a port other than the default `3001`, you can create a `.env` file in the `/proxy` directory and add:
         ```
-    -   Edit the new `.env` file with your router's details:
-        ```
-        ROUTER_HOST=192.168.88.1
-        ROUTER_USER=api-user
-        ROUTER_PASSWORD=your_strong_password_here
-        ROUTER_PORT=8728
-
-        # Port the proxy server will run on
-        PORT=3001
+        PORT=your_desired_port
         ```
 
 4.  **Run the proxy server:**
     ```bash
     npm start
     ```
-    The server will start and listen on port 3001. You can keep it running in the background using a tool like `pm2`.
+    The server will start. You can keep it running in the background using a tool like `pm2`.
 
 ### Part 3: Frontend Setup
 
@@ -95,7 +84,7 @@ The backend proxy is located in the `/proxy` directory.
         ```bash
         cp .env.example .env
         ```
-    -   Add your API key to this file. This key is used by the frontend and requires a build step if you are not using a development server that supports it.
+    -   Add your API key to this file.
 
 2.  **Serve the Frontend:**
     -   The frontend consists of static files (`index.html`, etc.). You need to serve these from a web server.
@@ -110,7 +99,9 @@ The backend proxy is located in the `/proxy` directory.
 
 1.  Start the backend proxy: `cd proxy && npm start`.
 2.  Start your frontend web server.
-3.  Open a web browser and navigate to the IP address of your Orange Pi. You should see the dashboard, now populated with live data from your router.
+3.  Open a web browser and navigate to the IP address of your Orange Pi.
+4.  Go to the **Routers** page and add the connection details for your MikroTik devices.
+5.  Use the dropdown in the header to select a router and view its dashboard.
 
 ## Disclaimer
 

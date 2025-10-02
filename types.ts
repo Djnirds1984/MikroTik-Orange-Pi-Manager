@@ -36,3 +36,15 @@ export interface GitHubRelease {
   published_at: string;
   body: string;
 }
+
+export interface RouterConfig {
+  name: string;
+  host: string;
+  user: string;
+  password?: string;
+  port: number;
+}
+
+export interface RouterConfigWithId extends RouterConfig {
+  id: string;
+}
