@@ -34,47 +34,15 @@ This separation is necessary because web browsers, for security reasons, cannot 
 
 ## Deployment on Orange Pi One (Step-by-Step Guide)
 
-This guide will walk you through deploying the entire application on your Orange Pi One.
+This guide will walk you through deploying the entire application on your Orange Pi One using a Git-based workflow.
 
 ### **Prerequisites**
 
 -   An Orange Pi One (or similar SBC) with a power supply.
 -   An SD card with a fresh installation of Armbian or Debian.
 -   You can connect to your Orange Pi via SSH.
--   You have cloned this project's files to your main computer.
 
-### **Step 1: Prepare the Orange Pi**
-
-First, we need to install the necessary software: Node.js, a process manager (`pm2`), and a web server (`nginx`).
-
-1.  **Connect via SSH and Update System:**
-    ```bash
-    ssh your_user@your_orangepi_ip
-    sudo apt update && sudo apt upgrade -y
-    ```
-
-2.  **Install Node.js:** The default version in `apt` can be old. We'll use the NodeSource repository for a modern version.
-    ```bash
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt install -y nodejs
-    ```
-    Verify the installation:
-    ```bash
-    node -v  # Should show v20.x.x
-    npm -v   # Should show a recent version
-    ```
-
-3.  **Install PM2 Process Manager:** This will keep our backend proxy running, even after reboots.
-    ```bash
-    sudo npm install pm2 -g
-    ```
-
-4.  **Install Nginx Web Server:** This will serve our frontend application.
-    ```bash
-    sudo apt install -y nginx
-    ```
-
-### **Step 2: MikroTik Router Configuration**
+### **Step 1: MikroTik Router Configuration**
 
 For **each router** you want to manage, you need to enable the API service.
 
@@ -87,28 +55,79 @@ For **each router** you want to manage, you need to enable the API service.
     -   Assign it to the `read` group.
     -   Set a strong password.
 
-### **Step 3: Deploy the Backend Proxy**
+### **Step 2: Prepare the Orange Pi**
 
-Now, we'll copy the backend code to the Orange Pi and get it running.
+First, we need to install the necessary software: Git, Node.js, a process manager (`pm2`), and a web server (`nginx`).
 
-1.  **From your main computer**, copy the `proxy` directory to your Orange Pi. Replace `your_user@your_orangepi_ip` with your details.
+1.  **Connect via SSH and Update System:**
     ```bash
-    # Run this command from the project's root directory on your computer
-    scp -r proxy/ your_user@your_orangepi_ip:~/
+    ssh your_user@your_orangepi_ip
+    sudo apt update && sudo apt upgrade -y
+    ```
+    
+2.  **Install Git:**
+    ```bash
+    sudo apt install -y git
     ```
 
-2.  **On the Orange Pi (via SSH)**, navigate into the directory and install its dependencies.
+3.  **Install Node.js:** The default version in `apt` can be old. We'll use the NodeSource repository for a modern version.
     ```bash
-    cd ~/proxy
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt install -y nodejs
+    ```
+    Verify the installation:
+    ```bash
+    node -v  # Should show v20.x.x
+    npm -v   # Should show a recent version
+    ```
+
+4.  **Install PM2 Process Manager:** This will keep our backend proxy running, even after reboots.
+    ```bash
+    sudo npm install pm2 -g
+    ```
+
+5.  **Install Nginx Web Server:** This will serve our frontend application.
+    ```bash
+    sudo apt install -y nginx
+    ```
+
+### **Step 3: Clone and Configure the Project**
+
+Now we'll download the project directly from your GitHub repository onto the Orange Pi.
+
+1.  **Clone Your Repository:**
+    ```bash
+    # Run this from your home directory (~)
+    git clone https://github.com/Djnirds1984/MikroTik-Orange-Pi-Manager.git
+    ```
+
+2.  **Navigate into the Project Directory:**
+    ```bash
+    cd MikroTik-Orange-Pi-Manager
+    ```
+
+3.  **(Optional) Configure the AI Assistant:**
+    -   If you want to use the AI Script Generator, you need a Google Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+    -   Edit the `env.js` file:
+        ```bash
+        nano env.js
+        ```
+    -   Replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key. Save the file (Ctrl+X, then Y, then Enter).
+
+### **Step 4: Deploy the Backend Proxy**
+
+1.  **Navigate into the `proxy` directory and install its dependencies:**
+    ```bash
+    cd proxy
     npm install
     ```
 
-3.  **Start the server with PM2:**
+2.  **Start the server with PM2:**
     ```bash
     pm2 start server.js --name "mikrotik-proxy"
     ```
 
-4.  **Enable PM2 to start on boot:**
+3.  **Enable PM2 to start on boot:**
     ```bash
     pm2 startup
     # Follow the on-screen instructions (it will give you a command to copy/paste)
@@ -116,32 +135,9 @@ Now, we'll copy the backend code to the Orange Pi and get it running.
     ```
     Your backend is now running and will restart automatically.
 
-### **Step 4: Deploy the Frontend Application**
+### **Step 5: Deploy the Frontend Application**
 
-Next, we'll set up Nginx to serve the frontend files.
-
-1.  **From your main computer**, copy all frontend files to a new directory on the Orange Pi.
-    ```bash
-    # Run this command from the project's root directory on your computer
-    # Note: This syncs everything EXCEPT the proxy directory.
-    rsync -av --exclude 'proxy' ./ your_user@your_orangepi_ip:~/mikrotik-manager-frontend
-    ```
-
-2.  **(Optional) Configure the AI Assistant:**
-    -   If you want to use the AI Script Generator, you need a Google Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-    -   **On the Orange Pi**, edit the `env.js` file you just copied.
-        ```bash
-        nano ~/mikrotik-manager-frontend/env.js
-        ```
-    -   Replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key. Save the file (Ctrl+X, then Y, then Enter).
-
-3.  **Move the frontend files to the web server directory:**
-    ```bash
-    sudo mkdir -p /var/www/mikrotik-manager
-    sudo rsync -a ~/mikrotik-manager-frontend/ /var/www/mikrotik-manager/
-    ```
-
-4.  **Configure Nginx:**
+1.  **Configure Nginx:**
     -   Create a new Nginx configuration file.
         ```bash
         sudo nano /etc/nginx/sites-available/mikrotik-manager
@@ -165,7 +161,18 @@ Next, we'll set up Nginx to serve the frontend files.
         ```
     -   Save the file (Ctrl+X, then Y, then Enter).
 
-5.  **Enable the new site and restart Nginx:**
+2.  **Move the frontend files to the web server directory:**
+    -   First, navigate back to the root of your project directory:
+        ```bash
+        cd ~/MikroTik-Orange-Pi-Manager
+        ```
+    -   Create the web directory and sync the files using `rsync`:
+        ```bash
+        sudo mkdir -p /var/www/mikrotik-manager
+        sudo rsync -a --delete ./ /var/www/mikrotik-manager/ --exclude 'proxy' --exclude '.git' --exclude 'README.md'
+        ```
+
+3.  **Enable the new site and restart Nginx:**
     ```bash
     sudo ln -s /etc/nginx/sites-available/mikrotik-manager /etc/nginx/sites-enabled/
     sudo rm /etc/nginx/sites-enabled/default # Remove the default config
@@ -173,7 +180,7 @@ Next, we'll set up Nginx to serve the frontend files.
     sudo systemctl restart nginx
     ```
 
-### **Step 5: Access Your Application!**
+### **Step 6: Access Your Application!**
 
 You are all set!
 
@@ -181,9 +188,39 @@ You are all set!
 2.  Navigate to the IP address of your Orange Pi (e.g., `http://192.168.1.50`).
 3.  You should see the MikroTik Manager interface.
 4.  Go to the **Routers** page and add the connection details for your MikroTik devices.
-5.  Use the dropdown in the header to select a router and enjoy your live dashboard!
 
 ---
+
+## Updating the Application
+
+When you push new changes to your GitHub repository, you can easily update the application on your Orange Pi.
+
+1.  **Connect to your Orange Pi via SSH.**
+
+2.  **Navigate to the project directory:**
+    ```bash
+    cd ~/MikroTik-Orange-Pi-Manager
+    ```
+
+3.  **Pull the latest changes from GitHub:**
+    ```bash
+    git pull origin main
+    ```
+
+4.  **Update backend dependencies and restart the proxy:**
+    ```bash
+    cd proxy
+    npm install # In case dependencies have changed
+    pm2 restart mikrotik-proxy
+    cd ..
+    ```
+
+5.  **Re-sync the frontend files to the web directory:**
+    ```bash
+    sudo rsync -a --delete ./ /var/www/mikrotik-manager/ --exclude 'proxy' --exclude '.git' --exclude 'README.md'
+    ```
+
+6.  **Hard-refresh your browser** (`Ctrl+Shift+R` or `Cmd+Shift+R`) to see the changes.
 
 ## Disclaimer
 
