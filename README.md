@@ -30,78 +30,160 @@ This separation is necessary because web browsers, for security reasons, cannot 
 -   **Backend:** Node.js, Express.js, `node-routeros`
 -   **AI:** Google Gemini API (`@google/genai`)
 
-## Setup and Installation
+---
 
-### Prerequisites
+## Deployment on Orange Pi One (Step-by-Step Guide)
 
--   Node.js and `npm` installed on your Orange Pi (or development machine).
--   A web server (like Nginx or Caddy) installed on your Orange Pi to serve the frontend files.
+This guide will walk you through deploying the entire application on your Orange Pi One.
 
-### Part 1: MikroTik Router Configuration
+### **Prerequisites**
+
+-   An Orange Pi One (or similar SBC) with a power supply.
+-   An SD card with a fresh installation of Armbian or Debian.
+-   You can connect to your Orange Pi via SSH.
+-   You have cloned this project's files to your main computer.
+
+### **Step 1: Prepare the Orange Pi**
+
+First, we need to install the necessary software: Node.js, a process manager (`pm2`), and a web server (`nginx`).
+
+1.  **Connect via SSH and Update System:**
+    ```bash
+    ssh your_user@your_orangepi_ip
+    sudo apt update && sudo apt upgrade -y
+    ```
+
+2.  **Install Node.js:** The default version in `apt` can be old. We'll use the NodeSource repository for a modern version.
+    ```bash
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt install -y nodejs
+    ```
+    Verify the installation:
+    ```bash
+    node -v  # Should show v20.x.x
+    npm -v   # Should show a recent version
+    ```
+
+3.  **Install PM2 Process Manager:** This will keep our backend proxy running, even after reboots.
+    ```bash
+    sudo npm install pm2 -g
+    ```
+
+4.  **Install Nginx Web Server:** This will serve our frontend application.
+    ```bash
+    sudo apt install -y nginx
+    ```
+
+### **Step 2: MikroTik Router Configuration**
 
 For **each router** you want to manage, you need to enable the API service.
 
 1.  Log in to your MikroTik router (using WinBox or the web interface).
 2.  Go to **IP -> Services**.
-3.  Find the service named `api`. Make sure it is enabled. Note the port number (default is `8728`).
-4.  It's highly recommended to create a dedicated user for the API with limited permissions. Go to **System -> Users**.
+3.  Find the service named `api`. Make sure it is **enabled**. Note the port number (default is `8728`).
+4.  (Highly Recommended) Create a dedicated, read-only user for the API. Go to **System -> Users**:
     -   Click 'Add New'.
     -   Give it a username (e.g., `api-user`).
-    -   Assign it to the `read` group (this is sufficient for the dashboard).
+    -   Assign it to the `read` group.
     -   Set a strong password.
 
-### Part 2: Backend Proxy Setup
+### **Step 3: Deploy the Backend Proxy**
 
-The backend proxy is located in the `/proxy` directory. Its setup is very simple as it no longer stores router credentials.
+Now, we'll copy the backend code to the Orange Pi and get it running.
 
-1.  **Navigate to the proxy directory:**
+1.  **From your main computer**, copy the `proxy` directory to your Orange Pi. Replace `your_user@your_orangepi_ip` with your details.
     ```bash
-    cd proxy
+    # Run this command from the project's root directory on your computer
+    scp -r proxy/ your_user@your_orangepi_ip:~/
     ```
 
-2.  **Install dependencies:**
+2.  **On the Orange Pi (via SSH)**, navigate into the directory and install its dependencies.
     ```bash
+    cd ~/proxy
     npm install
     ```
 
-3.  **Configure the Port (Optional):**
-    -   If you want the proxy to run on a port other than the default `3001`, you can create a `.env` file in the `/proxy` directory and add:
-        ```
-        PORT=your_desired_port
-        ```
-
-4.  **Run the proxy server:**
+3.  **Start the server with PM2:**
     ```bash
-    npm start
+    pm2 start server.js --name "mikrotik-proxy"
     ```
-    The server will start. You can keep it running in the background using a tool like `pm2`.
 
-### Part 3: Frontend Setup
+4.  **Enable PM2 to start on boot:**
+    ```bash
+    pm2 startup
+    # Follow the on-screen instructions (it will give you a command to copy/paste)
+    pm2 save
+    ```
+    Your backend is now running and will restart automatically.
 
-1.  **Configure the AI Assistant (Optional):**
-    -   The AI Script Generator requires a Google Gemini API key. If you want to use it, obtain a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-    -   In the project's **root** directory, create a `.env` file by copying the example:
+### **Step 4: Deploy the Frontend Application**
+
+Next, we'll set up Nginx to serve the frontend files.
+
+1.  **From your main computer**, copy all frontend files to a new directory on the Orange Pi.
+    ```bash
+    # Run this command from the project's root directory on your computer
+    # Note: This syncs everything EXCEPT the proxy directory.
+    rsync -av --exclude 'proxy' ./ your_user@your_orangepi_ip:~/mikrotik-manager-frontend
+    ```
+
+2.  **(Optional) Configure the AI Assistant:**
+    -   If you want to use the AI Script Generator, you need a Google Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+    -   **On the Orange Pi**, edit the `env.js` file you just copied.
         ```bash
-        cp .env.example .env
+        nano ~/mikrotik-manager-frontend/env.js
         ```
-    -   Add your API key to this file.
+    -   Replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key. Save the file (Ctrl+X, then Y, then Enter).
 
-2.  **Serve the Frontend:**
-    -   The frontend consists of static files (`index.html`, etc.). You need to serve these from a web server.
-    -   For local development, you can use a simple tool. From the project's **root** directory:
+3.  **Move the frontend files to the web server directory:**
+    ```bash
+    sudo mkdir -p /var/www/mikrotik-manager
+    sudo rsync -a ~/mikrotik-manager-frontend/ /var/www/mikrotik-manager/
+    ```
+
+4.  **Configure Nginx:**
+    -   Create a new Nginx configuration file.
         ```bash
-        # If you don't have it, install 'serve': npm install -g serve
-        serve .
+        sudo nano /etc/nginx/sites-available/mikrotik-manager
         ```
-    -   For deployment on your Orange Pi, copy all the frontend files (everything **except** the `proxy` directory) to your web server's root (e.g., `/var/www/html`).
+    -   Paste the following configuration into the file:
+        ```nginx
+        server {
+            listen 80 default_server;
+            listen [::]:80 default_server;
 
-### Running the Application
+            root /var/www/mikrotik-manager;
+            index index.html;
 
-1.  Start the backend proxy: `cd proxy && npm start`.
-2.  Start your frontend web server.
-3.  Open a web browser and navigate to the IP address of your Orange Pi.
+            server_name _;
+
+            location / {
+                # This is the key for single-page applications like React
+                try_files $uri /index.html;
+            }
+        }
+        ```
+    -   Save the file (Ctrl+X, then Y, then Enter).
+
+5.  **Enable the new site and restart Nginx:**
+    ```bash
+    sudo ln -s /etc/nginx/sites-available/mikrotik-manager /etc/nginx/sites-enabled/
+    sudo rm /etc/nginx/sites-enabled/default # Remove the default config
+    sudo nginx -t # Test the configuration
+    sudo systemctl restart nginx
+    ```
+
+### **Step 5: Access Your Application!**
+
+You are all set!
+
+1.  Open a web browser on a device on the same network as your Orange Pi.
+2.  Navigate to the IP address of your Orange Pi (e.g., `http://192.168.1.50`).
+3.  You should see the MikroTik Manager interface.
 4.  Go to the **Routers** page and add the connection details for your MikroTik devices.
-5.  Use the dropdown in the header to select a router and view its dashboard.
+5.  Use the dropdown in the header to select a router and enjoy your live dashboard!
+
+---
 
 ## Disclaimer
 

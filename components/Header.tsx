@@ -31,7 +31,8 @@ const RouterSelector: React.FC<{
   routers: RouterConfigWithId[];
   selectedRouter: RouterConfigWithId | null;
   onSelectRouter: (id: string) => void;
-}> = ({ routers, selectedRouter, onSelectRouter }) => {
+  setCurrentView: (view: 'dashboard' | 'scripting' | 'updater' | 'routers') => void;
+}> = ({ routers, selectedRouter, onSelectRouter, setCurrentView }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -47,9 +48,13 @@ const RouterSelector: React.FC<{
 
     if (routers.length === 0) {
         return (
-            <div className="px-3 py-2 text-sm text-slate-400 bg-slate-700 rounded-md">
-                No Routers Configured
-            </div>
+            <button
+                onClick={() => setCurrentView('routers')}
+                className="px-4 py-2 text-sm text-slate-100 bg-orange-600 hover:bg-orange-500 rounded-md transition-colors font-semibold"
+                title="Go to Routers page to add a new router"
+            >
+                Add a Router
+            </button>
         );
     }
     
@@ -98,7 +103,12 @@ export const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView, rou
           </div>
         </div>
         <div className="flex items-center gap-4">
-            <RouterSelector routers={routers} selectedRouter={selectedRouter} onSelectRouter={onSelectRouter} />
+            <RouterSelector 
+                routers={routers} 
+                selectedRouter={selectedRouter} 
+                onSelectRouter={onSelectRouter} 
+                setCurrentView={setCurrentView} 
+            />
             <nav className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg">
                 <NavLink label="Dashboard" isActive={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
                 <NavLink label="Routers" isActive={currentView === 'routers'} onClick={() => setCurrentView('routers')} />
