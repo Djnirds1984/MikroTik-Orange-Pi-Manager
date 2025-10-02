@@ -1,4 +1,4 @@
-import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfigWithId } from '../types';
+import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse } from '../types';
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
@@ -37,4 +37,25 @@ export const getHotspotClients = async (router: RouterConfigWithId): Promise<Hot
 export const getLogs = async (): Promise<LogEntry[]> => {
   console.warn("getLogs is not implemented in the backend proxy.");
   return Promise.resolve([]);
+};
+
+export const testRouterConnection = async (routerConfig: RouterConfig): Promise<TestConnectionResponse> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/test-connection`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(routerConfig),
+        });
+        // We expect JSON response even for errors from the proxy
+        return response.json() as Promise<TestConnectionResponse>;
+    } catch (error) {
+        console.error("Failed to send test connection request:", error);
+        // This catches network errors, like if the proxy is down
+        return {
+            success: false,
+            message: "Failed to connect to the backend proxy server."
+        };
+    }
 };

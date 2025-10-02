@@ -48,3 +48,8 @@ export interface RouterConfig {
 export interface RouterConfigWithId extends RouterConfig {
   id: string;
 }
+
+export interface TestConnectionResponse {
+    success: boolean;
+    message: string;
+}

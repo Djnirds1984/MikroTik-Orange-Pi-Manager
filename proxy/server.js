@@ -45,6 +45,20 @@ const handleRequest = async (req, res, callback) => {
     }
 };
 
+app.post('/api/test-connection', async (req, res) => {
+    let client;
+    try {
+        client = await connectToRouter(req.body);
+        res.json({ success: true, message: 'Connection successful!' });
+    } catch (err) {
+        res.json({ success: false, message: err.message });
+    } finally {
+        if (client && client.connected) {
+            client.close();
+        }
+    }
+});
+
 app.post('/api/system-info', (req, res) => {
     handleRequest(req, res, async (client) => {
         const [resource, routerboard] = await Promise.all([

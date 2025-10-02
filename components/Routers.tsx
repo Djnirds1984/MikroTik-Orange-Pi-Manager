@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfig, RouterConfigWithId } from '../types';
-import { RouterIcon, EditIcon, TrashIcon } from '../constants';
+import { testRouterConnection } from '../services/mikrotikService';
+import { RouterIcon, EditIcon, TrashIcon, SignalIcon } from '../constants';
 
 interface RoutersProps {
     routers: RouterConfigWithId[];
@@ -8,6 +9,8 @@ interface RoutersProps {
     onUpdateRouter: (router: RouterConfigWithId) => void;
     onDeleteRouter: (id: string) => void;
 }
+
+type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
 const RouterForm: React.FC<{
     onSubmit: (router: RouterConfig) => void;
@@ -20,6 +23,11 @@ const RouterForm: React.FC<{
     const [password, setPassword] = useState('');
     const [port, setPort] = useState(8728);
 
+    const [testStatus, setTestStatus] = useState<TestStatus>('idle');
+    const [testMessage, setTestMessage] = useState('');
+
+    const formData: RouterConfig = { name, host, user, password, port };
+
     useEffect(() => {
         if (initialData) {
             setName(initialData.name);
@@ -30,10 +38,31 @@ const RouterForm: React.FC<{
         }
     }, [initialData]);
 
+    // Reset test status if form data changes
+    useEffect(() => {
+        setTestStatus('idle');
+        setTestMessage('');
+    }, [name, host, user, password, port]);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSubmit({ name, host, user, password, port });
+        onSubmit(formData);
     };
+
+    const handleTestConnection = useCallback(async () => {
+        setTestStatus('testing');
+        setTestMessage('');
+        try {
+            const result = await testRouterConnection(formData);
+            setTestMessage(result.message);
+            setTestStatus(result.success ? 'success' : 'error');
+        } catch (err) {
+            setTestMessage('An unexpected error occurred.');
+            setTestStatus('error');
+        }
+    }, [formData]);
+
+    const isTesting = testStatus === 'testing';
 
     return (
         <form onSubmit={handleSubmit} className="bg-slate-800 p-6 rounded-lg border border-slate-700 space-y-4">
@@ -60,9 +89,24 @@ const RouterForm: React.FC<{
                     <input type="number" id="port" value={port} onChange={e => setPort(parseInt(e.target.value, 10))} required className="w-full md:w-1/4 bg-slate-700 border border-slate-600 rounded-md px-3 py-2 focus:ring-orange-500 focus:border-orange-500"/>
                 </div>
             </div>
-            <div className="flex justify-end gap-4 pt-2">
-                <button type="button" onClick={onCancel} className="bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">Cancel</button>
-                <button type="submit" className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+            <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-2">
+                <div className="w-full sm:w-auto sm:flex-grow text-center sm:text-left h-5">
+                     {testStatus !== 'idle' && (
+                        <p className={`text-sm ${
+                            testStatus === 'success' ? 'text-green-400' :
+                            testStatus === 'error' ? 'text-red-400' :
+                            'text-orange-400'
+                        }`}>
+                            {isTesting ? 'Testing...' : testMessage}
+                        </p>
+                    )}
+                </div>
+                <button type="button" onClick={handleTestConnection} disabled={isTesting} className="w-full sm:w-auto bg-sky-600 hover:bg-sky-500 text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center disabled:bg-sky-800 disabled:cursor-wait">
+                    <SignalIcon className={`w-5 h-5 mr-2 ${isTesting ? 'animate-pulse' : ''}`}/>
+                    Test Connection
+                </button>
+                <button type="button" onClick={onCancel} disabled={isTesting} className="w-full sm:w-auto bg-slate-600 hover:bg-slate-500 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-slate-700">Cancel</button>
+                <button type="submit" disabled={isTesting} className="w-full sm:w-auto bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-orange-800">
                     {initialData ? 'Save Changes' : 'Add Router'}
                 </button>
             </div>
