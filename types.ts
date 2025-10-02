@@ -1,3 +1,4 @@
+
 export interface SystemInfo {
   boardName: string;
   version: string;
@@ -28,4 +29,11 @@ export interface LogEntry {
   time: string;
   topic: string;
   message: string;
+}
+
+export interface GitHubRelease {
+  tag_name: string;
+  name: string;
+  published_at: string;
+  body: string;
 }

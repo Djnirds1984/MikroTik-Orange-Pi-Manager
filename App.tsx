@@ -4,8 +4,9 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { Dashboard } from './components/Dashboard';
 import { Scripting } from './components/Scripting';
+import { Updater } from './components/Updater';
 
-type View = 'dashboard' | 'scripting';
+type View = 'dashboard' | 'scripting' | 'updater';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -16,6 +17,7 @@ const App: React.FC = () => {
       <main className="flex-grow container mx-auto px-4 py-8">
         {currentView === 'dashboard' && <Dashboard />}
         {currentView === 'scripting' && <Scripting />}
+        {currentView === 'updater' && <Updater />}
       </main>
       <Footer />
     </div>

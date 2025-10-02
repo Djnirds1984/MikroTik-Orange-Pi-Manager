@@ -3,8 +3,8 @@ import React from 'react';
 import { MikroTikLogoIcon } from '../constants';
 
 interface HeaderProps {
-  currentView: 'dashboard' | 'scripting';
-  setCurrentView: (view: 'dashboard' | 'scripting') => void;
+  currentView: 'dashboard' | 'scripting' | 'updater';
+  setCurrentView: (view: 'dashboard' | 'scripting' | 'updater') => void;
 }
 
 const NavLink: React.FC<{
@@ -39,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, setCurrentView }) =
         <nav className="flex items-center gap-2 bg-slate-800 p-1 rounded-lg">
           <NavLink label="Dashboard" isActive={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
           <NavLink label="AI Script Generator" isActive={currentView === 'scripting'} onClick={() => setCurrentView('scripting')} />
+          <NavLink label="Updater" isActive={currentView === 'updater'} onClick={() => setCurrentView('updater')} />
         </nav>
       </div>
     </header>
