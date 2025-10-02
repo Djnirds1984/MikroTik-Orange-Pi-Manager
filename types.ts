@@ -1,4 +1,3 @@
-
 export interface SystemInfo {
   boardName: string;
   version: string;
@@ -11,12 +10,12 @@ export interface SystemInfo {
 export interface Interface {
   name: string;
   type: string;
-  rxRate: string;
-  txRate: string;
+  rxRate: number; // in bits per second
+  txRate: number; // in bits per second
 }
 
 export interface InterfaceWithHistory extends Interface {
-    trafficHistory: { rx: number, tx: number }[];
+    trafficHistory: { rx: number, tx: number }[]; // in Mbit/s for the chart
 }
 
 export interface HotspotClient {

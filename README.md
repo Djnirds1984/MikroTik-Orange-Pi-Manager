@@ -6,88 +6,114 @@ A modern, responsive web dashboard for managing your MikroTik router, specifical
 
 ## Features
 
-- **Real-time Dashboard:** Monitor system information, resource usage (CPU/Memory), and live interface traffic with dynamic graphs.
+- **Real-time Dashboard:** Connects to your router to monitor system information, resource usage (CPU/Memory), and live interface traffic with dynamic graphs.
+- **Live Data:** Fetches all data directly from your router via a secure backend proxy.
 - **Hotspot Client List:** See currently connected hotspot clients at a glance.
 - **AI Script Assistant:** Describe a networking task in plain English (e.g., "Block Facebook for the guest network"), and the AI will generate the corresponding RouterOS terminal script.
 - **Updater (Simulated):** Check for new versions of the management panel from a GitHub repository.
 - **Responsive Design:** A clean, modern UI that works on both desktop and mobile browsers.
-- **Lightweight:** Built with modern tools, ready to be served from a low-power device like an Orange Pi.
 
 ## Technical Architecture
 
-This project is a **frontend-only application** built with React and TypeScript. It is designed to be served as a static web page.
+This project consists of two main parts: a frontend web application and a backend proxy server.
 
-### Important: Backend Proxy Requirement
+1.  **Frontend (This Application):** A static web application built with React and TypeScript. It provides the user interface and is served from a web server on your Orange Pi. It does **not** connect to the router directly.
 
-For security reasons, web browsers cannot connect directly to the MikroTik API (which uses a raw TCP socket). To fetch live data from your router, you **must** create a simple backend proxy.
+2.  **Backend Proxy (`/proxy` directory):** A simple Node.js server that you run on your Orange Pi. Its only job is to act as a secure bridge between the frontend and the router. It receives simple web requests from the frontend, connects to the MikroTik API to fetch real data, and sends it back to the frontend.
 
-**How it works:**
+This separation is necessary because web browsers, for security reasons, cannot make the type of direct network connection required to talk to the MikroTik API.
 
-1.  The **Frontend** (this application) makes standard HTTP requests to the backend proxy (e.g., `GET /api/system-info`).
-2.  The **Backend Proxy** (a small server you run on your Orange Pi) receives these requests.
-3.  The proxy then connects to your MikroTik router's API, executes the necessary commands, and fetches the data.
-4.  Finally, the proxy sends the data back to the frontend as a JSON response.
+### Tech Stack
 
-You can build this proxy with any language you prefer, such as Node.js (with a library like `ros-node`), Python (with `routeros_api`), or Go.
-
-The `services/mikrotikService.ts` file in this project is currently using mock data but is structured to make switching to real API calls simple. You would just need to replace the promise-based mock functions with `fetch` calls to your proxy's endpoints.
-
-## Tech Stack
-
-- **Framework:** React 19
-- **Language:** TypeScript
-- **Styling:** Tailwind CSS
-- **Charting:** Recharts
-- **AI:** Google Gemini API (`@google/genai`)
+-   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
+-   **Backend:** Node.js, Express.js, `node-routeros`
+-   **AI:** Google Gemini API (`@google/genai`)
 
 ## Setup and Installation
 
-### 1. Clone the Repository
+You will need to set up and run both the **Backend Proxy** and the **Frontend**.
 
-```bash
-git clone https://github.com/your-username/mikrotik-orangepi-manager.git
-cd mikrotik-orangepi-manager
-```
+### Prerequisites
 
-### 2. Set up the AI Script Assistant
+-   Node.js and `npm` installed on your Orange Pi (or development machine).
+-   A web server (like Nginx or Caddy) installed on your Orange Pi to serve the frontend files.
 
-The AI Script Generator requires a Google Gemini API key.
+### Part 1: MikroTik Router Configuration
 
-1.  Obtain an API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-2.  Create a file named `.env` in the root of the project directory by copying the example file:
+Before running the proxy, you need to enable the API service on your router.
+
+1.  Log in to your MikroTik router (using WinBox or the web interface).
+2.  Go to **IP -> Services**.
+3.  Find the service named `api` (or `api-ssl` for encrypted connections). Make sure it is enabled. Note the port number (default is `8728` for `api` and `8729` for `api-ssl`).
+4.  It's highly recommended to create a dedicated user for the API with limited permissions. Go to **System -> Users**.
+    -   Click 'Add New'.
+    -   Give it a username (e.g., `api-user`).
+    -   Assign it to a group. The `read` group is sufficient for this dashboard.
+    -   Set a strong password.
+
+### Part 2: Backend Proxy Setup
+
+The backend proxy is located in the `/proxy` directory.
+
+1.  **Navigate to the proxy directory:**
     ```bash
-    cp .env.example .env
-    ```
-3.  Open the new `.env` file and add your API key:
-    ```
-    API_KEY=YOUR_GEMINI_API_KEY_HERE
+    cd proxy
     ```
 
-**Note:** This project uses an environment variable `process.env.API_KEY` to load the key. For a static web app, this requires a build step (e.g., using Vite or Create React App) to replace the variable. When deploying, ensure this key is handled securely and not exposed publicly in your client-side code.
-
-### 3. Running Locally
-
-Since this is a simple static application, you can serve it with any local web server. If you have Node.js installed, you can use a simple package like `serve`.
-
-1.  Install `serve`:
+2.  **Install dependencies:**
     ```bash
-    npm install -g serve
+    npm install
     ```
-2.  Run the server from the project's root directory:
+
+3.  **Configure Environment Variables:**
+    -   Copy the example environment file:
+        ```bash
+        cp .env.example .env
+        ```
+    -   Edit the new `.env` file with your router's details:
+        ```
+        ROUTER_HOST=192.168.88.1
+        ROUTER_USER=api-user
+        ROUTER_PASSWORD=your_strong_password_here
+        ROUTER_PORT=8728
+
+        # Port the proxy server will run on
+        PORT=3001
+        ```
+
+4.  **Run the proxy server:**
     ```bash
-    serve .
+    npm start
     ```
-3.  Open your browser and navigate to the URL provided (usually `http://localhost:3000`).
+    The server will start and listen on port 3001. You can keep it running in the background using a tool like `pm2`.
 
-### 4. Deployment on Orange Pi
+### Part 3: Frontend Setup
 
-1.  Set up a web server (like Nginx or Caddy) on your Orange Pi.
-2.  Copy the contents of this repository to the web server's root directory (e.g., `/var/www/html`).
-3.  (Optional) Set up your backend proxy on the same device.
-4.  Access the dashboard from any device on your network by navigating to your Orange Pi's IP address.
+1.  **Configure the AI Assistant (Optional):**
+    -   The AI Script Generator requires a Google Gemini API key. If you want to use it, obtain a key from [Google AI Studio](https://aistudio.google.com/app/apikey).
+    -   In the project's **root** directory, create a `.env` file by copying the example:
+        ```bash
+        cp .env.example .env
+        ```
+    -   Add your API key to this file. This key is used by the frontend and requires a build step if you are not using a development server that supports it.
+
+2.  **Serve the Frontend:**
+    -   The frontend consists of static files (`index.html`, etc.). You need to serve these from a web server.
+    -   For local development, you can use a simple tool. From the project's **root** directory:
+        ```bash
+        # If you don't have it, install 'serve': npm install -g serve
+        serve .
+        ```
+    -   For deployment on your Orange Pi, copy all the frontend files (everything **except** the `proxy` directory) to your web server's root (e.g., `/var/www/html`).
+
+### Running the Application
+
+1.  Start the backend proxy: `cd proxy && npm start`.
+2.  Start your frontend web server.
+3.  Open a web browser and navigate to the IP address of your Orange Pi. You should see the dashboard, now populated with live data from your router.
 
 ## Disclaimer
 
-- This project is not affiliated with MikroTik or Orange Pi.
-- The AI-generated scripts are for assistance only. **Always review scripts carefully before running them on a production router.**
-- The "Updater" feature is a simulation to demonstrate how such functionality would work. It does not perform a real file system upgrade.
+-   This project is not affiliated with MikroTik or Orange Pi.
+-   The AI-generated scripts are for assistance only. **Always review scripts carefully before running them on a production router.**
+-   The "Updater" feature is a simulation. It does not perform a real file system upgrade.

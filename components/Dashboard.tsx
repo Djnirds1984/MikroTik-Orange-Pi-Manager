@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -7,7 +7,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService';
-import type { SystemInfo, InterfaceWithHistory, HotspotClient } from '../types';
+import type { SystemInfo, InterfaceWithHistory, HotspotClient, Interface } from '../types';
 import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon } from '../constants';
 import { Loader } from './Loader';
 
@@ -40,32 +40,31 @@ const InfoItem: React.FC<{ label: string, value: string | number }> = ({ label, 
 
 const getInterfaceIcon = (type: string) => {
     switch (type) {
-        case 'ethernet': return <EthernetIcon className="w-5 h-5 text-sky-400" />;
-        case 'wifi': return <WifiIcon className="w-5 h-5 text-green-400" />;
-        case 'tunnel': return <TunnelIcon className="w-5 h-5 text-purple-400" />;
+        case 'ether': return <EthernetIcon className="w-5 h-5 text-sky-400" />;
+        case 'wlan': return <WifiIcon className="w-5 h-5 text-green-400" />;
+        case 'eoip': return <TunnelIcon className="w-5 h-5 text-purple-400" />;
         case 'vlan': return <VlanIcon className="w-5 h-5 text-yellow-400" />;
         default: return <EthernetIcon className="w-5 h-5 text-slate-500" />;
     }
 }
 
-const parseRate = (rateString: string): number => {
-  const value = parseFloat(rateString) || 0;
-  if (rateString.toLowerCase().includes('kbit/s')) {
-    return value / 1000;
-  }
-  return value;
+const formatRate = (bps: number): string => {
+    if (typeof bps !== 'number' || isNaN(bps)) return '0 bps';
+    if (bps < 1000) return `${bps} bps`;
+    if (bps < 1000000) return `${(bps / 1000).toFixed(2)} kbit/s`;
+    if (bps < 1000000000) return `${(bps / 1000000).toFixed(2)} Mbit/s`;
+    return `${(bps / 1000000000).toFixed(2)} Gbit/s`;
 };
-
 
 export const Dashboard: React.FC = () => {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
     const [hotspotClients, setHotspotClients] = useState<HotspotClient[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        const fetchData = async () => {
-          try {
+    const initialFetch = useCallback(async () => {
+        try {
             const [sysInfoData, interfacesData, hotspotData] = await Promise.all([
               getSystemInfo(),
               getInterfaces(),
@@ -76,51 +75,59 @@ export const Dashboard: React.FC = () => {
             setHotspotClients(hotspotData);
     
             const interfacesWithHistory = interfacesData.map(iface => {
-                const initialRx = parseRate(iface.rxRate);
-                const initialTx = parseRate(iface.txRate);
+                const initialRxMbps = iface.rxRate / 1000000;
+                const initialTxMbps = iface.txRate / 1000000;
                 return {
                     ...iface,
-                    trafficHistory: Array(20).fill({ rx: initialRx, tx: initialTx }).map(() => ({
-                        rx: Number((initialRx * (0.8 + Math.random() * 0.4)).toFixed(2)),
-                        tx: Number((initialTx * (0.8 + Math.random() * 0.4)).toFixed(2)),
-                    }))
-                }
+                    trafficHistory: Array(20).fill({ rx: initialRxMbps, tx: initialTxMbps }),
+                };
             });
             setInterfaces(interfacesWithHistory);
     
-          } catch (error) {
-            console.error("Failed to fetch dashboard data:", error);
-            // In a real app, you might set an error state here to show in the UI
+          } catch (err) {
+            console.error("Failed to fetch dashboard data:", err);
+            setError("Could not connect to the router. Please ensure the backend proxy is running and configured correctly.");
           } finally {
             setIsLoading(false);
           }
-        };
-    
-        fetchData();
     }, []);
 
     useEffect(() => {
-        if (isLoading || interfaces.length === 0) return;
+        initialFetch();
+    }, [initialFetch]);
 
-        const interval = setInterval(() => {
-            setInterfaces(currentInterfaces =>
-                currentInterfaces.map(iface => {
-                    const lastDataPoint = iface.trafficHistory[iface.trafficHistory.length - 1];
-                    const baseRx = parseRate(iface.rxRate) || 0.1;
-                    const baseTx = parseRate(iface.txRate) || 0.1;
+    useEffect(() => {
+        if (isLoading || error || interfaces.length === 0) return;
 
-                    const newRx = Math.max(0, lastDataPoint.rx + (Math.random() - 0.5) * (baseRx * 0.5));
-                    const newTx = Math.max(0, lastDataPoint.tx + (Math.random() - 0.5) * (baseTx * 0.5));
+        const interval = setInterval(async () => {
+            try {
+                const updatedInterfacesData = await getInterfaces();
+                setInterfaces(currentInterfaces =>
+                    currentInterfaces.map(currentIface => {
+                        const updatedData = updatedInterfacesData.find(u => u.name === currentIface.name);
+                        if (!updatedData) return currentIface;
 
-                    const newHistory = [...iface.trafficHistory.slice(1), { rx: Number(newRx.toFixed(2)), tx: Number(newTx.toFixed(2)) }];
+                        const newRxMbps = updatedData.rxRate / 1000000;
+                        const newTxMbps = updatedData.txRate / 1000000;
 
-                    return { ...iface, trafficHistory: newHistory };
-                })
-            );
-        }, 1000);
+                        const newHistory = [...currentIface.trafficHistory.slice(1), { rx: Number(newRxMbps.toFixed(2)), tx: Number(newTxMbps.toFixed(2)) }];
+
+                        return {
+                            ...currentIface,
+                            rxRate: updatedData.rxRate,
+                            txRate: updatedData.txRate,
+                            trafficHistory: newHistory,
+                        };
+                    })
+                );
+            } catch (err) {
+                console.error("Failed to poll interface data:", err);
+                // Optionally set an error state for polling failures
+            }
+        }, 2000); // Poll for new data every 2 seconds
 
         return () => clearInterval(interval);
-    }, [isLoading, interfaces]);
+    }, [isLoading, error, interfaces]);
 
   if (isLoading) {
     return (
@@ -131,20 +138,17 @@ export const Dashboard: React.FC = () => {
     );
   }
 
-  if (!systemInfo) {
+  if (error || !systemInfo) {
      return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700">
-            <p className="text-red-400">Failed to load router data.</p>
-            <p className="mt-2 text-slate-400 text-sm">Please ensure the backend proxy is running and configured correctly.</p>
+        <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
+            <p className="text-xl font-semibold text-red-400">Failed to load router data.</p>
+            <p className="mt-2 text-slate-400 text-sm">{error}</p>
         </div>
      );
   }
 
   return (
     <div>
-        <div className="mb-6 p-4 bg-yellow-900/20 border border-yellow-700 rounded-lg text-yellow-300 text-sm">
-            <strong>Note:</strong> This dashboard is connected to a mock API. To connect to a real device, a backend proxy is required.
-        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <DashboardCard title="System Information" className="md:col-span-2 lg:col-span-1">
                 <div className="space-y-3">
@@ -193,9 +197,7 @@ export const Dashboard: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                           {interfaces.map(iface => {
-                                const lastData = iface.trafficHistory[iface.trafficHistory.length - 1];
-                                return (
+                           {interfaces.map(iface => (
                                 <tr key={iface.name} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
                                     <td className="px-4 py-1">{getInterfaceIcon(iface.type)}</td>
                                     <td className="px-4 py-1 font-mono text-slate-200">{iface.name}</td>
@@ -219,11 +221,10 @@ export const Dashboard: React.FC = () => {
                                             </LineChart>
                                         </ResponsiveContainer>
                                     </td>
-                                    <td className="px-4 py-1 text-right font-mono text-cyan-400">{lastData.rx.toFixed(2)}</td>
-                                    <td className="px-4 py-1 text-right font-mono text-green-400">{lastData.tx.toFixed(2)}</td>
+                                    <td className="px-4 py-1 text-right font-mono text-cyan-400">{formatRate(iface.rxRate)}</td>
+                                    <td className="px-4 py-1 text-right font-mono text-green-400">{formatRate(iface.txRate)}</td>
                                 </tr>
-                                );
-                           })}
+                           ))}
                         </tbody>
                     </table>
                 </div>

@@ -1,45 +1,39 @@
-import { mockSystemInfo, mockInterfaces, mockHotspotClients, mockLogs } from '../data/mockData';
 import type { SystemInfo, Interface, HotspotClient, LogEntry } from '../types';
 
-// --- IMPORTANT ---
-// This is a MOCK API service. 
-// A web browser cannot directly connect to the MikroTik API (port 8728/8729) 
-// due to security restrictions (CORS and lack of raw TCP socket access).
-//
-// In a real-world application, you would need a backend proxy server
-// (e.g., using Node.js, Python, or Go) that:
-// 1. Receives requests from this frontend application.
-// 2. Connects to the MikroTik router's API.
-// 3. Fetches the data and sends it back to the frontend.
-//
-// This service simulates that backend interaction by returning mock data asynchronously.
+// The address of the backend proxy server.
+// In a production environment, this would be the address of your Orange Pi.
+const API_BASE_URL = 'http://localhost:3001/api';
 
-const API_LATENCY = 800; // Simulate network latency
+const fetchData = async <T>(endpoint: string): Promise<T> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`);
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`Proxy server returned an error: ${response.status} ${errorBody}`);
+    }
+    return response.json() as Promise<T>;
+  } catch (error) {
+    console.error(`Failed to fetch from ${endpoint}:`, error);
+    throw error;
+  }
+};
+
 
 export const getSystemInfo = async (): Promise<SystemInfo> => {
-  console.log("Fetching system info...");
-  return new Promise(resolve => {
-    setTimeout(() => resolve(mockSystemInfo), API_LATENCY);
-  });
+  return fetchData<SystemInfo>('/system-info');
 };
 
 export const getInterfaces = async (): Promise<Interface[]> => {
-    console.log("Fetching interfaces...");
-    return new Promise(resolve => {
-      setTimeout(() => resolve(mockInterfaces), API_LATENCY);
-    });
+  return fetchData<Interface[]>('/interfaces');
 };
   
 export const getHotspotClients = async (): Promise<HotspotClient[]> => {
-  console.log("Fetching hotspot clients...");
-  return new Promise(resolve => {
-    setTimeout(() => resolve(mockHotspotClients), API_LATENCY);
-  });
+  return fetchData<HotspotClient[]>('/hotspot-clients');
 };
   
+// Note: Log fetching is not implemented in the basic proxy.
+// This would require a more complex implementation on the backend.
 export const getLogs = async (): Promise<LogEntry[]> => {
-  console.log("Fetching logs...");
-  return new Promise(resolve => {
-    setTimeout(() => resolve(mockLogs), API_LATENCY);
-  });
+  console.warn("getLogs is not implemented in the backend proxy.");
+  return Promise.resolve([]);
 };
