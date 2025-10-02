@@ -115,8 +115,15 @@ const RouterForm: React.FC<{
 }
 
 export const Routers: React.FC<RoutersProps> = ({ routers, onAddRouter, onUpdateRouter, onDeleteRouter }) => {
-    const [isFormVisible, setIsFormVisible] = useState(false);
+    const [isFormVisible, setIsFormVisible] = useState(routers.length === 0);
     const [editingRouter, setEditingRouter] = useState<RouterConfigWithId | null>(null);
+
+    // This effect ensures that if the last router is deleted, the form reappears.
+    useEffect(() => {
+        if (routers.length === 0 && !isFormVisible) {
+            setIsFormVisible(true);
+        }
+    }, [routers.length, isFormVisible]);
 
     const handleAddClick = () => {
         setEditingRouter(null);
@@ -183,9 +190,11 @@ export const Routers: React.FC<RoutersProps> = ({ routers, onAddRouter, onUpdate
                             </div>
                         </li>
                     )) : (
-                        <li className="p-8 text-center text-slate-500">
-                            You haven't added any routers yet. Click "Add New Router" to get started.
-                        </li>
+                        !isFormVisible && (
+                            <li className="p-8 text-center text-slate-500">
+                                You haven't added any routers yet. Click "Add New Router" to get started.
+                            </li>
+                        )
                     )}
                 </ul>
             </div>
