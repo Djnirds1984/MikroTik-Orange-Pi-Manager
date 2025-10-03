@@ -1,13 +1,13 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppoeSettings, PppoeClient, PppProfile, BillingPlan } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan } from '../types.ts';
 
 // Generic fetch helper for our backend API
-const fetchData = async (path: string, routerConfig: RouterConfigWithId) => {
+const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: Record<string, any> = {}) => {
   const response = await fetch(path, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ routerConfig }),
+    body: JSON.stringify({ routerConfig, ...body }),
   });
   
   const contentType = response.headers.get("content-type");
@@ -33,6 +33,7 @@ const fetchData = async (path: string, routerConfig: RouterConfigWithId) => {
 
 export const testRouterConnection = async (routerConfig: RouterConfig): Promise<{ success: boolean, message: string }> => {
     try {
+        // Test connection doesn't need the extended body, so we call fetch directly
         const response = await fetch('/api/test-connection', {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
@@ -58,14 +59,22 @@ export const getHotspotClients = (router: RouterConfigWithId): Promise<HotspotCl
     return fetchData('/api/hotspot-clients', router);
 };
 
-export const getPppoeSettings = (router: RouterConfigWithId): Promise<PppoeSettings> => {
-    return fetchData('/api/pppoe-settings', router);
-};
-
-export const getPppoeActiveClients = (router: RouterConfigWithId): Promise<PppoeClient[]> => {
-    return fetchData('/api/pppoe-active', router);
-};
-
 export const getPppProfiles = (router: RouterConfigWithId): Promise<PppProfile[]> => {
-    return fetchData('/api/ppp-profiles', router);
+    return fetchData('/api/ppp/profiles', router);
+};
+
+export const getIpPools = (router: RouterConfigWithId): Promise<IpPool[]> => {
+    return fetchData('/api/ip/pools', router);
+};
+
+export const addPppProfile = (router: RouterConfigWithId, profileData: PppProfileData): Promise<any> => {
+    return fetchData('/api/ppp/profiles/add', router, { profileData });
+};
+
+export const updatePppProfile = (router: RouterConfigWithId, profileData: PppProfile): Promise<any> => {
+    return fetchData('/api/ppp/profiles/update', router, { profileData });
+};
+
+export const deletePppProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
+    return fetchData('/api/ppp/profiles/delete', router, { profileId });
 };

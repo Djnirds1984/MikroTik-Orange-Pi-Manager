@@ -194,66 +194,93 @@ app.post('/api/hotspot-clients', async (req, res) => {
     }
 });
 
-app.post('/api/pppoe-settings', async (req, res) => {
-    try {
-        const api = createRouterApi(req.body.routerConfig);
-        
-        const fetchSafely = (path) => fetchAll(api, path).catch(() => []);
+// --- PPPoE Profile Management ---
 
-        const [radius, pppoeServerResults] = await Promise.all([
-            fetchSafely('/rest/radius'),
-            fetchSafely('/rest/interface/pppoe-server/server')
-        ]);
-
-        const pppoeServer = pppoeServerResults[0] || {};
-        const authMethods = (pppoeServer['authentication'] || '').split(',');
-        const radiusConfig = radius.find(r => r.service && r.service.includes('ppp'));
-
-        res.json({
-            useRadius: !!radiusConfig,
-            defaultProfile: pppoeServer['default-profile'] || 'none',
-            authentication: {
-                pap: authMethods.includes('pap'),
-                chap: authMethods.includes('chap'),
-                mschap1: authMethods.includes('mschap1'),
-                mschap2: authMethods.includes('mschap2'),
-            },
-            radiusConfig: radiusConfig ? { address: radiusConfig.address } : undefined,
-        });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-app.post('/api/pppoe-active', async (req, res) => {
-    try {
-        const api = createRouterApi(req.body.routerConfig);
-        const clients = await fetchAll(api, '/rest/ppp/active');
-        res.json(clients.map(client => ({
-            id: client['.id'],
-            name: client.name,
-            service: client.service,
-            address: client.address,
-            callerId: client['caller-id'],
-            uptime: client.uptime,
-        })));
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-app.post('/api/ppp-profiles', async (req, res) => {
+app.post('/api/ppp/profiles', async (req, res) => {
     try {
         const api = createRouterApi(req.body.routerConfig);
         const profiles = await fetchAll(api, '/rest/ppp/profile');
         res.json(profiles.map(p => ({
             id: p['.id'],
             name: p.name,
+            localAddress: p['local-address'],
+            remoteAddress: p['remote-address'],
+            rateLimit: p['rate-limit'],
         })));
     } catch(error) {
         res.status(500).json({ message: error.message });
     }
 });
+
+app.post('/api/ip/pools', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const pools = await fetchAll(api, '/rest/ip/pool');
+        res.json(pools.map(p => ({
+            id: p['.id'],
+            name: p.name,
+        })));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+const cleanPayload = (obj) => {
+  const newObj = {};
+  for (const key in obj) {
+    if (obj[key] !== '' && obj[key] !== null && obj[key] !== undefined) {
+      newObj[key] = obj[key];
+    }
+  }
+  return newObj;
+};
+
+app.post('/api/ppp/profiles/add', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { profileData } = req.body;
+        const payload = cleanPayload({
+            name: profileData.name,
+            'local-address': profileData.localAddress,
+            'remote-address': profileData.remoteAddress,
+            'rate-limit': profileData.rateLimit,
+        });
+        const response = await api.put('/rest/ppp/profile', payload);
+        res.status(201).json(response.data);
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
+app.post('/api/ppp/profiles/update', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { profileData } = req.body;
+        const payload = cleanPayload({
+            '.id': profileData.id,
+            name: profileData.name,
+            'local-address': profileData.localAddress,
+            'remote-address': profileData.remoteAddress,
+            'rate-limit': profileData.rateLimit,
+        });
+        const response = await api.patch('/rest/ppp/profile', payload);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
+app.post('/api/ppp/profiles/delete', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { profileId } = req.body;
+        await api.delete(`/rest/ppp/profile/${profileId}`);
+        res.status(204).send();
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
 
 // --- Updater Endpoints ---
 const projectRoot = path.join(__dirname, '..');

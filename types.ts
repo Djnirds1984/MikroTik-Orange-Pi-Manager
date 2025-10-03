@@ -43,30 +43,17 @@ export interface HotspotClient {
   signal: string;
 }
 
-export interface PppoeSettings {
-    useRadius: boolean;
-    defaultProfile: string;
-    authentication: {
-        pap: boolean;
-        chap: boolean;
-        mschap1: boolean;
-        mschap2: boolean;
-    };
-    radiusConfig?: {
-        address: string;
-    }
-}
-
-export interface PppoeClient {
+export interface PppProfile {
     id: string;
     name: string;
-    service: string;
-    address: string;
-    callerId: string;
-    uptime: string;
+    localAddress?: string;
+    remoteAddress?: string;
+    rateLimit?: string;
 }
 
-export interface PppProfile {
+export type PppProfileData = Omit<PppProfile, 'id'>;
+
+export interface IpPool {
     id: string;
     name: string;
 }
