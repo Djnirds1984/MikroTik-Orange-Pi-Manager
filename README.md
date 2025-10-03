@@ -193,11 +193,13 @@ You are all set! Open a web browser and navigate to the IP address of your Orang
 
 ## Updating the Application
 
-Thanks to the simplified setup, updating is now a breeze.
+The panel includes a one-click updater to fetch the latest version directly from your GitHub repository.
 
-### **Making Updates Easier (Passwordless `git pull`)**
+### **Prerequisite: Configure SSH for Git**
 
-To avoid typing your GitHub credentials, set up an SSH key. This is a secure, one-time setup.
+For the one-click updater to work reliably, your Orange Pi **must** be configured to use an SSH key for authenticating with GitHub. This prevents the update process from hanging or failing when it tries to pull code. Using an SSH key is secure and standard practice for automated server tasks.
+
+This is a **one-time setup**.
 
 **1. Generate an SSH Key on your Orange Pi:**
    ```bash
@@ -220,7 +222,7 @@ To avoid typing your GitHub credentials, set up an SSH key. This is a secure, on
      ```bash
      git remote set-url origin git@github.com:Djnirds1984/MikroTik-Orange-Pi-Manager.git
      ```
-Now `git pull` will be passwordless.
+Now `git pull` will be passwordless and use SSH.
 
 ### **Pulling the Latest Code**
 
