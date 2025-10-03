@@ -59,8 +59,12 @@ This new method uses an `ecosystem.config.js` file to manage both servers with a
    ```
 
 3. **Start the Application with PM2:**
-   **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running this command.**
+   **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running these commands.**
    ```bash
+   # First, stop and delete any old running processes to ensure a clean start
+   pm2 delete all
+   
+   # Now, start both servers using the ecosystem file
    pm2 start ecosystem.config.js
    ```
 
@@ -99,7 +103,7 @@ The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the co
 1.  **Navigate to the Project Directory:**
     Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
     ```bash
-    cd /var/www/html/MikroTik-Orange-Pi-Manager
+    cd /var/w ww/html/MikroTik-Orange-Pi-Manager
     ```
 
 2.  **Install/Update Dependencies:**
@@ -111,25 +115,31 @@ The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the co
 
 ### **Step 3: Start and Manage the Application with PM2**
 
-1.  **Start Both Servers:**
+1.  **Stop and Delete Old Processes (CRITICAL STEP):**
+    Before starting, always clear out any old or lingering processes to prevent conflicts.
+    ```bash
+    pm2 delete all
+    ```
+
+2.  **Start Both Servers:**
     **IMPORTANT: Ensure you are in the project's root directory (`/var/www/html/MikroTik-Orange-Pi-Manager`) before running this command.**
     ```bash
     pm2 start ecosystem.config.js
     ```
 
-2.  **Verify the Status:**
-    Check that both processes are online and running without errors.
+3.  **Verify the Status:**
+    Check that both processes (`mikrotik-manager` and `mikrotik-api-backend`) are online and running without errors.
     ```bash
     pm2 list
     ```
 
-3.  **Save the Process List:**
+4.  **Save the Process List:**
     This command saves the current process list. If the server reboots, `pm2` will automatically restart your applications.
     ```bash
     pm2 save
     ```
 
-4.  **Viewing Logs:**
+5.  **Viewing Logs:**
     To see the logs for both servers in real-time:
     ```bash
     pm2 logs
