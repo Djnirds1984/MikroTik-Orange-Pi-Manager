@@ -103,7 +103,7 @@ The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the co
 1.  **Navigate to the Project Directory:**
     Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
     ```bash
-    cd /var/w ww/html/MikroTik-Orange-Pi-Manager
+    cd /var/www/html/MikroTik-Orange-Pi-Manager
     ```
 
 2.  **Install/Update Dependencies:**

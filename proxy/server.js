@@ -1,212 +1,217 @@
 const express = require('express');
-const { spawn } = require('child_process');
+const { build } = require('esbuild');
 const path = require('path');
-const fs = require('fs');
-const tar = require('tar');
+const fs = require('fs-extra');
+const { exec } = require('child_process');
 const archiver = require('archiver');
-const fsExtra = require('fs-extra');
+const tar = require('tar');
 
 const app = express();
 const port = 3001;
 
-// Middleware
-app.use(express.json());
-
-// ESBuild for JSX/TSX transpilation
-// This middleware MUST come before express.static to intercept .tsx requests.
+// --- Middleware for Live Transpilation ---
 app.use(async (req, res, next) => {
-    if (req.path.endsWith('.tsx') || req.path.endsWith('.ts')) {
+    if (req.url.endsWith('.tsx')) {
         try {
-            const esbuild = require('esbuild');
-            const result = await esbuild.build({
-                entryPoints: [path.join(__dirname, '..', req.path)],
-                bundle: true,
+            const filePath = path.join(__dirname, '..', req.url);
+            const result = await build({
+                entryPoints: [filePath],
+                bundle: false,
+                loader: 'tsx',
+                target: 'esnext',
                 write: false,
-                format: 'esm',
-                external: ['react', 'react-dom/client', '@google/genai', 'recharts'],
             });
             res.setHeader('Content-Type', 'application/javascript');
             res.send(result.outputFiles[0].text);
         } catch (e) {
             console.error('ESBuild transpilation failed:', e);
-            res.status(500).send('Error during transpilation');
+            res.status(500).send('// Transpilation Error');
         }
     } else {
         next();
     }
 });
 
-// Static file serving for HTML, JS, CSS, etc.
+// --- Static File Serving ---
 app.use(express.static(path.join(__dirname, '..')));
 
-
-// --- Updater Endpoints ---
-const runCommand = (command, args, res, onLog) => {
+// Helper to run shell commands
+const runCommand = (command, cwd = process.cwd()) => {
     return new Promise((resolve, reject) => {
-        const proc = spawn(command, args, { cwd: path.join(__dirname, '..'), shell: false });
-        proc.stdout.on('data', (data) => onLog(data.toString()));
-        proc.stderr.on('data', (data) => onLog(data.toString()));
-        proc.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`Command '${command} ${args.join(' ')}' failed with code ${code}`));
+        exec(command, { cwd }, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Command error: ${stderr}`);
+                return reject(new Error(stderr));
+            }
+            resolve(stdout.trim());
         });
-        proc.on('error', (err) => reject(err));
     });
 };
 
-const sendSse = (res, data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+// --- Updater API Endpoints ---
+const projectRoot = path.join(__dirname, '..');
 
-app.get('/api/update-status', async (res) => {
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
+const sendSse = (res, data) => {
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+app.get('/api/update-status', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
     try {
-        const remoteUrl = await new Promise((resolve, reject) => {
-            const proc = spawn('git', ['config', '--get', 'remote.origin.url'], { cwd: path.join(__dirname, '..') });
-            let url = '';
-            proc.stdout.on('data', (data) => url += data.toString());
-            proc.on('close', (code) => code === 0 ? resolve(url.trim()) : reject(new Error('Failed to get git remote URL')));
-        });
-
+        sendSse(res, { log: '>>> Checking Git remote URL...' });
+        const remoteUrl = await runCommand('git config --get remote.origin.url', projectRoot);
+        sendSse(res, { log: `Remote URL: ${remoteUrl}` });
         if (!remoteUrl.startsWith('git@')) {
-             sendSse(res, { status: 'error', message: `Insecure Git remote. Requires SSH (git@...) but found "${remoteUrl}".` });
-             return;
+             throw new Error(`Git remote is not configured for SSH. Current URL is ${remoteUrl}. Please use SSH (e.g., git@github.com:user/repo.git) for updates.`);
         }
         
-        await runCommand('ssh', ['-T', 'git@github.com', '-o', 'StrictHostKeyChecking=no', '-o', 'BatchMode=yes'], res, log => sendSse(res, { log }));
-        await runCommand('git', ['remote', 'update'], res, log => sendSse(res, { log }));
+        sendSse(res, { log: '\n>>> Fetching latest data from remote repository...' });
+        await runCommand('git fetch origin', projectRoot);
+        sendSse(res, { log: 'Fetch complete.' });
 
-        const [local, remote] = await Promise.all([
-             new Promise((resolve, reject) => {
-                 const proc = spawn('git', ['rev-parse', '@'], { cwd: path.join(__dirname, '..') });
-                 let hash = '';
-                 proc.stdout.on('data', data => hash += data.toString());
-                 proc.on('close', code => code === 0 ? resolve(hash.trim()) : reject());
-            }),
-             new Promise((resolve, reject) => {
-                 const proc = spawn('git', ['rev-parse', '@{u}'], { cwd: path.join(__dirname, '..') });
-                 let hash = '';
-                 proc.stdout.on('data', data => hash += data.toString());
-                 proc.on('close', code => code === 0 ? resolve(hash.trim()) : reject());
-            })
-        ]);
+        sendSse(res, { log: '\n>>> Comparing local and remote versions...' });
+        const local = await runCommand('git rev-parse HEAD', projectRoot);
+        const remote = await runCommand('git rev-parse @{u}', projectRoot);
         
-        if (local === remote) sendSse(res, { status: 'uptodate', message: 'Your panel is up to date.', local });
-        else sendSse(res, { status: 'available', message: 'Update available.', local, remote });
+        if (local === remote) {
+            sendSse(res, { status: 'uptodate', message: 'Your panel is up-to-date.', local });
+        } else {
+            sendSse(res, { status: 'available', message: 'An update is available.', local, remote });
+        }
 
     } catch (error) {
-        sendSse(res, { status: 'error', message: error.message, log: error.stack });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Update check failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
     } finally {
-        sendSse(res, { status: 'finished' });
+        sendSse(res, { status: 'finished' }); // Signal to the client that we are done
         res.end();
     }
 });
 
-const restartApp = () => {
-    // FIX: Use the ecosystem file with the correct .js extension to reliably restart all processes.
-    if (process.env.PM2_HOME) {
-        const pm2 = require('pm2');
-        pm2.connect(err => {
-            if (err) { console.error(err); return; }
-            // Restart all apps defined in the ecosystem config file.
-            pm2.restart('ecosystem.config.js', (err) => {
-                pm2.disconnect();
-                if (err) console.error('PM2 restart failed', err);
-            });
-        });
-    }
+const restartApp = (res) => {
+    sendSse(res, { log: '\n>>> Restarting application with pm2...' });
+    exec('pm2 restart ecosystem.config.js', (err, stdout, stderr) => {
+        if (err) {
+            console.error('PM2 restart failed:', stderr);
+            sendSse(res, { status: 'error', message: `Failed to restart server: ${stderr}` });
+        } else {
+            console.log('PM2 restart successful:', stdout);
+            sendSse(res, { log: 'Restart command issued successfully.' });
+        }
+        res.end();
+    });
 };
 
-app.get('/api/update-app', async (res) => {
-     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-    try {
-        const backupDir = path.join(__dirname, '..', 'backups');
-        await fsExtra.ensureDir(backupDir);
-        const backupFile = `backup-${new Date().toISOString().replace(/[.:]/g, '-')}.tar.gz`;
-        const outputPath = path.join(backupDir, backupFile);
+app.get('/api/update-app', async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-        sendSse(res, { log: `Creating backup: ${backupFile}` });
+    const backupDir = path.join(projectRoot, 'backups');
+    const backupFileName = `backup-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
+    const backupFilePath = path.join(backupDir, backupFileName);
+
+    try {
+        // 1. Create Backup
+        sendSse(res, { log: `>>> Creating backup at ${backupFilePath}` });
+        await fs.ensureDir(backupDir);
         
-        const output = fs.createWriteStream(outputPath);
         const archive = archiver('tar', { gzip: true });
+        const output = fs.createWriteStream(backupFilePath);
         archive.pipe(output);
         archive.glob('**/*', {
-            cwd: path.join(__dirname, '..'),
-            ignore: ['backups/**', 'proxy/node_modules/**', 'api-backend/node_modules/**', '.git/**']
+            cwd: projectRoot,
+            ignore: ['backups/**', 'node_modules/**', '.git/**'],
         });
         await archive.finalize();
-        
         sendSse(res, { log: 'Backup created successfully.' });
-        sendSse(res, { log: 'Pulling latest changes...' });
-        await runCommand('git', ['pull'], res, log => sendSse(res, { log }));
-        sendSse(res, { log: 'Installing UI server dependencies...' });
-        await runCommand('npm', ['install', '--prefix', 'proxy'], res, log => sendSse(res, { log }));
-        sendSse(res, { log: 'Installing API server dependencies...' });
-        await runCommand('npm', ['install', '--prefix', 'api-backend'], res, log => sendSse(res, { log }));
-        sendSse(res, { status: 'restarting', log: 'Restarting servers...' });
+
+        // 2. Git Pull
+        sendSse(res, { log: '\n>>> Pulling latest changes from Git...' });
+        const pullOutput = await runCommand('git pull origin main', projectRoot); // Assuming 'main' branch
+        sendSse(res, { log: pullOutput });
+        sendSse(res, { log: 'Git pull complete.' });
+        
+        // 3. NPM Install
+        sendSse(res, { log: '\n>>> Installing dependencies for UI server...' });
+        const proxyInstall = await runCommand('npm install', path.join(projectRoot, 'proxy'));
+        sendSse(res, { log: proxyInstall });
+        
+        sendSse(res, { log: '\n>>> Installing dependencies for API backend...' });
+        const apiInstall = await runCommand('npm install', path.join(projectRoot, 'api-backend'));
+        sendSse(res, { log: apiInstall });
+        sendSse(res, { log: 'Dependencies installed.' });
+        
+        // 4. Restart
+        sendSse(res, { status: 'restarting' });
+        restartApp(res);
 
     } catch (error) {
-        sendSse(res, { status: 'error', message: error.message });
-    } finally {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Update process failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
         res.end();
-        restartApp();
     }
 });
+
 
 app.get('/api/list-backups', async (req, res) => {
     try {
-        const backupDir = path.join(__dirname, '..', 'backups');
-        await fsExtra.ensureDir(backupDir);
-        const files = await fs.promises.readdir(backupDir);
+        const backupDir = path.join(projectRoot, 'backups');
+        await fs.ensureDir(backupDir);
+        const files = await fs.readdir(backupDir);
         res.json(files.filter(f => f.endsWith('.tar.gz')).sort().reverse());
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        res.status(500).json({ message: 'Could not list backups.' });
     }
 });
 
 app.get('/api/rollback', async (req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' });
-    const { backupFile } = req.query;
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-    if (!backupFile || !/^[a-zA-Z0-9\-_.]+\.tar\.gz$/.test(backupFile)) {
-         sendSse(res, { status: 'error', message: 'Invalid backup file name.' });
-         return res.end();
+    const { backupFile } = req.query;
+    if (!backupFile || typeof backupFile !== 'string') {
+        sendSse(res, { status: 'error', message: 'Invalid backup file specified.' });
+        return res.end();
     }
-    const backupPath = path.join(__dirname, '..', 'backups', backupFile);
+
+    const backupFilePath = path.join(projectRoot, 'backups', backupFile);
 
     try {
-        if (!fs.existsSync(backupPath)) throw new Error('Backup file not found.');
-        
-        sendSse(res, { log: `Restoring from ${backupFile}...` });
-        const appDir = path.join(__dirname, '..');
-        
-        // Find and remove items, preserving key directories
-        const items = await fs.promises.readdir(appDir);
-        for (const item of items) {
-            if (!['backups', '.git', 'proxy', 'api-backend', 'ecosystem.config.js'].includes(item)) {
-                await fsExtra.remove(path.join(appDir, item));
-            }
+        sendSse(res, { log: `>>> Starting rollback from ${backupFile}` });
+        if (!await fs.pathExists(backupFilePath)) {
+            throw new Error('Backup file not found.');
         }
-        
-        await tar.x({ file: backupPath, cwd: appDir });
 
-        sendSse(res, { log: 'Files restored. Installing dependencies for both servers...' });
-        await runCommand('npm', ['install', '--prefix', 'proxy'], res, log => sendSse(res, { log }));
-        await runCommand('npm', ['install', '--prefix', 'api-backend'], res, log => sendSse(res, { log }));
-        sendSse(res, { status: 'restarting', log: 'Restarting servers...' });
+        // Extract tarball over the project directory
+        await tar.x({
+            file: backupFilePath,
+            cwd: projectRoot,
+            strip: 0,
+        });
+        sendSse(res, { log: 'Files restored successfully.' });
+        
+        sendSse(res, { status: 'restarting' });
+        restartApp(res);
 
     } catch (error) {
-        sendSse(res, { status: 'error', message: error.message });
-    } finally {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Rollback failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
         res.end();
-        restartApp();
     }
 });
 
-
-// Serve index.html for all other routes
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
 app.listen(port, () => {
-    console.log(`MikroTik Manager UI server running. Access it at http://<your_ip_address>:${port}`);
+  console.log(`MikroTik Manager UI server running. Access it at http://<your_ip_address>:${port}`);
 });
