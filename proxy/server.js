@@ -124,15 +124,19 @@ app.post('/api/system-info', async (req, res) => {
             fetchAll(api, '/rest/system/resource'),
             fetchAll(api, '/rest/system/routerboard').catch(() => []), // Fetch safely
         ]);
-        const info = resource[0];
-        const board = routerboard[0] || {}; // Guard against empty response
+        const info = resource[0] || {}; // Guard against empty response
+        const board = routerboard[0] || {};
         res.json({
-            boardName: board['model'] || info['board-name'] || 'Unknown', // Add fallbacks
-            version: info['version'],
-            cpuLoad: info['cpu-load'],
-            uptime: info['uptime'],
-            memoryUsage: Math.round(((info['total-memory'] - info['free-memory']) / info['total-memory']) * 100),
-            totalMemory: `${Math.round(info['total-memory'] / 1024 / 1024)}MiB`,
+            boardName: board['model'] || info['board-name'] || 'Unknown',
+            version: info['version'] || 'N/A',
+            cpuLoad: info['cpu-load'] || 0,
+            uptime: info['uptime'] || 'N/A',
+            memoryUsage: (info['total-memory'] && info['free-memory'])
+                ? Math.round(((info['total-memory'] - info['free-memory']) / info['total-memory']) * 100)
+                : 0,
+            totalMemory: info['total-memory']
+                ? `${Math.round(info['total-memory'] / 1024 / 1024)}MiB`
+                : 'N/A',
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -194,7 +198,6 @@ app.post('/api/pppoe-settings', async (req, res) => {
     try {
         const api = createRouterApi(req.body.routerConfig);
         
-        // Helper to fetch data and return empty array on failure
         const fetchSafely = (path) => fetchAll(api, path).catch(() => []);
 
         const [radius, pppoeServerResults] = await Promise.all([
@@ -204,9 +207,10 @@ app.post('/api/pppoe-settings', async (req, res) => {
 
         const pppoeServer = pppoeServerResults[0] || {};
         const authMethods = (pppoeServer['authentication'] || '').split(',');
+        const radiusConfig = radius.find(r => r.service && r.service.includes('ppp'));
 
         res.json({
-            useRadius: radius.length > 0 && radius[0].service.includes('ppp'),
+            useRadius: !!radiusConfig,
             defaultProfile: pppoeServer['default-profile'] || 'none',
             authentication: {
                 pap: authMethods.includes('pap'),
@@ -214,7 +218,7 @@ app.post('/api/pppoe-settings', async (req, res) => {
                 mschap1: authMethods.includes('mschap1'),
                 mschap2: authMethods.includes('mschap2'),
             },
-            radiusConfig: radius.length > 0 ? { address: radius[0].address } : undefined,
+            radiusConfig: radiusConfig ? { address: radiusConfig.address } : undefined,
         });
     } catch (error) {
         res.status(500).json({ message: error.message });
