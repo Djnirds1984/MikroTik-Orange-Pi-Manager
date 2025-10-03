@@ -122,12 +122,12 @@ app.post('/api/system-info', async (req, res) => {
         const api = createRouterApi(req.body.routerConfig);
         const [resource, routerboard] = await Promise.all([
             fetchAll(api, '/rest/system/resource'),
-            fetchAll(api, '/rest/system/routerboard'),
+            fetchAll(api, '/rest/system/routerboard').catch(() => []), // Fetch safely
         ]);
         const info = resource[0];
-        const board = routerboard[0];
+        const board = routerboard[0] || {}; // Guard against empty response
         res.json({
-            boardName: board['model'],
+            boardName: board['model'] || info['board-name'] || 'Unknown', // Add fallbacks
             version: info['version'],
             cpuLoad: info['cpu-load'],
             uptime: info['uptime'],
@@ -193,27 +193,26 @@ app.post('/api/hotspot-clients', async (req, res) => {
 app.post('/api/pppoe-settings', async (req, res) => {
     try {
         const api = createRouterApi(req.body.routerConfig);
-        const [profiles, pppSettings, radius] = await Promise.all([
-             fetchAll(api, '/rest/ppp/profile'),
-             fetchAll(api, '/rest/ppp'),
-             fetchAll(api, '/rest/radius')
-        ]).catch(e => {
-            if (e.response && e.response.data && e.response.data.detail) {
-                 throw new Error(e.response.data.detail);
-            }
-            throw e;
-        });
+        
+        // Helper to fetch data and return empty array on failure
+        const fetchSafely = (path) => fetchAll(api, path).catch(() => []);
 
-        const pppoeServer = (await fetchAll(api, '/rest/interface/pppoe-server/server'))[0] || {};
+        const [radius, pppoeServerResults] = await Promise.all([
+            fetchSafely('/rest/radius'),
+            fetchSafely('/rest/interface/pppoe-server/server')
+        ]);
+
+        const pppoeServer = pppoeServerResults[0] || {};
+        const authMethods = (pppoeServer['authentication'] || '').split(',');
 
         res.json({
             useRadius: radius.length > 0 && radius[0].service.includes('ppp'),
             defaultProfile: pppoeServer['default-profile'] || 'none',
             authentication: {
-                pap: pppoeServer['authentication']?.includes('pap'),
-                chap: pppoeServer['authentication']?.includes('chap'),
-                mschap1: pppoeServer['authentication']?.includes('mschap1'),
-                mschap2: pppoeServer['authentication']?.includes('mschap2'),
+                pap: authMethods.includes('pap'),
+                chap: authMethods.includes('chap'),
+                mschap1: authMethods.includes('mschap1'),
+                mschap2: authMethods.includes('mschap2'),
             },
             radiusConfig: radius.length > 0 ? { address: radius[0].address } : undefined,
         });
