@@ -244,6 +244,49 @@ Now `git pull` will be passwordless.
 
 5.  **Hard-refresh your browser** (`Ctrl+Shift+R` or `Cmd+Shift+R`) to load the new version.
 
+---
+
+## Manual Recovery (Emergency Restore)
+
+If the web panel becomes inaccessible after a failed update, you can manually restore a backup directly from the command line on your Orange Pi.
+
+**1. Connect via SSH and Stop the Application:**
+   ```bash
+   ssh your_user@your_orangepi_ip
+   cd ~/MikroTik-Orange-Pi-Manager
+   pm2 stop mikrotik-manager
+   ```
+
+**2. Find Your Backup File:**
+   List the available backups to find the one you want to restore.
+   ```bash
+   ls -l backups/
+   # Note the filename, for example: backup-2023-10-26T14-30-00.000Z.tar.gz
+   ```
+
+**3. Clear Old Files and Extract the Backup:**
+   This step removes the broken application files and replaces them with the contents of your backup.
+
+   ```bash
+   # IMPORTANT: The next command deletes current application files.
+   # It is designed to PRESERVE your '.git' and 'backups' directories.
+   find . -maxdepth 1 -mindepth 1 ! -name 'backups' ! -name '.git' -exec rm -rf {} +
+
+   # Now, extract your chosen backup into the current directory.
+   # Replace YOUR_BACKUP_FILE.tar.gz with the actual filename from step 2.
+   tar -xzf backups/YOUR_BACKUP_FILE.tar.gz -C .
+   ```
+
+**4. Re-install Dependencies and Restart:**
+   Finally, install the correct node modules for the restored version and restart the server with pm2.
+   ```bash
+   cd proxy
+   npm install
+   cd ..
+   pm2 restart mikrotik-manager
+   ```
+Your application should now be restored and accessible again.
+
 ## Disclaimer
 
 -   This project is not affiliated with MikroTik or Orange Pi.
