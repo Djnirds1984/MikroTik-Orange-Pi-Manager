@@ -1,11 +1,10 @@
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { GitHubRelease } from '../types.ts';
 import { Loader } from './Loader.tsx';
 import { CloudArrowUpIcon, UpdateIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants.tsx';
 
-const GITHUB_REPO = "zaid-h-sh/mikrotik-orangepi-manager";
-const CURRENT_VERSION = "1.2.0";
+const GITHUB_REPO = "Djnirds1984/MikroTik-Orange-Pi-Manager";
 
 type Status = 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'error' | 'updating';
 
@@ -47,11 +46,29 @@ const StatusDisplay: React.FC<{ status: Status, errorMessage?: string | null, la
 
 export const Updater: React.FC = () => {
     const [status, setStatus] = useState<Status>('idle');
+    const [currentVersion, setCurrentVersion] = useState<string>('?.?.?');
     const [latestRelease, setLatestRelease] = useState<GitHubRelease | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [updateProgress, setUpdateProgress] = useState('');
+    const [updateLog, setUpdateLog] = useState<string[]>([]);
+    
+    useEffect(() => {
+        // Fetch the current version from the backend when the component mounts
+        const fetchVersion = async () => {
+            try {
+                const response = await fetch('/api/current-version');
+                if (!response.ok) throw new Error('Failed to fetch version');
+                const data = await response.json();
+                setCurrentVersion(data.version);
+            } catch (error) {
+                console.error("Could not fetch current version:", error);
+                setCurrentVersion('Error');
+            }
+        };
+        fetchVersion();
+    }, []);
 
     const handleCheckForUpdates = useCallback(async () => {
+        if (currentVersion === 'Error' || currentVersion === '?.?.?') return;
         setStatus('checking');
         setLatestRelease(null);
         setErrorMessage(null);
@@ -64,9 +81,8 @@ export const Updater: React.FC = () => {
             const data: GitHubRelease = await response.json();
             setLatestRelease(data);
             
-            // Simple version comparison, assumes "v" prefix
             const latestVersion = data.tag_name.replace('v', '');
-            if (latestVersion > CURRENT_VERSION) {
+            if (latestVersion > currentVersion) {
                 setStatus('update-available');
             } else {
                 setStatus('up-to-date');
@@ -77,19 +93,33 @@ export const Updater: React.FC = () => {
             setStatus('error');
             setErrorMessage((error as Error).message);
         }
-    }, []);
+    }, [currentVersion]);
 
     const handleUpgrade = useCallback(() => {
         setStatus('updating');
-        setUpdateProgress("Starting upgrade...");
-        setTimeout(() => setUpdateProgress(`Downloading version ${latestRelease?.tag_name}... (1/3)`), 1500);
-        setTimeout(() => setUpdateProgress("Verifying download... (2/3)"), 3500);
-        setTimeout(() => setUpdateProgress("Installing update... (3/3)"), 5000);
-        setTimeout(() => {
-            setUpdateProgress("Upgrade complete! Please refresh your browser to see the changes.");
-            // In a real app, you might trigger location.reload() here.
-        }, 7000);
-    }, [latestRelease]);
+        setUpdateLog(['Connecting to update server...']);
+
+        const eventSource = new EventSource('/api/update-app');
+
+        eventSource.onmessage = (event) => {
+            if (event.data.startsWith('UPDATE_COMPLETE')) {
+                 setUpdateLog(prev => [...prev, `\n${event.data.replace('UPDATE_COMPLETE: ', '')}`]);
+                 eventSource.close();
+            } else {
+                setUpdateLog(prev => [...prev, event.data]);
+            }
+        };
+
+        eventSource.onerror = () => {
+            // This will likely trigger when the server restarts
+            setUpdateLog(prev => [...prev, "\nConnection to server lost. This is expected if the update was successful."]);
+            eventSource.close();
+        };
+
+        return () => {
+            eventSource.close();
+        };
+    }, []);
 
 
     const isBusy = status === 'checking' || status === 'updating';
@@ -126,7 +156,7 @@ export const Updater: React.FC = () => {
                  
                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-900/50 p-4 rounded-md border border-slate-700">
                     <div className="mb-4 sm:mb-0">
-                        <p className="text-sm text-slate-400">Current Version: <span className="font-mono bg-slate-700 px-2 py-1 rounded">{CURRENT_VERSION}</span></p>
+                        <p className="text-sm text-slate-400">Current Version: <span className="font-mono bg-slate-700 px-2 py-1 rounded">{currentVersion}</span></p>
                         <div className="mt-4 h-6">
                             <StatusDisplay status={status} errorMessage={errorMessage} latestVersion={latestRelease?.tag_name} />
                         </div>
@@ -138,13 +168,9 @@ export const Updater: React.FC = () => {
             {status === 'updating' && (
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
                     <h3 className="text-lg font-semibold text-orange-400 mb-4">Upgrade in Progress...</h3>
-                    <div className="flex items-center">
-                        <Loader />
-                        <p className="ml-4 font-mono text-slate-300">{updateProgress}</p>
-                    </div>
-                     <div className="w-full bg-slate-700 rounded-full h-2.5 mt-4">
-                        <div className="bg-orange-500 h-2.5 rounded-full animate-pulse"></div>
-                    </div>
+                    <pre className="w-full overflow-auto text-sm bg-slate-900 p-4 rounded-md text-slate-300 font-mono whitespace-pre-wrap h-64">
+                       {updateLog.join('\n')}
+                    </pre>
                 </div>
             )}
 

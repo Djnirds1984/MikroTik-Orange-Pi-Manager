@@ -6,6 +6,7 @@ const https = require('https');
 const path = require('path');
 const fs = require('fs').promises;
 const esbuild = require('esbuild');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -89,6 +90,81 @@ const handleRequest = async (req, res, callback) => {
 };
 
 // --- API Endpoints ---
+
+// Versioning and Updater endpoints
+app.get('/api/current-version', async (req, res) => {
+    try {
+        const packageJsonPath = path.join(__dirname, 'package.json');
+        const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));
+        res.json({ version: packageJson.version });
+    } catch (error) {
+        console.error("Could not read package.json:", error);
+        res.status(500).json({ error: "Could not determine server version." });
+    }
+});
+
+app.get('/api/update-app', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const sendEvent = (data) => {
+        const lines = data.split('\n');
+        for (const line of lines) {
+            res.write(`data: ${line}\n\n`);
+        }
+    };
+
+    const runCommand = (command, args, cwd, name) => {
+        return new Promise((resolve, reject) => {
+            sendEvent(`--- Running ${name} ---`);
+            const child = spawn(command, args, { cwd });
+
+            child.stdout.on('data', (data) => sendEvent(data.toString().trim()));
+            child.stderr.on('data', (data) => sendEvent(`ERROR: ${data.toString().trim()}`));
+
+            child.on('close', (code) => {
+                if (code === 0) {
+                    sendEvent(`--- ${name} completed successfully ---\n`);
+                    resolve();
+                } else {
+                    sendEvent(`--- ${name} failed with code ${code} ---\n`);
+                    reject(new Error(`Command failed: ${name}`));
+                }
+            });
+             child.on('error', (err) => {
+                sendEvent(`--- Failed to start ${name}: ${err.message} ---\n`);
+                reject(err);
+            });
+        });
+    };
+
+    (async () => {
+        try {
+            const projectRoot = path.join(__dirname, '..');
+            await runCommand('git', ['pull'], projectRoot, 'git pull');
+            await runCommand('npm', ['install'], __dirname, 'npm install');
+            
+            sendEvent('--- Restarting application ---');
+            sendEvent('UPDATE_COMPLETE: Please refresh your browser in a few seconds.');
+            
+            // Detach the restart process so it can kill the current server instance
+            const pm2 = spawn('pm2', ['restart', 'mikrotik-manager'], {
+                detached: true,
+                stdio: 'ignore'
+            });
+            pm2.unref();
+
+            res.end();
+        } catch (error) {
+            sendEvent(`\n--- UPDATE FAILED ---`);
+            sendEvent(error.message);
+            res.end();
+        }
+    })();
+});
+
 
 // Test connection endpoint
 app.post('/api/test-connection', async (req, res) => {
