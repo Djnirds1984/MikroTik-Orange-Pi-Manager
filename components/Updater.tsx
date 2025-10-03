@@ -1,221 +1,107 @@
+import React, { useState } from 'react';
+import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants';
+import { Loader } from './Loader';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { Loader } from './Loader.tsx';
-import { CloudArrowUpIcon, UpdateIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants.tsx';
-
-type Status = 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'error' | 'updating' | 'rolling-back';
-
-interface LatestCommitInfo {
-    sha: string;
-    message: string;
-    author: string;
-    date: string;
-}
-
-const StatusDisplay: React.FC<{ status: Status, errorMessage?: string | null }> = ({ status, errorMessage }) => {
-    switch (status) {
-        case 'checking':
-            return <div className="flex items-center text-orange-400"><Loader /><span className="ml-3">Checking for updates...</span></div>;
-        case 'up-to-date':
-            return <div className="flex items-center text-green-400"><CheckCircleIcon className="w-6 h-6" /><span className="ml-3 font-semibold">You are on the latest version.</span></div>;
-        case 'update-available':
-            return <div className="flex items-center text-cyan-400"><UpdateIcon className="w-6 h-6" /><span className="ml-3 font-semibold">A new version is available!</span></div>;
-        case 'error':
-             return <div className="flex items-center text-red-400"><ExclamationTriangleIcon className="w-6 h-6" /><span className="ml-3 font-semibold">Error: {errorMessage || "Could not fetch update information."}</span></div>;
-        case 'idle': default:
-            return <p className="text-slate-500">Check for the latest version of the management panel.</p>;
-    }
-}
+type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'error';
 
 export const Updater: React.FC = () => {
-    const [status, setStatus] = useState<Status>('idle');
-    const [currentVersion, setCurrentVersion] = useState<string>('?.?.?');
-    const [currentCommit, setCurrentCommit] = useState<string>('...');
-    const [latestCommitInfo, setLatestCommitInfo] = useState<LatestCommitInfo | null>(null);
-    const [errorMessage, setErrorMessage] = useState<string | null>(null);
-    const [processLog, setProcessLog] = useState<string[]>([]);
-    const [backups, setBackups] = useState<string[]>([]);
-    
-    const fetchInitialData = useCallback(async () => {
-        try {
-            const [updateStatusRes, backupsResponse] = await Promise.all([
-                fetch('/api/update-status'),
-                fetch('/api/list-backups')
-            ]);
-    
-            if (!updateStatusRes.ok) {
-                 const errData = await updateStatusRes.json();
-                 throw new Error(errData.error || 'Failed to fetch updater status');
-            }
-            const statusData = await updateStatusRes.json();
-            setCurrentVersion(statusData.version);
-            setCurrentCommit(statusData.currentCommit);
-    
-            if (!backupsResponse.ok) throw new Error('Failed to fetch backups');
-            const backupsData = await backupsResponse.json();
-            setBackups(backupsData);
+  const [status, setStatus] = useState<UpdateStatus>('idle');
+  const [currentVersion] = useState('1.0.0');
+  const [latestVersion] = useState('1.1.0');
 
-        } catch (error) {
-            console.error("Could not fetch initial data:", error);
-            setStatus('error');
-            setErrorMessage((error as Error).message);
-        }
-    }, []);
+  const handleCheckForUpdates = () => {
+    setStatus('checking');
+    // Simulate an API call
+    setTimeout(() => {
+      // Simulate a random outcome for demonstration
+      const randomOutcome = Math.random();
+      if (randomOutcome < 0.2) {
+        setStatus('error');
+      } else if (currentVersion === latestVersion) {
+        setStatus('uptodate');
+      } else {
+        setStatus('available');
+      }
+    }, 2000);
+  };
 
-    useEffect(() => {
-        fetchInitialData();
-    }, [fetchInitialData]);
-
-    const handleCheckForUpdates = useCallback(async () => {
-        setStatus('checking');
-        setLatestCommitInfo(null);
-        setErrorMessage(null);
-
-        try {
-            const response = await fetch('/api/update-status');
-            if (!response.ok) {
-                const errData = await response.json();
-                throw new Error(errData.error || `Server responded with status ${response.status}`);
-            }
-            const data = await response.json();
-
-            setCurrentVersion(data.version);
-            setCurrentCommit(data.currentCommit);
-
-            if (data.updateAvailable) {
-                setLatestCommitInfo(data.latestCommitInfo);
-                setStatus('update-available');
-            } else {
-                setStatus('up-to-date');
-            }
-        } catch (error) {
-            console.error("Failed to check for updates:", error);
-            setStatus('error');
-            setErrorMessage((error as Error).message);
-        }
-    }, []);
-
-    const handleUpgrade = useCallback(() => {
-        if (!window.confirm("This will update the application and restart the server. Are you sure?")) return;
-        setStatus('updating');
-        setProcessLog(['Connecting to update server...']);
-
-        const eventSource = new EventSource('/api/update-app');
-        eventSource.onmessage = (event) => {
-            setProcessLog(prev => [...prev, event.data]);
-            if (event.data.startsWith('UPDATE_COMPLETE')) eventSource.close();
-        };
-        eventSource.onerror = () => {
-            setProcessLog(prev => [...prev, "\nConnection lost. This is expected on restart. Please refresh."]);
-            eventSource.close();
-        };
-    }, []);
-
-    const handleRollback = useCallback((filename: string) => {
-        if (!window.confirm(`This will restore the backup "${filename}" and restart the server. Are you sure?`)) return;
-        setStatus('rolling-back');
-        setProcessLog([`Connecting to server to restore ${filename}...`]);
-
-        const eventSource = new EventSource(`/api/rollback?filename=${encodeURIComponent(filename)}`);
-        fetch('/api/rollback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ filename }),
-        }).then(response => {
-             const reader = response.body?.getReader();
-             const decoder = new TextDecoder();
-             const read = () => {
-                reader?.read().then(({done, value}) => {
-                    if (done) return;
-                    const chunk = decoder.decode(value, {stream: true});
-                    const messages = chunk.split('\n\n').filter(Boolean);
-                    for (const message of messages) {
-                        const data = message.replace(/^data: /, '');
-                        setProcessLog(prev => [...prev, data]);
-                        if (data.startsWith('UPDATE_COMPLETE')) return;
-                    }
-                    read();
-                });
-             };
-             read();
-        }).catch(err => {
-            setProcessLog(prev => [...prev, `\nError initiating rollback: ${err.message}`]);
-        });
-    }, []);
-
-    const isBusy = status === 'checking' || status === 'updating' || status === 'rolling-back';
-    
-    return (
-        <div className="max-w-4xl mx-auto flex flex-col space-y-8">
-            <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-                 <h2 className="text-2xl font-bold text-slate-100 mb-2">Panel Updater</h2>
-                 <p className="text-slate-400 mb-6">Keep your management panel up-to-date with the latest features and security fixes.</p>
-                 
-                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-900/50 p-4 rounded-md border border-slate-700">
-                    <div className="mb-4 sm:mb-0">
-                        <p className="text-sm text-slate-400">
-                            Current Version: <span className="font-mono bg-slate-700 px-2 py-1 rounded">{currentVersion}</span>
-                            <span className="font-mono ml-2 text-xs">({(currentCommit || '').substring(0, 7)})</span>
-                        </p>
-                        <div className="mt-4 h-6">
-                            <StatusDisplay status={status} errorMessage={errorMessage} />
-                        </div>
-                    </div>
-                    {status === 'update-available' ? (
-                        <button onClick={handleUpgrade} disabled={isBusy} className="w-full sm:w-auto flex items-center justify-center bg-cyan-600 hover:bg-cyan-500 disabled:bg-cyan-800 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg">
-                            <UpdateIcon className="w-5 h-5 mr-2" /> Upgrade Now
-                        </button>
-                    ) : (
-                        <button onClick={handleCheckForUpdates} disabled={isBusy} className="w-full sm:w-auto flex items-center justify-center bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg">
-                            <CloudArrowUpIcon className="w-5 h-5 mr-2" /> Check for Updates
-                        </button>
-                    )}
-                 </div>
+  const renderStatus = () => {
+    switch (status) {
+      case 'checking':
+        return (
+          <div className="flex items-center space-x-3">
+            <Loader />
+            <span className="text-slate-300">Checking for updates...</span>
+          </div>
+        );
+      case 'uptodate':
+        return (
+          <div className="flex items-center space-x-3 text-green-400">
+            <CheckCircleIcon className="w-8 h-8" />
+            <div>
+              <p className="font-semibold">You are up to date!</p>
+              <p className="text-sm text-slate-400">Panel version {currentVersion} is the latest version.</p>
             </div>
-
-            {(status === 'updating' || status === 'rolling-back') && (
-                <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-                    <h3 className="text-lg font-semibold text-orange-400 mb-4">{status === 'updating' ? 'Upgrade' : 'Rollback'} in Progress...</h3>
-                    <pre className="w-full overflow-auto text-sm bg-slate-900 p-4 rounded-md text-slate-300 font-mono whitespace-pre-wrap h-64">
-                       {processLog.join('\n')}
-                    </pre>
-                </div>
-            )}
-            
-            {(latestCommitInfo && (status === 'update-available' || status === 'up-to-date')) && (
-                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-                     <h3 className="text-lg font-semibold text-orange-400 mb-4">Latest Version Information</h3>
-                     <div className="border-b border-slate-700 pb-3 mb-3">
-                        <p className="text-slate-300 font-bold text-lg whitespace-pre-wrap">{latestCommitInfo.message.split('\n')[0]}</p>
-                        <p className="text-slate-500 text-sm">by {latestCommitInfo.author} on {new Date(latestCommitInfo.date).toLocaleDateString()}</p>
-                     </div>
-                     <pre className="w-full overflow-auto text-sm text-slate-400 font-sans whitespace-pre-wrap max-h-48">
-                        {latestCommitInfo.message}
-                     </pre>
-                </div>
-            )}
-
-             <div className="bg-slate-800 border border-slate-700 rounded-lg p-6">
-                <h2 className="text-xl font-bold text-slate-100 mb-4">Available Backups</h2>
-                {backups.length > 0 ? (
-                    <ul className="divide-y divide-slate-700">
-                        {backups.map(backupFile => (
-                            <li key={backupFile} className="py-3 flex items-center justify-between">
-                                <span className="font-mono text-sm text-slate-300">{backupFile}</span>
-                                <button
-                                    onClick={() => handleRollback(backupFile)}
-                                    disabled={isBusy}
-                                    className="px-3 py-1 text-sm font-semibold bg-slate-600 hover:bg-slate-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-md transition-colors"
-                                >
-                                    Restore
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-slate-500 text-center py-4">No backups found. A backup is automatically created before an update.</p>
-                )}
+          </div>
+        );
+      case 'available':
+        return (
+          <div className="flex items-center space-x-3 text-cyan-400">
+            <CloudArrowUpIcon className="w-8 h-8" />
+            <div>
+              <p className="font-semibold">Update available!</p>
+              <p className="text-sm text-slate-400">Version {latestVersion} is ready to be installed.</p>
+            </div>
+          </div>
+        );
+       case 'error':
+        return (
+          <div className="flex items-center space-x-3 text-red-400">
+            <ExclamationTriangleIcon className="w-8 h-8" />
+            <div>
+              <p className="font-semibold">Could not check for updates.</p>
+              <p className="text-sm text-slate-400">Please check your internet connection and try again.</p>
+            </div>
+          </div>
+        );
+      case 'idle':
+      default:
+        return (
+          <div className="flex items-center space-x-3">
+             <UpdateIcon className="w-8 h-8 text-slate-500" />
+             <div>
+                <p className="text-slate-400">Check for the latest version of the panel.</p>
+                <p className="text-xs text-slate-500">Current version: {currentVersion}</p>
              </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">
+        <h2 className="text-2xl font-bold text-slate-100 mb-6">Panel Updater</h2>
+        <div className="bg-slate-900/50 p-6 rounded-lg min-h-[100px] flex items-center justify-center">
+            {renderStatus()}
         </div>
-    );
-}
+        <div className="mt-6 flex justify-end space-x-4">
+             {status === 'available' && (
+                <button
+                    className="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                >
+                    Install Update
+                </button>
+             )}
+            <button
+                onClick={handleCheckForUpdates}
+                disabled={status === 'checking'}
+                className="bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg transition-colors"
+            >
+                {status === 'checking' ? 'Checking...' : 'Check for Updates'}
+            </button>
+        </div>
+      </div>
+    </div>
+  );
+};
