@@ -1,5 +1,5 @@
 const express = require('express');
-const { build } = require('esbuild');
+const { transform } = require('esbuild'); // Use transform instead of build
 const path = require('path');
 const fs = require('fs-extra');
 const { exec } = require('child_process');
@@ -14,15 +14,19 @@ app.use(async (req, res, next) => {
     if (req.url.endsWith('.tsx')) {
         try {
             const filePath = path.join(__dirname, '..', req.url);
-            const result = await build({
-                entryPoints: [filePath],
-                bundle: false,
-                loader: 'tsx',
+            
+            // Prevent server crash if a .tsx file is not found
+            if (!await fs.pathExists(filePath)) {
+                return res.status(404).send('// File not found');
+            }
+            
+            const source = await fs.readFile(filePath, 'utf8');
+            const result = await transform(source, {
+                loader: 'tsx', // 'loader' as a string is correct for the transform() API
                 target: 'esnext',
-                write: false,
             });
             res.setHeader('Content-Type', 'application/javascript');
-            res.send(result.outputFiles[0].text);
+            res.send(result.code);
         } catch (e) {
             console.error('ESBuild transpilation failed:', e);
             res.status(500).send('// Transpilation Error');
@@ -31,6 +35,7 @@ app.use(async (req, res, next) => {
         next();
     }
 });
+
 
 // --- Static File Serving ---
 app.use(express.static(path.join(__dirname, '..')));
