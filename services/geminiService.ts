@@ -1,17 +1,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Access the API key from the `window` object, as set by env.js
-const API_KEY = (window as any).process.env.API_KEY;
-
-if (!API_KEY || API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
-  console.warn("Gemini API Key is not configured. Please add it to env.js. The AI Scripting feature will be disabled.");
-}
-
-// Initialize the client only if the key is valid
-const ai = (API_KEY && API_KEY !== "YOUR_GEMINI_API_KEY_HERE")
-  ? new GoogleGenAI({ apiKey: API_KEY })
-  : null;
+// Fix: Initialize the GoogleGenAI client directly with the API key from the environment variable as per guidelines.
+// It is assumed that process.env.API_KEY is properly configured in the execution environment.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_INSTRUCTION = `You are an expert MikroTik network engineer specializing in RouterOS.
 Your sole purpose is to generate RouterOS terminal command scripts based on user requests.
@@ -23,13 +15,8 @@ Follow these rules strictly:
 5. If the request is impossible or nonsensical, output a single comment line starting with '#' explaining why. For example: '# Error: Cannot assign a public IP to a local bridge.'`;
 
 export const generateMikroTikScript = async (userPrompt: string): Promise<string> => {
-  if (!ai) {
-    const errorMessage = "Gemini AI client is not initialized. Please configure your API key in env.js.";
-    console.error(errorMessage);
-    // Return a user-friendly error message as a comment in the script block
-    return Promise.resolve(`# Error: ${errorMessage}`);
-  }
-
+  // Fix: Removed conditional client initialization. The client is now always initialized.
+  // The try-catch block will handle any issues with the API key or network at runtime.
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -42,12 +29,18 @@ export const generateMikroTikScript = async (userPrompt: string): Promise<string
       },
     });
 
+    // Fix: Directly access the 'text' property on the response as per guidelines.
     const script = response.text.trim();
     
     // Clean up potential markdown code block formatting
     return script.replace(/^```(routeros|bash|sh)?\s*|```$/g, '').trim();
   } catch (error) {
     console.error("Error generating script from Gemini API:", error);
-    throw new Error("Failed to communicate with the AI service. Check your API key and internet connection.");
+    // Fix: Improved error handling to return a user-friendly message within the script block.
+    // This avoids throwing an unhandled exception in the UI.
+    if (error instanceof Error && error.message.includes('API key not valid')) {
+        return `# Error: Invalid Gemini API Key. Please ensure it is configured correctly in your environment.`;
+    }
+    return `# Error: Failed to communicate with the AI service. Check your internet connection and API key.`;
   }
 };
