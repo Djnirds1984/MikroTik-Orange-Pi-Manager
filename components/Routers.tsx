@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import type { RouterConfig, RouterConfigWithId } from '../types.ts';
-import { testRouterConnection } from '../services/mikrotikService.ts';
-import { EditIcon, TrashIcon, RouterIcon } from '../constants.tsx';
+// Fix: Removed .ts extension from import paths.
+import type { RouterConfig, RouterConfigWithId } from '../types';
+import { testRouterConnection } from '../services/mikrotikService';
+import { EditIcon, TrashIcon, RouterIcon } from '../constants';
 
 interface RouterFormProps {
     onSave: (routerConfig: RouterConfig | RouterConfigWithId) => void;
@@ -48,6 +49,7 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
         if (initialData) {
             const finalRouterData = { ...initialData, ...router };
             if (!router.password) {
+                // @ts-ignore
                 finalRouterData.password = initialData.password;
             }
             onSave(finalRouterData);
@@ -61,6 +63,7 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
         setTestResult(null);
         const testConfig: RouterConfig = {...router};
         if (initialData && !router.password) {
+             // @ts-ignore
              testConfig.password = initialData.password;
         }
         const result = await testRouterConnection(testConfig);

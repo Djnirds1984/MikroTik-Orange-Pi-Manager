@@ -6,10 +6,11 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService.ts';
-import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types.ts';
-import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants.tsx';
-import { Loader } from './Loader.tsx';
+// Fix: Removed .ts extension from import paths.
+import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService';
+import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types';
+import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants';
+import { Loader } from './Loader';
 
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
@@ -70,6 +71,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const initialFetch = useCallback(async () => {
         if (!selectedRouter) {
             setIsLoading(false);
+            setSystemInfo(null);
+            setInterfaces([]);
+            setHotspotClients([]);
             return;
         }
         setIsLoading(true);

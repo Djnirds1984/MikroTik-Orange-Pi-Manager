@@ -1,80 +1,87 @@
-import React, { useState, useEffect } from 'react';
-import { Sidebar } from './components/Sidebar.tsx';
-import { TopBar } from './components/TopBar.tsx';
-import { Footer } from './components/Footer.tsx';
-import { Dashboard } from './components/Dashboard.tsx';
-import { Scripting } from './components/Scripting.tsx';
-import { Updater } from './components/Updater.tsx';
-import { Routers } from './components/Routers.tsx';
-import { Pppoe } from './components/Pppoe.tsx';
-import { useRouters } from './hooks/useRouters.ts';
-
-type View = 'dashboard' | 'pppoe' | 'scripting' | 'updater' | 'routers';
-
-const VIEW_TITLES: Record<View, string> = {
-  dashboard: 'Dashboard',
-  pppoe: 'PPPoE Manager',
-  scripting: 'AI Script Assistant',
-  updater: 'Panel Updater',
-  routers: 'Manage Routers',
-};
+import React, { useState, useMemo, useEffect } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { TopBar } from './components/TopBar';
+import { Dashboard } from './components/Dashboard';
+import { Scripting } from './components/Scripting';
+import { Routers } from './components/Routers';
+import { Updater } from './components/Updater';
+import { Pppoe } from './components/Pppoe';
+import { Billing } from './components/Billing';
+import { useRouters } from './hooks/useRouters';
+import type { View } from './types';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const { routers, addRouter, updateRouter, deleteRouter } = useRouters();
   const [selectedRouterId, setSelectedRouterId] = useState<string | null>(() => {
-    return localStorage.getItem('selectedRouterId');
-  });
-
-  useEffect(() => {
-    if (selectedRouterId) {
-      localStorage.setItem('selectedRouterId', selectedRouterId);
-    } else {
-      localStorage.removeItem('selectedRouterId');
+    // Initialize selected router from localStorage if available
+    try {
+      const storedRouters = JSON.parse(localStorage.getItem('mikrotikRouters') || '[]');
+      return storedRouters.length > 0 ? storedRouters[0].id : null;
+    } catch {
+      return null;
     }
-  }, [selectedRouterId]);
+  });
+  const { routers, addRouter, updateRouter, deleteRouter } = useRouters();
 
   useEffect(() => {
-    // If there's no selected router, try to select the first one.
+    // If there's no selected router but there are routers available, select the first one.
     if (!selectedRouterId && routers.length > 0) {
       setSelectedRouterId(routers[0].id);
     }
-    // If the selected router was deleted, clear the selection.
+    // If the selected router is deleted, clear the selection and pick the first available.
     if (selectedRouterId && !routers.find(r => r.id === selectedRouterId)) {
-      setSelectedRouterId(null);
+        setSelectedRouterId(routers.length > 0 ? routers[0].id : null);
     }
   }, [routers, selectedRouterId]);
-  
-  const selectedRouter = routers.find(r => r.id === selectedRouterId) || null;
+
+  const selectedRouter = useMemo(
+    () => routers.find(r => r.id === selectedRouterId) || null,
+    [routers, selectedRouterId]
+  );
+
+  const renderView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <Dashboard selectedRouter={selectedRouter} />;
+      case 'scripting':
+        return <Scripting />;
+      case 'routers':
+        return <Routers routers={routers} onAddRouter={addRouter} onUpdateRouter={updateRouter} onDeleteRouter={deleteRouter} />;
+      case 'pppoe':
+          return <Pppoe selectedRouter={selectedRouter} />;
+      case 'billing':
+          return <Billing />;
+      case 'updater':
+        return <Updater />;
+      default:
+        return <Dashboard selectedRouter={selectedRouter} />;
+    }
+  };
+
+  const titles: Record<View, string> = {
+    dashboard: 'Dashboard',
+    scripting: 'AI Script Generator',
+    routers: 'Router Management',
+    pppoe: 'PPPoE Server',
+    billing: 'Billing Plans',
+    updater: 'Panel Updater',
+  };
 
   return (
-    <div className="flex min-h-screen bg-slate-900 text-slate-200 font-sans">
+    <div className="flex bg-slate-950 text-slate-100 min-h-screen">
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
-      
-      <div className="flex-grow flex flex-col ml-64"> {/* Offset for sidebar width */}
+      <main className="flex-1 flex flex-col">
         <TopBar
-            title={VIEW_TITLES[currentView]}
-            routers={routers}
-            selectedRouter={selectedRouter}
-            onSelectRouter={setSelectedRouterId}
-            setCurrentView={setCurrentView}
+          title={titles[currentView]}
+          routers={routers}
+          selectedRouter={selectedRouter}
+          onSelectRouter={setSelectedRouterId}
+          setCurrentView={setCurrentView}
         />
-        <main className="flex-grow container mx-auto px-8 py-8">
-          {currentView === 'dashboard' && <Dashboard selectedRouter={selectedRouter} />}
-          {currentView === 'pppoe' && <Pppoe selectedRouter={selectedRouter} />}
-          {currentView === 'scripting' && <Scripting />}
-          {currentView === 'updater' && <Updater />}
-          {currentView === 'routers' && (
-            <Routers 
-              routers={routers}
-              onAddRouter={addRouter}
-              onUpdateRouter={updateRouter}
-              onDeleteRouter={deleteRouter}
-            />
-          )}
-        </main>
-        <Footer />
-      </div>
+        <div className="p-8 overflow-auto">
+          {renderView()}
+        </div>
+      </main>
     </div>
   );
 };

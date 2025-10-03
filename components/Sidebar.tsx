@@ -1,49 +1,64 @@
 import React from 'react';
-import { MikroTikLogoIcon } from '../constants.tsx';
-
-type View = 'dashboard' | 'pppoe' | 'scripting' | 'updater' | 'routers';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon } from '../constants';
+import type { View } from '../types';
 
 interface SidebarProps {
   currentView: View;
   setCurrentView: (view: View) => void;
 }
 
-const NavLink: React.FC<{
+const NavItem: React.FC<{
+  icon: React.ReactNode;
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = ({ label, isActive, onClick }) => (
-  <button
-    onClick={onClick}
-    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center gap-3 ${
-      isActive
-        ? 'bg-orange-600 text-white'
-        : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-    }`}
-  >
-    {label}
-  </button>
-);
-
+}> = ({ icon, label, isActive, onClick }) => {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className={`flex items-center w-full p-3 text-base font-normal rounded-lg transition duration-75 group ${
+          isActive
+            ? 'bg-orange-600 text-white'
+            : 'text-slate-300 hover:bg-slate-700'
+        }`}
+      >
+        {icon}
+        <span className="flex-1 ml-3 text-left whitespace-nowrap">{label}</span>
+      </button>
+    </li>
+  );
+};
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
+  const navItems = [
+    { id: 'dashboard', label: 'Dashboard', icon: <EthernetIcon className="w-6 h-6" /> },
+    { id: 'scripting', label: 'AI Scripting', icon: <EditIcon className="w-6 h-6" /> },
+    { id: 'routers', label: 'Routers', icon: <RouterIcon className="w-6 h-6" /> },
+    { id: 'pppoe', label: 'PPPoE', icon: <VlanIcon className="w-6 h-6" /> },
+    { id: 'billing', label: 'Billing Plans', icon: <SignalIcon className="w-6 h-6" /> },
+    { id: 'updater', label: 'Updater', icon: <UpdateIcon className="w-6 h-6" /> },
+  ] as const;
+
   return (
-    <aside className="fixed top-0 left-0 h-full w-64 bg-slate-800 border-r border-slate-700 flex flex-col p-4 z-30">
-        <div className="flex items-center gap-3 px-2 pb-6 border-b border-slate-700">
-          <MikroTikLogoIcon className="h-10 w-10 text-orange-500" />
-          <div>
-            <h1 className="text-lg font-bold text-slate-100">MikroTik Manager</h1>
-            <p className="text-xs text-slate-400">for Orange Pi</p>
-          </div>
-        </div>
-      
-        <nav className="flex flex-col gap-2 mt-6">
-            <NavLink label="Dashboard" isActive={currentView === 'dashboard'} onClick={() => setCurrentView('dashboard')} />
-            <NavLink label="PPPoE" isActive={currentView === 'pppoe'} onClick={() => setCurrentView('pppoe')} />
-            <NavLink label="Routers" isActive={currentView === 'routers'} onClick={() => setCurrentView('routers')} />
-            <NavLink label="AI Script" isActive={currentView === 'scripting'} onClick={() => setCurrentView('scripting')} />
-            <NavLink label="Updater" isActive={currentView === 'updater'} onClick={() => setCurrentView('updater')} />
-        </nav>
+    <aside className="w-64 h-screen sticky top-0 bg-slate-900 border-r border-slate-800" aria-label="Sidebar">
+      <div className="flex items-center justify-center h-16 border-b border-slate-800">
+          <MikroTikLogoIcon className="w-8 h-8 text-orange-500" />
+          <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white">MikroTik UI</span>
+      </div>
+      <div className="h-full px-3 py-4 overflow-y-auto">
+        <ul className="space-y-2">
+          {navItems.map((item) => (
+            <NavItem
+              key={item.id}
+              label={item.label}
+              icon={item.icon}
+              isActive={currentView === item.id}
+              onClick={() => setCurrentView(item.id)}
+            />
+          ))}
+        </ul>
+      </div>
     </aside>
   );
 };

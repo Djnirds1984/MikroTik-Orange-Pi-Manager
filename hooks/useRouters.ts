@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { RouterConfig, RouterConfigWithId } from '../types.ts';
+// Fix: Removed .ts extension from import path.
+import type { RouterConfig, RouterConfigWithId } from '../types';
 
 const STORAGE_KEY = 'mikrotikRouters';
 

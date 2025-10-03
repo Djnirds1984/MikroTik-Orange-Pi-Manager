@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { RouterConfigWithId } from '../types.ts';
+// Fix: Removed .ts extension from import path.
+import type { RouterConfigWithId, View } from '../types';
 
 interface TopBarProps {
   title: string;
   routers: RouterConfigWithId[];
   selectedRouter: RouterConfigWithId | null;
   onSelectRouter: (id: string | null) => void;
-  setCurrentView: (view: 'dashboard' | 'scripting' | 'updater' | 'routers') => void;
+  setCurrentView: (view: View) => void;
 }
 
 const RouterSelector: React.FC<{
   routers: RouterConfigWithId[];
   selectedRouter: RouterConfigWithId | null;
   onSelectRouter: (id: string) => void;
-  setCurrentView: (view: 'dashboard' | 'scripting' | 'updater' | 'routers') => void;
+  setCurrentView: (view: View) => void;
 }> = ({ routers, selectedRouter, onSelectRouter, setCurrentView }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);

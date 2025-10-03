@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, PppoeSettings, PppoeClient } from '../types.ts';
-import { getPppoeSettings, getPppoeActiveClients } from '../services/mikrotikService.ts';
-import { Loader } from './Loader.tsx';
-import { RouterIcon } from '../constants.tsx';
+// Fix: Removed .ts extension from import paths.
+import type { RouterConfigWithId, PppoeSettings, PppoeClient } from '../types';
+import { getPppoeSettings, getPppoeActiveClients } from '../services/mikrotikService';
+import { Loader } from './Loader';
+import { RouterIcon } from '../constants';
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
   <div className={`bg-slate-800 border border-slate-700 rounded-lg p-6 ${className}`}>
@@ -51,6 +52,8 @@ export const Pppoe: React.FC<PppoeProps> = ({ selectedRouter }) => {
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
             setIsLoading(false);
+            setSettings(null);
+            setClients([]);
             return;
         }
         setIsLoading(true);

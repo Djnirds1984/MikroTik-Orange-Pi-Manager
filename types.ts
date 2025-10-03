@@ -1,3 +1,17 @@
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'billing' | 'updater';
+
+export interface RouterConfig {
+  name: string;
+  host: string;
+  user: string;
+  password?: string;
+  port: number;
+}
+
+export interface RouterConfigWithId extends RouterConfig {
+  id: string;
+}
+
 export interface SystemInfo {
   boardName: string;
   version: string;
@@ -14,8 +28,13 @@ export interface Interface {
   txRate: number; // in bits per second
 }
 
+export interface TrafficHistoryPoint {
+  rx: number; // in Mbps
+  tx: number; // in Mbps
+}
+
 export interface InterfaceWithHistory extends Interface {
-    trafficHistory: { rx: number, tx: number }[]; // in Mbit/s for the chart
+  trafficHistory: TrafficHistoryPoint[];
 }
 
 export interface HotspotClient {
@@ -24,20 +43,6 @@ export interface HotspotClient {
   signal: string;
 }
 
-export interface PppoeClient {
-    id: string;
-    name: string;
-    service: string;
-    callerId: string;
-    address: string;
-    uptime: string;
-}
-
-export interface RadiusConfig {
-    address: string;
-    secret: string; // Masked on arrival
-    timeout: string;
-}
 export interface PppoeSettings {
     useRadius: boolean;
     defaultProfile: string;
@@ -46,36 +51,29 @@ export interface PppoeSettings {
         chap: boolean;
         mschap1: boolean;
         mschap2: boolean;
-    },
-    radiusConfig: RadiusConfig | null;
+    };
+    radiusConfig?: {
+        address: string;
+    }
 }
 
-export interface LogEntry {
-  time: string;
-  topic: string;
-  message: string;
+export interface PppoeClient {
+    id: string;
+    name: string;
+    service: string;
+    address: string;
+    callerId: string;
+    uptime: string;
 }
 
-export interface GitHubRelease {
-  tag_name: string;
-  name: string;
-  published_at: string;
-  body: string;
+export interface BillingPlan {
+    name: string;
+    price: number;
+    uploadSpeed: number; // in Mbps
+    downloadSpeed: number; // in Mbps
+    description: string;
 }
 
-export interface RouterConfig {
-  name: string;
-  host: string;
-  user: string;
-  password?: string;
-  port: number;
-}
-
-export interface RouterConfigWithId extends RouterConfig {
-  id: string;
-}
-
-export interface TestConnectionResponse {
-    success: boolean;
-    message: string;
+export interface BillingPlanWithId extends BillingPlan {
+    id: string;
 }
