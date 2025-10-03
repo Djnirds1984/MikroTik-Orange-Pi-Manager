@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData } from '../types.ts';
 import { getPppProfiles, getIpPools, addPppProfile, updatePppProfile, deletePppProfile } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, EditIcon, TrashIcon } from '../constants.tsx';
+import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon } from '../constants.tsx';
 
 // --- Modal Form for Add/Edit ---
 interface ProfileFormModalProps {
@@ -12,9 +12,10 @@ interface ProfileFormModalProps {
     initialData: PppProfile | null;
     pools: IpPool[];
     isLoading: boolean;
+    poolError?: string;
 }
 
-const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, onSave, initialData, pools, isLoading }) => {
+const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, onSave, initialData, pools, isLoading, poolError }) => {
     const [profile, setProfile] = useState<PppProfileData>({ name: '', localAddress: '', remoteAddress: 'none', rateLimit: '' });
 
     useEffect(() => {
@@ -64,6 +65,12 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
                                 </div>
                                 <div>
                                     <label htmlFor="remoteAddress" className="block text-sm font-medium text-slate-300">Remote Address (Pool)</label>
+                                    {poolError && 
+                                        <div className="flex items-center gap-2 text-xs text-yellow-400 mt-1 bg-yellow-900/30 border border-yellow-800/50 p-2 rounded-md">
+                                            <ExclamationTriangleIcon className="w-4 h-4 flex-shrink-0" />
+                                            <span>{poolError} List may be incomplete.</span>
+                                        </div>
+                                    }
                                     <select name="remoteAddress" id="remoteAddress" value={profile.remoteAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
                                         <option value="none">none</option>
                                         {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
@@ -94,7 +101,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
     const [pools, setPools] = useState<IpPool[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<{ profiles?: string; pools?: string } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProfile, setEditingProfile] = useState<PppProfile | null>(null);
 
@@ -107,19 +114,33 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         }
         setIsLoading(true);
         setError(null);
-        try {
-            const [profilesData, poolsData] = await Promise.all([
-                getPppProfiles(selectedRouter),
-                getIpPools(selectedRouter),
-            ]);
-            setProfiles(profilesData);
-            setPools(poolsData);
-        } catch (err) {
-            console.error("Failed to fetch PPPoE data:", err);
-            setError(`Could not fetch PPPoE data from "${selectedRouter.name}". Ensure the PPP package is enabled.`);
-        } finally {
-            setIsLoading(false);
+
+        const [profilesResult, poolsResult] = await Promise.allSettled([
+            getPppProfiles(selectedRouter),
+            getIpPools(selectedRouter),
+        ]);
+
+        const newErrors: { profiles?: string; pools?: string } = {};
+
+        if (profilesResult.status === 'fulfilled') {
+            setProfiles(profilesResult.value);
+        } else {
+            console.error("Failed to fetch PPPoE profiles:", profilesResult.reason);
+            newErrors.profiles = `Could not fetch PPPoE profiles. Ensure the PPP package is enabled on "${selectedRouter.name}".`;
         }
+
+        if (poolsResult.status === 'fulfilled') {
+            setPools(poolsResult.value);
+        } else {
+            console.error("Failed to fetch IP pools:", poolsResult.reason);
+            newErrors.pools = `Could not fetch IP pools from "${selectedRouter.name}".`;
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setError(newErrors);
+        }
+        
+        setIsLoading(false);
     }, [selectedRouter]);
 
     useEffect(() => {
@@ -182,16 +203,18 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-orange-400">Fetching PPPoE profiles from {selectedRouter.name}...</p>
+                <p className="mt-4 text-orange-400">Fetching PPPoE data from {selectedRouter.name}...</p>
             </div>
         );
     }
     
-    if (error) {
+    // If we can't get profiles, we can't do anything. Show a fatal error.
+    if (error?.profiles) {
          return (
             <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
                 <p className="text-xl font-semibold text-red-400">Failed to load PPPoE data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{error}</p>
+                <p className="mt-2 text-slate-400 text-sm">{error.profiles}</p>
+                 {error.pools && <p className="mt-2 text-slate-500 text-xs">{error.pools}</p>}
             </div>
          );
     }
@@ -205,6 +228,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                 initialData={editingProfile}
                 pools={pools}
                 isLoading={isSubmitting}
+                poolError={error?.pools}
             />
 
             <div className="flex justify-between items-center mb-6">
