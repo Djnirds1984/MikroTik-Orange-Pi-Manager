@@ -11,9 +11,9 @@ const port = 3001;
 
 // Middleware
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '..')));
 
 // ESBuild for JSX/TSX transpilation
+// This middleware MUST come before express.static to intercept .tsx requests.
 app.use(async (req, res, next) => {
     if (req.path.endsWith('.tsx') || req.path.endsWith('.ts')) {
         try {
@@ -35,6 +35,9 @@ app.use(async (req, res, next) => {
         next();
     }
 });
+
+// Static file serving for HTML, JS, CSS, etc.
+app.use(express.static(path.join(__dirname, '..')));
 
 
 // --- Updater Endpoints ---
