@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { RouterOSClient } = require('node-routeros');
+const axios = require('axios');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -9,69 +10,95 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const connectToRouter = async ({ host, user, password, port }) => {
+// Helper function to create an Axios instance for a specific router
+const createApiClient = ({ host, user, password, port, useSsl = false }) => {
     if (!host || !user) {
-        throw new Error("Router configuration (host, user) is missing in the request.");
+        throw new Error("Router configuration (host, user) is missing.");
     }
-    const client = new RouterOSClient({
-        host,
-        user,
-        password: password || '',
-        port: port || 8728,
-        timeout: 10 // seconds
+    const protocol = useSsl ? 'https' : 'http';
+    const apiPort = port || (useSsl ? 443 : 80);
+
+    const instance = axios.create({
+        baseURL: `${protocol}://${host}:${apiPort}/rest`,
+        auth: {
+            username: user,
+            password: password || '',
+        },
+        timeout: 10000, // 10 seconds timeout
+        httpsAgent: useSsl ? new https.Agent({ rejectUnauthorized: false }) : undefined,
     });
-    try {
-        await client.connect();
-        return client;
-    } catch (err) {
-        console.error(`Failed to connect to router at ${host}:`, err.message);
-        throw new Error(`Could not connect to the MikroTik router. Check connection details and ensure the router's API service is enabled at ${host}.`);
-    }
+    
+    return instance;
 };
 
+// Generic request handler
 const handleRequest = async (req, res, callback) => {
-    let client;
     try {
-        client = await connectToRouter(req.body);
-        const data = await callback(client);
+        // NOTE: The UI does not provide a useSsl option, so we default to false.
+        const apiClient = createApiClient({ ...req.body, useSsl: false });
+        const data = await callback(apiClient);
         res.json(data);
     } catch (err) {
-        console.error("Error during API request processing:", err.message);
-        res.status(500).json({ error: err.message });
-    } finally {
-        if (client && client.connected) {
-            client.close();
+        let errorMessage = 'An unknown error occurred.';
+        if (axios.isAxiosError(err)) {
+            if (err.response) {
+                // The request was made and the server responded with a status code
+                const detail = err.response.data?.detail || err.response.statusText;
+                errorMessage = `Router API error: ${err.response.status} - ${detail}`;
+            } else if (err.request) {
+                // The request was made but no response was received
+                errorMessage = `Could not connect to the MikroTik router. Check connection details and ensure the router's WWW service is enabled at ${req.body.host}.`;
+            } else {
+                // Something happened in setting up the request that triggered an Error
+                errorMessage = err.message;
+            }
+        } else {
+             errorMessage = err.message;
         }
+        console.error("Error during API request processing:", errorMessage);
+        res.status(500).json({ error: errorMessage });
     }
 };
 
+// Test connection endpoint
 app.post('/api/test-connection', async (req, res) => {
-    let client;
     try {
-        client = await connectToRouter(req.body);
+        const apiClient = createApiClient({ ...req.body, useSsl: false });
+        // A simple GET request to check connectivity and credentials
+        await apiClient.get('/system/resource');
         res.json({ success: true, message: 'Connection successful!' });
     } catch (err) {
-        res.json({ success: false, message: err.message });
-    } finally {
-        if (client && client.connected) {
-            client.close();
-        }
+        let errorMessage = 'Failed to connect.';
+         if (axios.isAxiosError(err)) {
+             if (err.response) {
+                 errorMessage = `Connection failed: ${err.response.status} ${err.response.data?.title || err.response.statusText}. Check credentials.`;
+             } else if (err.request) {
+                 errorMessage = `Connection failed. No response from ${req.body.host}. Check host, port, and firewall.`;
+             } else {
+                 errorMessage = `Connection setup error: ${err.message}`;
+             }
+         } else {
+            errorMessage = err.message;
+         }
+        res.json({ success: false, message: errorMessage });
     }
 });
 
+
+// System info endpoint
 app.post('/api/system-info', (req, res) => {
     handleRequest(req, res, async (client) => {
-        const [resource, routerboard] = await Promise.all([
-            client.write('/system/resource/print'),
-            client.write('/system/routerboard/print')
+        const [resourceRes, routerboardRes] = await Promise.all([
+            client.get('/system/resource'),
+            client.get('/system/routerboard')
         ]);
 
-        if (!resource?.[0] || !routerboard?.[0]) {
+        const sysInfo = resourceRes.data;
+        const boardInfo = routerboardRes.data;
+        
+        if (!sysInfo || !boardInfo) {
             throw new Error("Incomplete system information received from router.");
         }
-
-        const sysInfo = resource[0];
-        const boardInfo = routerboard[0];
 
         const totalMemory = parseInt(sysInfo['total-memory'], 10);
         const freeMemory = parseInt(sysInfo['free-memory'], 10);
@@ -88,48 +115,67 @@ app.post('/api/system-info', (req, res) => {
     });
 });
 
+// Interfaces endpoint
 app.post('/api/interfaces', (req, res) => {
     handleRequest(req, res, async (client) => {
-        const interfaces = await client.write('/interface/print');
-        if (!interfaces || interfaces.length === 0) {
-            return [];
-        }
-        const interfaceNames = interfaces.map(iface => iface.name);
-        
-        const traffic = await client.write('/interface/monitor-traffic', {
-            interface: interfaceNames.join(','),
-            once: true,
-        });
+        const proplist = ['.id', 'name', 'type', 'rx-byte', 'tx-byte'].join(',');
 
-        return interfaces.map(iface => {
-            const trafficData = traffic.find(t => t.name === iface.name);
+        const initialStatsRes = await client.get('/interface', { params: { '.proplist': proplist } });
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
+        const finalStatsRes = await client.get('/interface', { params: { '.proplist': proplist } });
+
+        const initialStats = initialStatsRes.data;
+        const finalStats = finalStatsRes.data;
+
+        const finalStatsMap = new Map(finalStats.map(item => [item['.id'], item]));
+
+        return initialStats.map(initialIface => {
+            const finalIface = finalStatsMap.get(initialIface['.id']);
+            if (!finalIface) {
+                return {
+                    name: initialIface.name,
+                    type: initialIface.type,
+                    rxRate: 0,
+                    txRate: 0,
+                };
+            }
+
+            const rxRate = (parseInt(finalIface['rx-byte'], 10) - parseInt(initialIface['rx-byte'], 10)) * 8;
+            const txRate = (parseInt(finalIface['tx-byte'], 10) - parseInt(initialIface['tx-byte'], 10)) * 8;
+
             return {
-                name: iface.name,
-                type: iface.type,
-                rxRate: trafficData ? parseInt(trafficData['rx-bits-per-second'], 10) : 0,
-                txRate: trafficData ? parseInt(trafficData['tx-bits-per-second'], 10) : 0,
+                name: initialIface.name,
+                type: initialIface.type,
+                rxRate: Math.max(0, rxRate), // Ensure rate is not negative
+                txRate: Math.max(0, txRate),
             };
         });
     });
 });
 
+// Hotspot clients endpoint
 app.post('/api/hotspot-clients', (req, res) => {
     handleRequest(req, res, async (client) => {
-        let clients = [];
         try {
-            clients = await client.write('/ip/hotspot/active/print');
+            const response = await client.get('/ip/hotspot/active');
+            const clients = response.data;
+            return clients.map(client => ({
+                macAddress: client['mac-address'],
+                uptime: client.uptime,
+                signal: client['signal-strength'] || 'N/A',
+            }));
         } catch (err) {
-            console.warn("Could not fetch hotspot clients. This is normal if hotspot is not configured. Error:", err.message);
+            if (axios.isAxiosError(err) && (err.response?.status === 404 || err.response?.data?.detail?.includes("no such item"))) {
+                 console.warn("Could not fetch hotspot clients. This is normal if hotspot is not configured.");
+                 return []; // Hotspot feature might not be installed or enabled
+            }
+            // Re-throw other errors to be caught by the main handler
+            throw err;
         }
-        
-        return clients.map(client => ({
-            macAddress: client['mac-address'],
-            uptime: client.uptime,
-            signal: client['signal-strength'] || 'N/A',
-        }));
     });
 });
 
+
 app.listen(PORT, () => {
-    console.log(`MikroTik stateless proxy server listening on port ${PORT}`);
+    console.log(`MikroTik stateless REST proxy server listening on port ${PORT}`);
 });

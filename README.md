@@ -20,14 +20,14 @@ This project consists of two main parts: a frontend web application and a backen
 
 1.  **Frontend (This Application):** A static web application built with React and TypeScript. It provides the user interface where you configure and manage your routers. Router details are stored in your browser's local storage.
 
-2.  **Backend Proxy (`/proxy` directory):** A simple, **stateless** Node.js server that you run on your Orange Pi. It acts as a secure bridge between the frontend and your routers. It receives requests from the frontend (including the credentials for the target router) and makes the API connection on its behalf.
+2.  **Backend Proxy (`/proxy` directory):** A simple, **stateless** Node.js server that you run on your Orange Pi. It acts as a secure bridge between the frontend and your routers. It receives requests from the frontend (including the credentials for the target router) and makes the REST API connection on its behalf.
 
-This separation is necessary because web browsers, for security reasons, cannot make the type of direct network connection required to talk to the MikroTik API.
+This separation is necessary because web browsers, for security reasons, have restrictions (CORS) that prevent them from directly communicating with the router's REST API.
 
 ### Tech Stack
 
 -   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
--   **Backend:** Node.js, Express.js, `node-routeros`
+-   **Backend:** Node.js, Express.js, Axios
 -   **AI:** Google Gemini API (`@google/genai`)
 
 ---
@@ -44,15 +44,16 @@ This guide will walk you through deploying the entire application on your Orange
 
 ### **Step 1: MikroTik Router Configuration**
 
-For **each router** you want to manage, you need to enable the API service.
+For **each router** you want to manage, you need to enable the REST API service.
 
 1.  Log in to your MikroTik router (using WinBox or the web interface).
 2.  Go to **IP -> Services**.
-3.  Find the service named `api`. Make sure it is **enabled**. Note the port number (default is `8728`).
+3.  Find the service named `www`. Make sure it is **enabled**. Note the port number (default is `80`).
+    -   For an encrypted connection, you would enable `www-ssl` (default port `443`), but the current panel version does not yet support SSL connections to the router.
 4.  (Highly Recommended) Create a dedicated, read-only user for the API. Go to **System -> Users**:
     -   Click 'Add New'.
     -   Give it a username (e.g., `api-user`).
-    -   Assign it to the `read` group.
+    -   Assign it to the `read` group. This group has sufficient permissions for the dashboard.
     -   Set a strong password.
 
 ### **Step 2: Prepare the Orange Pi**

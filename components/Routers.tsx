@@ -21,7 +21,7 @@ const RouterForm: React.FC<{
     const [host, setHost] = useState('');
     const [user, setUser] = useState('');
     const [password, setPassword] = useState('');
-    const [port, setPort] = useState(8728);
+    const [port, setPort] = useState(80);
 
     const [testStatus, setTestStatus] = useState<TestStatus>('idle');
     const [testMessage, setTestMessage] = useState('');
@@ -85,8 +85,8 @@ const RouterForm: React.FC<{
                     <input type="password" id="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="(leave blank if none)" className="w-full bg-slate-700 border border-slate-600 rounded-md px-3 py-2 focus:ring-orange-500 focus:border-orange-500"/>
                 </div>
                  <div className="md:col-span-2">
-                    <label htmlFor="port" className="block text-sm font-medium text-slate-300 mb-1">API Port</label>
-                    <input type="number" id="port" value={port} onChange={e => setPort(parseInt(e.target.value, 10))} required className="w-full md:w-1/4 bg-slate-700 border border-slate-600 rounded-md px-3 py-2 focus:ring-orange-500 focus:border-orange-500"/>
+                    <label htmlFor="port" className="block text-sm font-medium text-slate-300 mb-1">REST API Port</label>
+                    <input type="number" id="port" value={port} onChange={e => setPort(parseInt(e.target.value, 10))} required placeholder="80" className="w-full md:w-1/4 bg-slate-700 border border-slate-600 rounded-md px-3 py-2 focus:ring-orange-500 focus:border-orange-500"/>
                 </div>
             </div>
             <div className="flex flex-col sm:flex-row justify-end items-center gap-4 pt-2">
