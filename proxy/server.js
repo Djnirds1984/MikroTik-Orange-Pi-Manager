@@ -131,41 +131,43 @@ const execPromise = (command, options) => {
     });
 };
 
-app.get('/api/updater-info', async (req, res) => {
+app.get('/api/update-status', async (req, res) => {
     try {
         const projectRoot = path.join(__dirname, '..');
         const packageJsonPath = path.join(__dirname, 'package.json');
         const packageJson = JSON.parse(await fsp.readFile(packageJsonPath, 'utf-8'));
         
-        const commit = await execPromise('git rev-parse HEAD', { cwd: projectRoot }).catch(() => 'N/A');
-        const branch = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: projectRoot }).catch(() => 'N/A');
-        const remoteUrl = await execPromise('git config --get remote.origin.url', { cwd: projectRoot }).catch(() => 'N/A');
+        const currentCommit = await execPromise('git rev-parse HEAD', { cwd: projectRoot }).catch(() => 'N/A');
+        
+        // Fetch latest data from remote without merging
+        await execPromise('git remote update', { cwd: projectRoot });
 
-        let owner = null;
-        let repo = null;
+        // Check status
+        const statusOutput = await execPromise('git status -uno', { cwd: projectRoot });
+        const updateAvailable = statusOutput.includes('Your branch is behind');
 
-        if (remoteUrl !== 'N/A') {
-            // Robust regex to handle both SSH and HTTPS URLs
-            const match = remoteUrl.match(/github\.com[:\/]([\w.-]+)\/([\w.-]+?)(\.git)?$/);
-            if (match && match.length >= 3) {
-                owner = match[1];
-                repo = match[2];
-            }
+        let latestCommitInfo = null;
+        if (updateAvailable) {
+            const branch = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: projectRoot });
+            // Format: sha|message|author|isodate
+            const logOutput = await execPromise(`git log -1 origin/${branch} --pretty=format:"%H|%s|%an|%cI"`, { cwd: projectRoot });
+            const [sha, message, author, date] = logOutput.split('|');
+            latestCommitInfo = { sha, message, author, date };
         }
         
         res.json({
             version: packageJson.version,
-            commit,
-            branch,
-            owner,
-            repo
+            currentCommit,
+            updateAvailable,
+            latestCommitInfo
         });
 
     } catch (error) {
-        console.error("Could not read updater info:", error);
-        res.status(500).json({ error: "Could not determine server version or git info." });
+        console.error("Could not check for updates via git:", error);
+        res.status(500).json({ error: "Could not determine update status. Is this a git repository?" });
     }
 });
+
 
 app.get('/api/list-backups', async (req, res) => {
     try {

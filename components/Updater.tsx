@@ -12,13 +12,7 @@ interface LatestCommitInfo {
     date: string;
 }
 
-interface RepoInfo {
-    owner: string | null;
-    repo: string | null;
-    branch: string | null;
-}
-
-const StatusDisplay: React.FC<{ status: Status, errorMessage?: string | null, latestCommitInfo?: LatestCommitInfo | null }> = ({ status, errorMessage, latestCommitInfo }) => {
+const StatusDisplay: React.FC<{ status: Status, errorMessage?: string | null }> = ({ status, errorMessage }) => {
     switch (status) {
         case 'checking':
             return <div className="flex items-center text-orange-400"><Loader /><span className="ml-3">Checking for updates...</span></div>;
@@ -37,73 +31,69 @@ export const Updater: React.FC = () => {
     const [status, setStatus] = useState<Status>('idle');
     const [currentVersion, setCurrentVersion] = useState<string>('?.?.?');
     const [currentCommit, setCurrentCommit] = useState<string>('...');
-    const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
     const [latestCommitInfo, setLatestCommitInfo] = useState<LatestCommitInfo | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [processLog, setProcessLog] = useState<string[]>([]);
     const [backups, setBackups] = useState<string[]>([]);
     
-    useEffect(() => {
-        const fetchInitialData = async () => {
-            try {
-                // Fetch current version and git info
-                const infoResponse = await fetch('/api/updater-info');
-                if (!infoResponse.ok) throw new Error('Failed to fetch updater info from server');
-                const infoData = await infoResponse.json();
-                setCurrentVersion(infoData.version);
-                setCurrentCommit(infoData.commit);
-                setRepoInfo({ owner: infoData.owner, repo: infoData.repo, branch: infoData.branch });
-
-                // Fetch available backups
-                const backupsResponse = await fetch('/api/list-backups');
-                if (!backupsResponse.ok) throw new Error('Failed to fetch backups');
-                const backupsData = await backupsResponse.json();
-                setBackups(backupsData);
-
-            } catch (error) {
-                console.error("Could not fetch initial data:", error);
-                setStatus('error');
-                setErrorMessage((error as Error).message);
+    const fetchInitialData = useCallback(async () => {
+        try {
+            const [updateStatusRes, backupsResponse] = await Promise.all([
+                fetch('/api/update-status'),
+                fetch('/api/list-backups')
+            ]);
+    
+            if (!updateStatusRes.ok) {
+                 const errData = await updateStatusRes.json();
+                 throw new Error(errData.error || 'Failed to fetch updater status');
             }
-        };
-        fetchInitialData();
+            const statusData = await updateStatusRes.json();
+            setCurrentVersion(statusData.version);
+            setCurrentCommit(statusData.currentCommit);
+    
+            if (!backupsResponse.ok) throw new Error('Failed to fetch backups');
+            const backupsData = await backupsResponse.json();
+            setBackups(backupsData);
+
+        } catch (error) {
+            console.error("Could not fetch initial data:", error);
+            setStatus('error');
+            setErrorMessage((error as Error).message);
+        }
     }, []);
 
+    useEffect(() => {
+        fetchInitialData();
+    }, [fetchInitialData]);
+
     const handleCheckForUpdates = useCallback(async () => {
-        if (currentCommit === 'N/A' || !repoInfo) return;
         setStatus('checking');
         setLatestCommitInfo(null);
         setErrorMessage(null);
 
         try {
-            if (!repoInfo.owner || !repoInfo.repo || !repoInfo.branch) {
-                throw new Error("Git repository info is missing or invalid. Cannot check for updates.");
+            const response = await fetch('/api/update-status');
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `Server responded with status ${response.status}`);
             }
-            
-            const { owner, repo, branch } = repoInfo;
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${branch}`);
-            
-            if (!response.ok) throw new Error(`GitHub API responded with status ${response.status}`);
             const data = await response.json();
-            
-            setLatestCommitInfo({
-                sha: data.sha,
-                message: data.commit.message,
-                author: data.commit.author.name,
-                date: data.commit.author.date,
-            });
-            
-            if (data.sha !== currentCommit) {
+
+            setCurrentVersion(data.version);
+            setCurrentCommit(data.currentCommit);
+
+            if (data.updateAvailable) {
+                setLatestCommitInfo(data.latestCommitInfo);
                 setStatus('update-available');
             } else {
                 setStatus('up-to-date');
             }
         } catch (error) {
-            console.error("Failed to fetch updates:", error);
+            console.error("Failed to check for updates:", error);
             setStatus('error');
             setErrorMessage((error as Error).message);
         }
-    }, [currentCommit, repoInfo]);
+    }, []);
 
     const handleUpgrade = useCallback(() => {
         if (!window.confirm("This will update the application and restart the server. Are you sure?")) return;
@@ -126,6 +116,7 @@ export const Updater: React.FC = () => {
         setStatus('rolling-back');
         setProcessLog([`Connecting to server to restore ${filename}...`]);
 
+        const eventSource = new EventSource(`/api/rollback?filename=${encodeURIComponent(filename)}`);
         fetch('/api/rollback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -136,7 +127,6 @@ export const Updater: React.FC = () => {
              const read = () => {
                 reader?.read().then(({done, value}) => {
                     if (done) return;
-                    // SSE messages are `data: message\n\n`. We need to parse that.
                     const chunk = decoder.decode(value, {stream: true});
                     const messages = chunk.split('\n\n').filter(Boolean);
                     for (const message of messages) {
@@ -165,10 +155,10 @@ export const Updater: React.FC = () => {
                     <div className="mb-4 sm:mb-0">
                         <p className="text-sm text-slate-400">
                             Current Version: <span className="font-mono bg-slate-700 px-2 py-1 rounded">{currentVersion}</span>
-                            <span className="font-mono ml-2 text-xs">({currentCommit.substring(0, 7)})</span>
+                            <span className="font-mono ml-2 text-xs">({(currentCommit || '').substring(0, 7)})</span>
                         </p>
                         <div className="mt-4 h-6">
-                            <StatusDisplay status={status} errorMessage={errorMessage} latestCommitInfo={latestCommitInfo} />
+                            <StatusDisplay status={status} errorMessage={errorMessage} />
                         </div>
                     </div>
                     {status === 'update-available' ? (
