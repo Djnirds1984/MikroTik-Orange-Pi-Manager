@@ -1,7 +1,7 @@
 {
-  "name": "mikrotik-proxy-backend",
-  "version": "1.4.0",
-  "description": "Backend proxy for the MikroTik Orange Pi Manager",
+  "name": "mikrotik-proxy-frontend",
+  "version": "1.5.0",
+  "description": "Frontend server for the MikroTik Orange Pi Manager",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -10,9 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "archiver": "^7.0.1",
-    "axios": "^1.7.2",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
     "esbuild": "^0.23.0",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",

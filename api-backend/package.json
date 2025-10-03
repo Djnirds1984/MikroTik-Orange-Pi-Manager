@@ -1,0 +1,17 @@
+{
+  "name": "mikrotik-api-backend",
+  "version": "1.0.0",
+  "description": "Dedicated API backend for the MikroTik Orange Pi Manager",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "https": "^1.0.0",
+    "node-mikrotik-api": "^2.1.0"
+  }
+}
