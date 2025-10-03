@@ -358,11 +358,12 @@ app.post('/api/ppp/process-payment', async (req, res) => {
         const schedulerName = `ppp-scheduler-${secret.name}`;
         const scriptSource = `/ppp secret set [find name="${secret.name}"] profile="${nonPaymentProfile}"`;
 
-        const existingScripts = await api.write('/system/script/print', [`?name=${scriptName}`]);
+        const existingScripts = await api.read(`/system/script?name=${encodeURIComponent(scriptName)}`);
         if (existingScripts.length > 0) {
             await api.write('/system/script/remove', { '.id': existingScripts[0]['.id'] });
         }
-        const existingSchedulers = await api.write('/system/scheduler/print', [`?name=${schedulerName}`]);
+        
+        const existingSchedulers = await api.read(`/system/scheduler?name=${encodeURIComponent(schedulerName)}`);
         if (existingSchedulers.length > 0) {
             await api.write('/system/scheduler/remove', { '.id': existingSchedulers[0]['.id'] });
         }
@@ -372,7 +373,8 @@ app.post('/api/ppp/process-payment', async (req, res) => {
             source: scriptSource,
         });
         
-        const schedulerStartDate = newDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '').replace(' ', '/').replace(' ', '/');
+        const schedulerStartDate = newDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '').replace(/ /g, '/');
+        
         await api.write('/system/scheduler/add', {
             name: schedulerName,
             'start-date': schedulerStartDate.toLowerCase(),
