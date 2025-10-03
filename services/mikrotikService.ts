@@ -12,8 +12,22 @@ const fetchData = async <T>(endpoint: string, router: RouterConfigWithId): Promi
         body: JSON.stringify(router),
     });
     if (!response.ok) {
-      const errorBody = await response.json();
-      throw new Error(errorBody.error || `Proxy server returned an error: ${response.status}`);
+        const contentType = response.headers.get('content-type');
+        let errorMessage = `Proxy server returned an error: ${response.status}`;
+
+        if (contentType && contentType.includes('application/json')) {
+            const errorBody = await response.json();
+            errorMessage = errorBody.error || errorMessage;
+        } else {
+            // The response is not JSON, likely HTML from the catch-all for a 404
+            const textResponse = await response.text();
+            if (textResponse.includes('DOCTYPE html')) {
+                 errorMessage = `The API endpoint was not found (${response.status}). The backend server may be out of date or misconfigured.`;
+            } else {
+                 errorMessage = `Received a non-JSON response from the server: ${response.statusText}`;
+            }
+        }
+        throw new Error(errorMessage);
     }
     return response.json() as Promise<T>;
   } catch (error) {
