@@ -49,12 +49,20 @@ export const Updater: React.FC = () => {
     }, [fetchBackups]);
 
     const handleCheckForUpdates = () => {
+        setLogs([]);
         setStatusInfo({ status: 'checking', message: 'Connecting to repository...' });
+        
         const eventSource = new EventSource('/api/update-status');
+        
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
+            if (data.log) {
+                setLogs(prev => [...prev, data.log.trim()]);
+            }
+            // Update status info, which may or may not include a new status
             setStatusInfo(prev => ({ ...prev, ...data }));
         };
+
         eventSource.onerror = () => {
             setStatusInfo({ status: 'error', message: 'Connection to server failed. Could not check for updates.' });
             eventSource.close();
@@ -154,7 +162,7 @@ export const Updater: React.FC = () => {
                 </div>
             </div>
 
-            {(statusInfo.status === 'updating' || statusInfo.status === 'rollingback') && (
+            {(statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'rollingback') && logs.length > 0 && (
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">
                      <h3 className="text-xl font-bold text-slate-100 mb-4 capitalize">{statusInfo.status} Log</h3>
                      <LogViewer logs={logs} />

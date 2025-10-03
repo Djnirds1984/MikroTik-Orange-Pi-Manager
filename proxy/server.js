@@ -270,7 +270,8 @@ const run = (cmd) => new Promise((resolve, reject) => {
     };
     exec(cmd, options, (err, stdout, stderr) => {
         if (err) {
-            return reject(new Error(stderr || err.message));
+            // Include stderr in the rejection for better error messages (e.g., from ssh)
+            return reject(new Error(stderr || stdout || err.message));
         }
         resolve(stdout.trim());
     });
@@ -306,17 +307,47 @@ app.get('/api/update-status', (req, res) => {
 
     (async () => {
         try {
-            // Check if Git remote is configured for SSH. This is a security and reliability measure.
+            // Step 1: Check remote URL and inform user
             const remoteUrl = await run('git config --get remote.origin.url');
+            sendSse(res, { log: `--- Found Git remote URL: ${remoteUrl}` });
+
+            // Step 2: Enforce SSH
             if (!remoteUrl.startsWith('git@') && !remoteUrl.startsWith('ssh://')) {
                 sendSse(res, {
                     status: 'error',
-                    message: `Git remote is not configured for SSH. Please use an SSH URL (e.g., git@github.com:user/repo.git). Current URL: ${remoteUrl}`
+                    message: `Git remote is not configured for SSH. Please use an SSH URL.`,
+                    log: `FAIL: Remote URL must start with 'git@' or 'ssh://'.`
                 });
-                return; // Stop execution
+                return;
+            }
+            sendSse(res, { log: `--- Remote URL is using SSH. OK.` });
+
+            // Step 3: Test SSH connection to GitHub
+            sendSse(res, { log: `--- Testing SSH connection to github.com...` });
+            try {
+                // BatchMode=yes prevents password prompts, causing it to fail fast if keys are not set up.
+                // The output on success or failure is captured in stderr, which is useful.
+                await run('ssh -o BatchMode=yes -T git@github.com');
+            } catch (e) {
+                const sshError = e.message || '';
+                if (sshError.includes('successfully authenticated')) {
+                    sendSse(res, { log: `--- SSH connection successful. ---` });
+                    // This is a success case, so we continue.
+                } else {
+                    sendSse(res, {
+                        status: 'error',
+                        message: 'SSH connection to GitHub failed. Check your SSH key setup.',
+                        log: `FAIL: SSH connection test failed.\n\n${sshError}`
+                    });
+                    return; // Stop execution
+                }
             }
 
+            // Step 4: Fetch updates and compare commits
+            sendSse(res, { log: `\n--- Fetching latest updates from remote...` });
             await run('git remote update');
+            sendSse(res, { log: `Fetch complete.` });
+
             const local = await run('git rev-parse @');
             const remote = await run('git rev-parse @{u}');
             const base = await run('git merge-base @ @{u}');
@@ -329,7 +360,7 @@ app.get('/api/update-status', (req, res) => {
                 sendSse(res, { status: 'diverged', message: 'Local changes detected. Please commit or stash changes.', local, remote });
             }
         } catch (err) {
-            sendSse(res, { status: 'error', message: err.message });
+            sendSse(res, { status: 'error', message: err.message, log: err.stack });
         } finally {
             res.end();
         }
