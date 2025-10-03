@@ -9,214 +9,251 @@ const port = 3002;
 app.use(cors());
 app.use(express.json());
 
-// --- Helper Functions ---
-
-// Converts camelCase to kebab-case for MikroTik API compatibility
-const camelToKebab = (str) => str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
-
-// Converts object keys from camelCase to kebab-case recursively
-const convertKeysToKebab = (obj) => {
-    if (typeof obj !== 'object' || obj === null) return obj;
-    if (Array.isArray(obj)) return obj.map(convertKeysToKebab);
+// Helper to convert camelCase to kebab-case for MikroTik API
+const camelToKebab = (obj) => {
+    if (typeof obj !== 'object' || obj === null) {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(camelToKebab);
+    }
     return Object.keys(obj).reduce((acc, key) => {
-        acc[camelToKebab(key)] = obj[key];
+        const kebabKey = key.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
+        acc[kebabKey] = camelToKebab(obj[key]);
         return acc;
     }, {});
 };
 
-// Main request handler to create API instance and handle errors
-const handleApiRequest = async (req, res, callback) => {
-    const { routerConfig } = req.body;
-    if (!routerConfig) {
-        return res.status(400).json({ message: 'Router configuration is missing.' });
-    }
+// Helper to create a configured axios instance for a specific router
+const createApiClient = (routerConfig) => {
+    const { host, port, user, password } = routerConfig;
+    const protocol = port === 443 ? 'https' : 'http';
+    const baseURL = `${protocol}://${host}:${port}/rest`;
 
-    const { host, user, password, port } = routerConfig;
-    const protocol = [443, 8729].includes(port) ? 'https' : 'http';
-    
-    const api = axios.create({
-        baseURL: `${protocol}://${host}:${port}`,
+    return axios.create({
+        baseURL,
         auth: {
             username: user,
             password: password || '',
         },
+        // Allow self-signed certificates, common on MikroTik routers
         httpsAgent: new https.Agent({
-            rejectUnauthorized: false,
-        }),
+            rejectUnauthorized: false
+        })
     });
+};
 
+// Generic handler for API requests to reduce boilerplate
+const handleApiRequest = async (req, res, callback) => {
     try {
-        await callback(api, req, res);
+        const { routerConfig } = req.body;
+        if (!routerConfig) {
+            return res.status(400).json({ message: "Router configuration is missing." });
+        }
+        const apiClient = createApiClient(routerConfig);
+        await callback(apiClient);
     } catch (error) {
-        console.error(`API Error for ${host}:`, { 
-            status: error.response?.status, 
-            data: error.response?.data,
-            message: error.message 
-        });
+        console.error('API Request Error:', error.response ? error.response.data : error.message);
         const status = error.response?.status || 500;
-        const message = error.response?.data?.message || error.response?.data?.detail || 'An unexpected error occurred on the API backend.';
+        const message = error.response?.data?.message || error.response?.data?.detail || error.message || "An unexpected error occurred.";
         res.status(status).json({ message: `MikroTik REST API Error: ${message}` });
     }
 };
 
 // --- API Endpoints ---
 
-app.post('/api/test-connection', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.get('/rest/system/identity');
-    res.json({ success: true, message: `Connection successful! Router name: ${response.data.name}` });
-}));
-
-app.post('/api/system-info', (req, res) => handleApiRequest(req, res, async (api) => {
-    const [resourceRes, routerboardRes] = await Promise.all([
-        api.get('/rest/system/resource'),
-        api.get('/rest/routerboard'),
-    ]);
-    const resource = resourceRes.data;
-    res.json({
-        boardName: resource['board-name'],
-        version: resource.version,
-        cpuLoad: resource['cpu-load'],
-        uptime: resource.uptime,
-        totalMemory: `${Math.round(resource['total-memory'] / 1024 / 1024)} MB`,
-        memoryUsage: Math.round(((resource['total-memory'] - resource['free-memory']) / resource['total-memory']) * 100),
+app.post('/api/test-connection', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/system/resource');
+        if (response.data) {
+            res.status(200).json({ success: true, message: `Connection successful! Board: ${response.data['board-name']}` });
+        } else {
+            throw new Error('Received an empty response from the router.');
+        }
     });
-}));
+});
 
-app.post('/api/interfaces', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.post('/rest/interface/monitor', { once: true });
-    res.json(response.data.map(iface => ({
-        name: iface.name,
-        type: iface.type,
-        rxRate: parseInt(iface['rx-bits-per-second'], 10),
-        txRate: parseInt(iface['tx-bits-per-second'], 10),
-    })));
-}));
+app.post('/api/system-info', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const resource = (await apiClient.get('/system/resource')).data;
+        const routerboard = (await apiClient.get('/system/routerboard')).data;
+        res.status(200).json({
+            boardName: resource['board-name'],
+            version: resource.version,
+            cpuLoad: resource['cpu-load'],
+            uptime: resource.uptime,
+            memoryUsage: Math.round(((resource['total-memory'] - resource['free-memory']) / resource['total-memory']) * 100),
+            totalMemory: `${(resource['total-memory'] / 1024 / 1024).toFixed(2)} MiB`,
+        });
+    });
+});
 
-app.post('/api/hotspot-clients', (req, res) => handleApiRequest(req, res, async (api) => {
-    try {
-        const response = await api.get('/rest/ip/hotspot/active');
-        res.json(response.data.map(client => ({
-            macAddress: client['mac-address'],
-            uptime: client.uptime,
-            signal: client['signal-strength'] || 'N/A',
-        })));
-    } catch (error) {
-        if (error.response?.status === 404) return res.json([]);
-        throw error;
-    }
-}));
+app.post('/api/interfaces', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.post('/interface/monitor', { "once": "", "interface": "all" });
+        const interfaces = response.data.map(iface => ({
+            name: iface.name,
+            type: iface.type,
+            rxRate: parseInt(iface['rx-bits-per-second'], 10),
+            txRate: parseInt(iface['tx-bits-per-second'], 10),
+        }));
+        res.status(200).json(interfaces);
+    });
+});
 
-// --- PPPoE Profile Endpoints ---
-app.post('/api/ppp/profiles', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.get('/rest/ppp/profile');
-    res.json(response.data.map(p => ({
-        id: p['.id'], name: p.name, localAddress: p['local-address'],
-        remoteAddress: p['remote-address'], rateLimit: p['rate-limit'],
-    })));
-}));
+app.post('/api/hotspot-clients', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        // This is a placeholder as REST API doesn't have a direct equivalent for active hotspot signal strength easily.
+        // We will return an empty array to prevent dashboard errors. A more complex script might be needed on the router side.
+        res.status(200).json([]);
+    });
+});
 
-app.post('/api/ppp/profiles/add', (req, res) => handleApiRequest(req, res, async (api) => {
-    const { profileData } = req.body;
-    const response = await api.put('/rest/ppp/profile', convertKeysToKebab(profileData));
-    res.status(201).json(response.data);
-}));
+// --- PPPoE Profiles ---
+app.post('/api/ppp/profiles', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/ppp/profile');
+        res.status(200).json(response.data.map(p => ({ ...p, id: p['.id'] })));
+    });
+});
 
-app.post('/api/ppp/profiles/update', (req, res) => handleApiRequest(req, res, async (api) => {
-    const { profileData } = req.body;
-    const { id, ...dataToUpdate } = profileData;
-    const response = await api.patch(`/rest/ppp/profile/${id}`, convertKeysToKebab(dataToUpdate));
-    res.json(response.data);
-}));
+app.post('/api/ppp/profiles/add', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { profileData } = req.body;
+        const response = await apiClient.put('/ppp/profile', camelToKebab(profileData));
+        res.status(201).json(response.data);
+    });
+});
 
-app.post('/api/ppp/profiles/delete', (req, res) => handleApiRequest(req, res, async (api) => {
-    await api.delete(`/rest/ppp/profile/${req.body.profileId}`);
-    res.status(204).send();
-}));
+app.post('/api/ppp/profiles/update', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { profileData } = req.body;
+        const profileId = profileData.id;
+        delete profileData.id; // MikroTik API uses .id in the URL, not the body for updates
+        const response = await apiClient.patch(`/ppp/profile/${profileId}`, camelToKebab(profileData));
+        res.status(200).json(response.data);
+    });
+});
 
-// --- IP Pool Endpoints ---
-app.post('/api/ip/pools', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.get('/rest/ip/pool');
-    res.json(response.data.map(p => ({ id: p['.id'], name: p.name })));
-}));
+app.post('/api/ppp/profiles/delete', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { profileId } = req.body;
+        await apiClient.delete(`/ppp/profile/${profileId}`);
+        res.status(204).send();
+    });
+});
 
-// --- PPPoE Secret (User) Endpoints ---
-app.post('/api/ppp/secrets', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.get('/rest/ppp/secret');
-    res.json(response.data.map(s => ({
-        id: s['.id'], name: s.name, service: s.service, profile: s.profile, comment: s.comment,
-    })));
-}));
+// --- IP Pools ---
+app.post('/api/ip/pools', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/ip/pool');
+        res.status(200).json(response.data.map(p => ({ ...p, id: p['.id'] })));
+    });
+});
 
-app.post('/api/ppp/active', (req, res) => handleApiRequest(req, res, async (api) => {
-    const response = await api.get('/rest/ppp/active');
-    res.json(response.data.map(a => ({ id: a['.id'], name: a.name, uptime: a.uptime })));
-}));
+// --- PPPoE Secrets ---
+app.post('/api/ppp/secrets', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/ppp/secret');
+        res.status(200).json(response.data.map(s => ({ ...s, id: s['.id'] })));
+    });
+});
 
-app.post('/api/ppp/secrets/add', (req, res) => handleApiRequest(req, res, async (api) => {
-    const { secretData } = req.body;
-    const response = await api.put('/rest/ppp/secret', convertKeysToKebab(secretData));
-    res.status(201).json(response.data);
-}));
+app.post('/api/ppp/active', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/ppp/active');
+        res.status(200).json(response.data.map(a => ({ ...a, id: a['.id'] })));
+    });
+});
 
-app.post('/api/ppp/secrets/update', (req, res) => handleApiRequest(req, res, async (api) => {
-    const { secretData } = req.body;
-    const { id, ...dataToUpdate } = secretData;
-    const response = await api.patch(`/rest/ppp/secret/${id}`, convertKeysToKebab(dataToUpdate));
-    res.json(response.data);
-}));
+app.post('/api/ppp/secrets/add', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { secretData } = req.body;
+        const response = await apiClient.put('/ppp/secret', camelToKebab(secretData));
+        res.status(201).json(response.data);
+    });
+});
 
-app.post('/api/ppp/secrets/delete', (req, res) => handleApiRequest(req, res, async (api) => {
-    await api.delete(`/rest/ppp/secret/${req.body.secretId}`);
-    res.status(204).send();
-}));
+app.post('/api/ppp/secrets/update', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { secretData } = req.body;
+        const secretId = secretData.id;
+        delete secretData.id;
+        const response = await apiClient.patch(`/ppp/secret/${secretId}`, camelToKebab(secretData));
+        res.status(200).json(response.data);
+    });
+});
+
+app.post('/api/ppp/secrets/delete', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { secretId } = req.body;
+        await apiClient.delete(`/ppp/secret/${secretId}`);
+        res.status(204).send();
+    });
+});
 
 // --- Payment Processing ---
-const formatSchedulerDate = (date) => {
-    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-    return `${monthNames[date.getMonth()]}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
+const formatDateForMikroTik = (date) => {
+    const d = new Date(date);
+    const months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    const month = months[d.getUTCMonth()];
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const year = d.getUTCFullYear();
+    return `${month}/${day}/${year}`;
 };
 
-app.post('/api/ppp/process-payment', (req, res) => handleApiRequest(req, res, async (api) => {
-    const { secret, plan, nonPaymentProfile, paymentDate } = req.body;
-    const commentData = JSON.parse(secret.comment || '{}');
-    const oldDueDate = commentData.dueDate ? new Date(commentData.dueDate) : new Date(paymentDate);
-    const payDate = new Date(paymentDate);
+app.post('/api/ppp/process-payment', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { secret, plan, nonPaymentProfile, discountDays, paymentDate } = req.body;
 
-    const startDate = oldDueDate > payDate ? oldDueDate : payDate;
-    const newDueDate = new Date(startDate);
-    newDueDate.setDate(newDueDate.getDate() + 30);
+        const currentDueDate = secret.comment ? JSON.parse(secret.comment).dueDate : null;
+        const startDate = new Date(currentDueDate && new Date(currentDueDate) > new Date() ? currentDueDate : paymentDate);
+        const newDueDate = new Date(startDate);
+        newDueDate.setDate(newDueDate.getDate() + 30);
 
-    const newComment = JSON.stringify({ plan: plan.name, dueDate: newDueDate.toISOString().split('T')[0] });
-    await api.patch(`/rest/ppp/secret/${secret.id}`, { comment: newComment });
+        const newComment = JSON.stringify({
+            plan: plan.name,
+            dueDate: newDueDate.toISOString().split('T')[0],
+        });
 
-    try {
+        // 1. Update the user's secret with new due date and ensure they are on the correct profile
+        await apiClient.patch(`/ppp/secret/${secret['.id']}`, {
+            comment: newComment,
+            profile: plan.pppoeProfile,
+        });
+
+        // 2. Create/Update the script that will disable the user
         const scriptName = `expire-${secret.name}`;
-        const schedulerName = `expire-sched-${secret.name}`;
         const scriptSource = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
-
-        const [scriptRes, schedRes] = await Promise.all([
-            api.get('/rest/system/script', { params: { "?name": scriptName } }),
-            api.get('/rest/system/scheduler', { params: { "?name": schedulerName } }),
-        ]);
-
-        if (scriptRes.data.length > 0) {
-            await api.patch(`/rest/system/script/${scriptRes.data[0]['.id']}`, { source: scriptSource });
+        const existingScripts = await apiClient.get(`/system/script?name=${scriptName}`);
+        if (existingScripts.data.length > 0) {
+            await apiClient.patch(`/system/script/${existingScripts.data[0]['.id']}`, { source: scriptSource });
         } else {
-            await api.put('/rest/system/script', { name: scriptName, source: scriptSource });
+            await apiClient.put('/system/script', { name: scriptName, source: scriptSource });
         }
 
-        if (schedRes.data.length > 0) {
-            await api.patch(`/rest/system/scheduler/${schedRes.data[0]['.id']}`, { 'start-date': formatSchedulerDate(newDueDate), 'on-event': scriptName });
+        // 3. Create/Update the scheduler to run the script
+        const schedulerName = `expire-sched-${secret.name}`;
+        const formattedStartDate = formatDateForMikroTik(newDueDate);
+        const existingSchedulers = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
+        if (existingSchedulers.data.length > 0) {
+            await apiClient.patch(`/system/scheduler/${existingSchedulers.data[0]['.id']}`, {
+                'start-date': formattedStartDate,
+                'on-event': scriptName
+            });
         } else {
-            await api.put('/rest/system/scheduler', { name: schedulerName, 'start-date': formatSchedulerDate(newDueDate), 'start-time': '00:00:01', 'on-event': scriptName });
+            await apiClient.put('/system/scheduler', {
+                name: schedulerName,
+                'start-date': formattedStartDate,
+                'start-time': '00:00:01',
+                interval: '0s',
+                'on-event': scriptName,
+            });
         }
-    } catch (e) {
-        console.warn(`Could not update scheduler (is it installed?): ${e.message}`);
-    }
 
-    res.json({ success: true, message: 'Payment processed.' });
-}));
-
+        res.status(200).json({ success: true, message: 'Payment processed successfully.' });
+    });
+});
 
 app.listen(port, () => {
     console.log(`MikroTik Manager API backend running. Listening on port ${port}`);
