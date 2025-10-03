@@ -16,7 +16,7 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
         host: '',
         user: 'admin',
         password: '',
-        port: 8728, // Default MikroTik API port
+        port: 80, // Default MikroTik REST API port
     });
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -32,7 +32,7 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
                 host: '',
                 user: 'admin',
                 password: '',
-                port: 8728,
+                port: 80,
             });
         }
     }, [initialData]);

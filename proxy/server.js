@@ -145,8 +145,9 @@ app.get('/api/updater-info', async (req, res) => {
         let repo = null;
 
         if (remoteUrl !== 'N/A') {
-            const match = remoteUrl.match(/(?:[:\/])([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
-            if (match && match.length === 3) {
+            // Robust regex to handle both SSH and HTTPS URLs
+            const match = remoteUrl.match(/github\.com[:\/]([\w.-]+)\/([\w.-]+?)(\.git)?$/);
+            if (match && match.length >= 3) {
                 owner = match[1];
                 repo = match[2];
             }
