@@ -306,6 +306,16 @@ app.get('/api/update-status', (req, res) => {
 
     (async () => {
         try {
+            // Check if Git remote is configured for SSH. This is a security and reliability measure.
+            const remoteUrl = await run('git config --get remote.origin.url');
+            if (!remoteUrl.startsWith('git@') && !remoteUrl.startsWith('ssh://')) {
+                sendSse(res, {
+                    status: 'error',
+                    message: `Git remote is not configured for SSH. Please use an SSH URL (e.g., git@github.com:user/repo.git). Current URL: ${remoteUrl}`
+                });
+                return; // Stop execution
+            }
+
             await run('git remote update');
             const local = await run('git rev-parse @');
             const remote = await run('git rev-parse @{u}');

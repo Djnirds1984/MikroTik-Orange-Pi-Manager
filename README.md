@@ -195,9 +195,9 @@ You are all set! Open a web browser and navigate to the IP address of your Orang
 
 The panel includes a one-click updater to fetch the latest version directly from your GitHub repository.
 
-### **Prerequisite: Configure SSH for Git**
+### **Requirement: Configure SSH for Git**
 
-For the one-click updater to work reliably, your Orange Pi **must** be configured to use an SSH key for authenticating with GitHub. This prevents the update process from hanging or failing when it tries to pull code. Using an SSH key is secure and standard practice for automated server tasks.
+The one-click updater **requires** that your Orange Pi is configured to use an SSH key for authenticating with GitHub. The application will check the Git remote URL and will refuse to run the update process over an insecure HTTPS connection that could hang waiting for a password. Using an SSH key is secure and the only supported method for the updater.
 
 This is a **one-time setup**.
 

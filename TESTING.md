@@ -64,6 +64,25 @@ These tests should be performed in your web browser.
 
 Testing the updater requires making changes to your local git repository to simulate updates being available.
 
+### 2.0. Test SSH Configuration Requirement
+
+This test verifies that the updater correctly blocks updates over insecure HTTPS remotes.
+
+1.  **Set Git remote to HTTPS (for testing):**
+    -   SSH into your device and navigate to the project directory.
+    -   **Replace the URL with your repository's HTTPS URL.**
+    -   `git remote set-url origin https://github.com/Djnirds1984/MikroTik-Orange-Pi-Manager.git`
+2.  **Check for Error in UI:**
+    -   Go to the "Updater" page in the web UI and click "Check for Updates".
+    -   Verify that an error message appears, stating that the Git remote is not configured for SSH and showing the current HTTPS URL.
+3.  **Restore Git remote to SSH:**
+    -   In your SSH session, set the remote back to the correct SSH URL.
+    -   `git remote set-url origin git@github.com:Djnirds1984/MikroTik-Orange-Pi-Manager.git`
+4.  **Verify Functionality:**
+    -   On the "Updater" page, click "Check for Updates" again.
+    -   Verify that the check now proceeds without the SSH error.
+
+
 ### 2.1. Test "Check for Updates"
 
 1.  **Ensure you are up-to-date:**
