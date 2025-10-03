@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header';
-import { Footer } from './components/Footer';
-import { Dashboard } from './components/Dashboard';
-import { Scripting } from './components/Scripting';
-import { Updater } from './components/Updater';
-import { Routers } from './components/Routers';
-import { useRouters } from './hooks/useRouters';
+import { Header } from './components/Header.tsx';
+import { Footer } from './components/Footer.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { Scripting } from './components/Scripting.tsx';
+import { Updater } from './components/Updater.tsx';
+import { Routers } from './components/Routers.tsx';
+import { useRouters } from './hooks/useRouters.ts';
 
 type View = 'dashboard' | 'scripting' | 'updater' | 'routers';
 

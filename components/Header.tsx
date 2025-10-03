@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MikroTikLogoIcon } from '../constants';
-import type { RouterConfigWithId } from '../types';
+import { MikroTikLogoIcon } from '../constants.tsx';
+import type { RouterConfigWithId } from '../types.ts';
 
 interface HeaderProps {
   currentView: 'dashboard' | 'scripting' | 'updater' | 'routers';

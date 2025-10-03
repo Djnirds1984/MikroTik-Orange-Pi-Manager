@@ -1,8 +1,8 @@
 
 import React, { useState, useCallback } from 'react';
-import type { GitHubRelease } from '../types';
-import { Loader } from './Loader';
-import { CloudArrowUpIcon, UpdateIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants';
+import type { GitHubRelease } from '../types.ts';
+import { Loader } from './Loader.tsx';
+import { CloudArrowUpIcon, UpdateIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants.tsx';
 
 const GITHUB_REPO = "zaid-h-sh/mikrotik-orangepi-manager";
 const CURRENT_VERSION = "1.2.0";

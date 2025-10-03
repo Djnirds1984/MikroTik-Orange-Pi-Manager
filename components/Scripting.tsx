@@ -1,10 +1,10 @@
 
 import React, { useState, useCallback } from 'react';
-import { ScriptGenerator } from './ScriptGenerator';
-import { CodeBlock } from './CodeBlock';
-import { Loader } from './Loader';
-import { generateMikroTikScript } from '../services/geminiService';
-import { EXAMPLE_PROMPTS } from '../constants';
+import { ScriptGenerator } from './ScriptGenerator.tsx';
+import { CodeBlock } from './CodeBlock.tsx';
+import { Loader } from './Loader.tsx';
+import { generateMikroTikScript } from '../services/geminiService.ts';
+import { EXAMPLE_PROMPTS } from '../constants.tsx';
 
 export const Scripting: React.FC = () => {
   const [prompt, setPrompt] = useState<string>('');

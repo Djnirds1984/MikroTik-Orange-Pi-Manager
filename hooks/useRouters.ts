@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { RouterConfig, RouterConfigWithId } from '../types';
+import type { RouterConfig, RouterConfigWithId } from '../types.ts';
 
 const STORAGE_KEY = 'mikrotikRouters';
 

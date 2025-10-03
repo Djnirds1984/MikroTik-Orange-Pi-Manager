@@ -1,4 +1,4 @@
-import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse } from '../types';
+import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse } from '../types.ts';
 
 const API_BASE_URL = '/api';
 

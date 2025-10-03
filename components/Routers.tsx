@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfig, RouterConfigWithId } from '../types';
-import { testRouterConnection } from '../services/mikrotikService';
-import { RouterIcon, EditIcon, TrashIcon, SignalIcon } from '../constants';
+import type { RouterConfig, RouterConfigWithId } from '../types.ts';
+import { testRouterConnection } from '../services/mikrotikService.ts';
+import { RouterIcon, EditIcon, TrashIcon, SignalIcon } from '../constants.tsx';
 
 interface RoutersProps {
     routers: RouterConfigWithId[];
