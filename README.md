@@ -16,7 +16,7 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 
 ## Technical Architecture
 
-To improve stability and reliability, this project now uses a **two-process architecture**, managed by a single `ecosystem.config.js` file for `pm2`.
+To improve stability and reliability, this project uses a **two-process architecture**.
 
 1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
 2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server that uses the official **MikroTik REST API**. It handles all communication with your routers and exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
@@ -41,7 +41,7 @@ This two-process model provides a robust separation of concerns, ensuring the ap
     2.  Open the `env.js` file and replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key.
 
 ### **Installation and Startup**
-This new method uses an `ecosystem.config.js` file to manage both servers with a single command.
+This new, more reliable method starts each server as a separate, named process.
 
 1. **Clone the repository:**
    ```bash
@@ -64,8 +64,11 @@ This new method uses an `ecosystem.config.js` file to manage both servers with a
    # First, stop and delete any old running processes to ensure a clean start
    pm2 delete all
    
-   # Now, start both servers using the ecosystem file
-   pm2 start ecosystem.config.js
+   # Start the UI server on port 3001
+   pm2 start ./proxy/server.js --name mikrotik-manager
+
+   # Start the API backend server on port 3002
+   pm2 start ./api-backend/server.js --name mikrotik-api-backend
    ```
 
 4. **Check the status:**
@@ -81,7 +84,7 @@ This new method uses an `ecosystem.config.js` file to manage both servers with a
 
 ## Deployment on Orange Pi One (Step-by-Step Guide)
 
-This guide shows how to deploy both servers using `pm2` and the new `ecosystem.config.js` for simpler, more reliable process management.
+This guide shows how to deploy both servers using simple `pm2` commands for reliable process management.
 
 ### **Prerequisites**
 
@@ -122,9 +125,13 @@ The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the co
     ```
 
 2.  **Start Both Servers:**
-    **IMPORTANT: Ensure you are in the project's root directory (`/var/www/html/MikroTik-Orange-Pi-Manager`) before running this command.**
+    **IMPORTANT: Ensure you are in the project's root directory (`/var/www/html/MikroTik-Orange-Pi-Manager`) before running these commands.**
     ```bash
-    pm2 start ecosystem.config.js
+    # Start the UI server on port 3001
+    pm2 start ./proxy/server.js --name mikrotik-manager
+
+    # Start the API backend server on port 3002
+    pm2 start ./api-backend/server.js --name mikrotik-api-backend
     ```
 
 3.  **Verify the Status:**

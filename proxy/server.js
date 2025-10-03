@@ -11,7 +11,7 @@ const port = 3001;
 
 // --- Middleware for Live Transpilation ---
 app.use(async (req, res, next) => {
-    if (req.url.endsWith('.tsx')) {
+    if (req.url.endsWith('.tsx') || req.url.endsWith('.ts')) {
         try {
             const filePath = path.join(__dirname, '..', req.url);
             
@@ -22,7 +22,7 @@ app.use(async (req, res, next) => {
             
             const source = await fs.readFile(filePath, 'utf8');
             const result = await transform(source, {
-                loader: 'tsx', // 'loader' as a string is correct for the transform() API
+                loader: req.url.endsWith('.ts') ? 'ts' : 'tsx',
                 target: 'esnext',
             });
             res.setHeader('Content-Type', 'application/javascript');
@@ -99,7 +99,8 @@ app.get('/api/update-status', async (req, res) => {
 
 const restartApp = (res) => {
     sendSse(res, { log: '\n>>> Restarting application with pm2...' });
-    exec('pm2 restart ecosystem.config.js', (err, stdout, stderr) => {
+    // Restart both servers by their names for reliability
+    exec('pm2 restart mikrotik-manager mikrotik-api-backend', (err, stdout, stderr) => {
         if (err) {
             console.error('PM2 restart failed:', stderr);
             sendSse(res, { status: 'error', message: `Failed to restart server: ${stderr}` });
