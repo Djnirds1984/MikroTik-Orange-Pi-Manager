@@ -364,19 +364,35 @@ app.post('/api/ppp/secrets/delete', async (req, res) => {
 app.post('/api/ppp/process-payment', async (req, res) => {
     try {
         const api = createRouterApi(req.body.routerConfig);
-        const { secret, plan, nonPaymentProfile } = req.body;
+        const { secret, plan, nonPaymentProfile, paymentDate } = req.body;
 
-        // 1. Calculate new due date (30 days from now)
-        const today = new Date();
-        const newDueDate = new Date(today.setDate(today.getDate() + 30));
-        const dueDateString = newDueDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-
-        // 2. Prepare the new comment
         let commentJson = {};
         try {
             if (secret.comment) commentJson = JSON.parse(secret.comment);
         } catch { /* ignore parsing errors, start fresh */ }
+
+        // 1. Calculate the new due date intelligently
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Base the calculation on the payment date or today, whichever is later, to prevent back-dating.
+        const paymentDateObj = new Date(paymentDate);
+        let baseDate = paymentDateObj > today ? paymentDateObj : today;
+
+        if (commentJson.dueDate) {
+            const existingDueDate = new Date(commentJson.dueDate);
+            // If the user is paying early (existing due date is in the future), extend from there.
+            if (existingDueDate > baseDate) {
+                baseDate = existingDueDate;
+            }
+        }
         
+        // Add 30 days to the calculated base date
+        const newDueDate = new Date(baseDate);
+        newDueDate.setDate(newDueDate.getDate() + 30);
+        const dueDateString = newDueDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        // 2. Prepare the new comment
         commentJson.dueDate = dueDateString;
         commentJson.plan = plan.name;
         const newComment = JSON.stringify(commentJson);
@@ -388,13 +404,15 @@ app.post('/api/ppp/process-payment', async (req, res) => {
             comment: newComment,
         });
 
-        // 4. Manage the scheduler
+        // 4. Manage the scheduler to enforce the due date
         const schedulerName = `ppp-due-check-${secret.name}`;
         const scriptName = `ppp-expire-script-${secret.name}`;
         const scriptSource = `/ppp secret set [find name="${secret.name}"] profile="${nonPaymentProfile}"`;
-        const startDate = newDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '');
-
-        // Find and remove old scheduler/script
+        
+        // MikroTik's 'start-date' format is 'mon/dd/yyyy'
+        const startDate = newDueDate.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }).replace(/ /g, '/').replace(',', '');
+        
+        // Find and remove old scheduler/script to avoid duplicates
         const [schedulers, scripts] = await Promise.all([
             fetchAll(api, `/rest/system/scheduler?name=${schedulerName}`),
             fetchAll(api, `/rest/system/script?name=${scriptName}`),
@@ -405,12 +423,12 @@ app.post('/api/ppp/process-payment', async (req, res) => {
         // Add new script
         await api.put('/rest/system/script', { name: scriptName, source: scriptSource });
 
-        // Add new scheduler
+        // Add new scheduler to run on the due date
         await api.put('/rest/system/scheduler', {
             name: schedulerName,
             'on-event': scriptName,
             'start-date': startDate,
-            'start-time': '00:00:01', // Run just after midnight
+            'start-time': '00:00:01', // Run just after midnight on the due date
         });
 
         res.json({ success: true, message: 'Payment processed and scheduler updated.' });

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiveConnection, BillingPlanWithId } from '../types.ts';
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
@@ -16,6 +16,9 @@ const parseComment = (comment: string | undefined): { dueDate?: string; plan?: s
             plan: data.plan,
         };
     } catch {
+        // If comment is not valid JSON, it might be a simple string.
+        // For backward compatibility or manual entries, you could return it as a plan.
+        // For this app, we'll assume JSON or nothing.
         return {};
     }
 };
@@ -39,32 +42,34 @@ const getStatus = (dueDate: string | undefined): { text: string; color: string }
     return { text: 'Active', color: 'text-green-400' };
 };
 
-// --- Secret Form Modal ---
+// --- Secret Form Modal (Add/Edit User) ---
 interface SecretFormModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (secretData: PppSecret | PppSecretData) => void;
     initialData: PppSecret | null;
-    profiles: PppProfile[];
+    plans: BillingPlanWithId[];
     isLoading: boolean;
 }
 
-const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSave, initialData, profiles, isLoading }) => {
-    // FIX: Define a default state to avoid issues with controlled/uncontrolled components.
-    const defaultSecretState: PppSecretData = { name: '', password: '', service: 'pppoe', profile: '', comment: '' };
+const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSave, initialData, plans, isLoading }) => {
+    const defaultSecretState = { name: '', password: '', service: 'pppoe', profile: '', comment: '' };
     const [secret, setSecret] = useState<PppSecretData>(defaultSecretState);
+    const [selectedPlanId, setSelectedPlanId] = useState<string>('');
 
     useEffect(() => {
         if (isOpen) {
             if (initialData) {
-                // For editing, pre-fill data but keep password blank for security
+                const commentData = parseComment(initialData.comment);
+                const currentPlan = plans.find(p => p.name === commentData.plan);
+                setSelectedPlanId(currentPlan?.id || '');
                 setSecret({ ...initialData, password: '' });
             } else {
-                // For adding, set default values, including the first available profile
-                setSecret({ ...defaultSecretState, profile: profiles[0]?.name || '' });
+                setSelectedPlanId(plans[0]?.id || '');
+                setSecret(defaultSecretState);
             }
         }
-    }, [initialData, isOpen, profiles]);
+    }, [initialData, isOpen, plans]);
 
     if (!isOpen) return null;
 
@@ -72,18 +77,34 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
         const { name, value } = e.target;
         setSecret(s => ({ ...s, [name]: value }));
     };
+    
+    const handlePlanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedPlanId(e.target.value);
+    }
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
-        let dataToSave: PppSecret | PppSecretData = { ...secret };
+        const selectedPlan = plans.find(p => p.id === selectedPlanId);
+        if (!selectedPlan) {
+            alert("Please select a valid billing plan.");
+            return;
+        }
+
+        const commentJson = parseComment(initialData?.comment);
+        const newComment = JSON.stringify({
+            ...commentJson,
+            plan: selectedPlan.name,
+        });
+
+        let dataToSave: PppSecret | PppSecretData = {
+            ...secret,
+            profile: selectedPlan.pppoeProfile,
+            comment: newComment,
+        };
         
         if (initialData) {
-            // It's an update
-            dataToSave = { ...initialData, ...secret };
+            dataToSave = { ...initialData, ...dataToSave };
             if (!secret.password) {
-                // If password field is empty on edit, we don't want to change it.
-                // The backend service needs to handle the absence of the password field.
                 // @ts-ignore
                 delete dataToSave.password;
             }
@@ -99,38 +120,25 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                     <div className="p-6">
                         <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="name" className="block text-sm font-medium text-slate-300">Username</label>
-                                    <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" />
-                                </div>
-                                <div>
-                                    <label htmlFor="password" className="block text-sm font-medium text-slate-300">Password</label>
-                                    <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" />
-                                </div>
+                            <div>
+                                <label htmlFor="name" className="block text-sm font-medium text-slate-300">Username</label>
+                                <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="service" className="block text-sm font-medium text-slate-300">Service</label>
-                                    <select name="service" id="service" value={secret.service} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
-                                        <option value="any">any</option>
-                                        <option value="pppoe">pppoe</option>
-                                        <option value="l2tp">l2tp</option>
-                                        <option value="ovpn">ovpn</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label htmlFor="profile" className="block text-sm font-medium text-slate-300">Profile</label>
-                                    <select name="profile" id="profile" value={secret.profile} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
-                                        {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                    </select>
-                                </div>
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-300">Password</label>
+                                <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                            </div>
+                            <div>
+                                <label htmlFor="plan" className="block text-sm font-medium text-slate-300">Billing Plan</label>
+                                <select id="plan" value={selectedPlanId} onChange={handlePlanChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                    {plans.map(p => <option key={p.id} value={p.id}>{p.name} ({p.pppoeProfile})</option>)}
+                                </select>
                             </div>
                         </div>
                     </div>
                     <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
-                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancel</button>
-                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50">
+                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">
                             {isLoading ? 'Saving...' : 'Save User'}
                         </button>
                     </div>
@@ -144,52 +152,81 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (plan: BillingPlanWithId) => void;
+    onProcess: (discountDays: number, paymentDate: string) => void;
     user: PppSecret | null;
     plans: BillingPlanWithId[];
     isLoading: boolean;
 }
 
 const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess, user, plans, isLoading }) => {
-    const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-    
+    const [paymentDate, setPaymentDate] = useState('');
+    const [discountDays, setDiscountDays] = useState(0);
+
+    const currentUserPlan = useMemo(() => {
+        if (!user) return null;
+        const commentData = parseComment(user.comment);
+        return plans.find(p => p.name === commentData.plan) || null;
+    }, [user, plans]);
+
     useEffect(() => {
-        if (isOpen && plans.length > 0) {
-            setSelectedPlanId(plans[0].id);
+        if (isOpen) {
+            setPaymentDate(new Date().toISOString().split('T')[0]);
+            setDiscountDays(0);
         }
-    }, [isOpen, plans]);
+    }, [isOpen]);
 
     if (!isOpen || !user) return null;
 
+    const planPrice = currentUserPlan?.price || 0;
+    const pricePerDay = planPrice / 30; // Assuming all plans are monthly for discount calculation
+    const discountAmount = pricePerDay * discountDays;
+    const finalAmount = planPrice - discountAmount;
+
     const handleSubmit = () => {
-        const selectedPlan = plans.find(p => p.id === selectedPlanId);
-        if (selectedPlan) {
-            onProcess(selectedPlan);
-        }
+        onProcess(discountDays, paymentDate);
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
                 <div className="p-6">
-                    <h3 className="text-xl font-bold text-orange-400 mb-2">Process Payment</h3>
-                    <p className="text-sm text-slate-400 mb-4">Select a billing plan for user <span className="font-mono text-white">{user.name}</span>.</p>
-                    <select
-                        value={selectedPlanId}
-                        onChange={(e) => setSelectedPlanId(e.target.value)}
-                        className="w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500"
-                    >
-                        {plans.map(plan => (
-                            <option key={plan.id} value={plan.id}>
-                                {plan.name} ({plan.price} {plan.currency}/{plan.cycle})
-                            </option>
-                        ))}
-                    </select>
+                    <h3 className="text-xl font-bold text-orange-400 mb-2">Record Payment for <span className="text-white">{user.name}</span></h3>
+                    <div className="space-y-4 mt-4">
+                        <div>
+                            <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-300">Payment Date</label>
+                            <input type="date" name="paymentDate" id="paymentDate" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        </div>
+                        <div>
+                            <label htmlFor="discountDays" className="block text-sm font-medium text-slate-300">Discount for Downtime (Days)</label>
+                            <input type="number" name="discountDays" id="discountDays" value={discountDays} onChange={(e) => setDiscountDays(Number(e.target.value))} min="0" className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        </div>
+                    </div>
+
+                    {currentUserPlan ? (
+                        <div className="mt-6 pt-4 border-t border-slate-700 space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Plan Price:</span>
+                                <span className="text-slate-200">{currentUserPlan.currency} {planPrice.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Discount:</span>
+                                <span className="text-red-400">- {currentUserPlan.currency} {discountAmount.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-base font-bold mt-2">
+                                <span className="text-green-400">Final Amount:</span>
+                                <span className="text-green-400">{currentUserPlan.currency} {finalAmount.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    ) : (
+                         <div className="mt-6 pt-4 border-t border-slate-700 text-center text-yellow-400 text-sm">
+                            User does not have a valid billing plan assigned. Payment will only extend access.
+                        </div>
+                    )}
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                    <button type="button" onClick={handleSubmit} disabled={isLoading || !selectedPlanId} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50">
-                        {isLoading ? 'Processing...' : 'Process'}
+                    <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isLoading ? 'Processing...' : 'Confirm Payment'}
                     </button>
                 </div>
             </div>
@@ -204,6 +241,7 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isPolling, setIsPolling] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
@@ -219,7 +257,6 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
-            setIsLoading(false);
             setSecrets([]);
             setActive([]);
             setProfiles([]);
@@ -246,12 +283,33 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
     }, [selectedRouter]);
 
     useEffect(() => {
-        fetchData();
+        if (!isPolling) { // Prevent initial double-load
+           fetchData();
+        }
     }, [fetchData]);
 
+    // Background polling for active users
+    useEffect(() => {
+        if (!selectedRouter || isLoading) return;
+
+        const pollInterval = setInterval(async () => {
+            setIsPolling(true);
+            try {
+                const activeData = await getPppActive(selectedRouter);
+                setActive(activeData);
+            } catch (err) {
+                console.error("Failed to poll active users:", err);
+            } finally {
+                setIsPolling(false);
+            }
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(pollInterval);
+    }, [selectedRouter, isLoading]);
+
     const handleAdd = () => {
-        if (profiles.length === 0) {
-            alert("No PPPoE profiles found. Please create a profile before adding a user.");
+        if (plans.length === 0) {
+            alert("No billing plans found. Please create a billing plan before adding a user.");
             return;
         }
         setEditingSecret(null);
@@ -299,11 +357,19 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         setIsPaymentModalOpen(true);
     };
 
-    const handleProcessPayment = async (plan: BillingPlanWithId) => {
+    const handleProcessPayment = async (discountDays: number, paymentDate: string) => {
         if (!selectedRouter || !payingSecret) return;
+        
+        const commentData = parseComment(payingSecret.comment);
+        const currentUserPlan = plans.find(p => p.name === commentData.plan);
+        if (!currentUserPlan) {
+            alert("Cannot process payment: The user does not have a valid billing plan assigned.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            await processPppPayment(selectedRouter, payingSecret, plan, nonPaymentProfile);
+            await processPppPayment(selectedRouter, payingSecret, currentUserPlan, nonPaymentProfile, discountDays, paymentDate);
             setIsPaymentModalOpen(false);
             setPayingSecret(null);
             await fetchData();
@@ -352,7 +418,7 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                 onClose={() => setIsFormModalOpen(false)}
                 onSave={handleSave}
                 initialData={editingSecret}
-                profiles={profiles}
+                plans={plans}
                 isLoading={isSubmitting}
             />
             <PaymentModal
@@ -366,6 +432,9 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
 
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-100">PPPoE Users</h2>
+                 <p className="text-sm text-slate-500">
+                    NOTE: The payment system requires a PPPoE profile named <code className="font-mono bg-slate-700 px-1 rounded text-xs">{nonPaymentProfile}</code> to exist on your router.
+                </p>
                 <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
                     Add New User
                 </button>
@@ -399,7 +468,7 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 font-mono text-cyan-400">{commentData.plan || 'N/A'}</td>
-                                        <td className={`px-6 py-4 font-semibold ${subscriptionStatus.color}`}>{subscriptionStatus.text}</td>
+                                        <td className={`px-6 py-4 font-semibold ${subscriptionStatus.color}`}>{commentData.dueDate ? `${subscriptionStatus.text} (${commentData.dueDate})` : subscriptionStatus.text}</td>
                                         <td className="px-6 py-4 text-right space-x-1">
                                             <button onClick={() => handleOpenPayment(secret)} className="px-3 py-1 text-xs bg-sky-600 hover:bg-sky-500 rounded-md font-semibold text-white">
                                                 Pay

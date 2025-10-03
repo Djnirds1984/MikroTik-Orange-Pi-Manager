@@ -100,6 +100,6 @@ export const deletePppSecret = (router: RouterConfigWithId, secretId: string): P
     return fetchData('/api/ppp/secrets/delete', router, { secretId });
 };
 
-export const processPppPayment = (router: RouterConfigWithId, secret: PppSecret, plan: BillingPlan, nonPaymentProfile: string): Promise<any> => {
-    return fetchData('/api/ppp/process-payment', router, { secret, plan, nonPaymentProfile });
+export const processPppPayment = (router: RouterConfigWithId, secret: PppSecret, plan: BillingPlan, nonPaymentProfile: string, discountDays: number, paymentDate: string): Promise<any> => {
+    return fetchData('/api/ppp/process-payment', router, { secret, plan, nonPaymentProfile, discountDays, paymentDate });
 };
