@@ -26,7 +26,7 @@ app.use(async (req, res, next) => {
                     format: 'esm',
                     platform: 'browser',
                     jsx: 'automatic',
-                    external: ['react', 'react-dom/*', '@google/genai', 'recharts'],
+                    external: ['react', 'react-dom/client', '@google/genai', 'recharts'],
                 });
                 res.set('Content-Type', 'application/javascript');
                 res.send(result.outputFiles[0].text);
