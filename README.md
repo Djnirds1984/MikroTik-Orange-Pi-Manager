@@ -116,15 +116,15 @@ Install the necessary software: Git, Node.js, `pm2`, and `nginx`.
 
 ### **Step 3: Clone and Run the Application**
 
-1.  **Clone Your Repository:**
+1.  **Navigate to the Project Directory:**
+    Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
     ```bash
-    # Run this from your home directory (~)
-    git clone https://github.com/Djnirds1984/MikroTik-Orange-Pi-Manager.git
+    cd /var/www/html/MikroTik-Orange-Pi-Manager
     ```
 
 2.  **Navigate into the `proxy` Directory:**
     ```bash
-    cd MikroTik-Orange-Pi-Manager/proxy
+    cd proxy
     ```
    
 3.  **Install Dependencies:**
@@ -140,6 +140,7 @@ Install the necessary software: Git, Node.js, `pm2`, and `nginx`.
     -   Replace `"YOUR_GEMINI_API_KEY_HERE"` with your Gemini API key. Save and exit.
 
 5.  **Start the Server with PM2:**
+    We will use the standard name `mikrotik-manager` to identify this process in `pm2`.
     ```bash
     pm2 start server.js --name "mikrotik-manager"
     ```
@@ -214,7 +215,7 @@ To avoid typing your GitHub credentials, set up an SSH key. This is a secure, on
    - Give it a title (e.g., "Orange Pi") and paste the key.
 
 **4. Update your Git Remote URL on the Orange Pi:**
-   - Navigate to your project directory: `cd ~/MikroTik-Orange-Pi-Manager`
+   - Navigate to your project directory: `cd /var/www/html/MikroTik-Orange-Pi-Manager`
    - Change the remote URL. **Replace `Djnirds1984/MikroTik-Orange-Pi-Manager` with your GitHub username/repo.**
      ```bash
      git remote set-url origin git@github.com:Djnirds1984/MikroTik-Orange-Pi-Manager.git
@@ -227,7 +228,7 @@ Now `git pull` will be passwordless.
 
 2.  **Navigate to the project directory:**
     ```bash
-    cd ~/MikroTik-Orange-Pi-Manager
+    cd /var/www/html/MikroTik-Orange-Pi-Manager
     ```
 
 3.  **Pull the latest changes from GitHub:**
@@ -253,7 +254,7 @@ If the web panel becomes inaccessible after a failed update, you can manually re
 **1. Connect via SSH and Stop the Application:**
    ```bash
    ssh your_user@your_orangepi_ip
-   cd ~/MikroTik-Orange-Pi-Manager
+   cd /var/www/html/MikroTik-Orange-Pi-Manager
    pm2 stop mikrotik-manager
    ```
 
