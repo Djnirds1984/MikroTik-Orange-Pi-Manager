@@ -1,5 +1,5 @@
 const express = require('express');
-const { transform } = require('esbuild'); // Use transform instead of build
+const { transform } = require('esbuild');
 const path = require('path');
 const fs = require('fs-extra');
 const { exec } = require('child_process');
@@ -10,34 +10,33 @@ const app = express();
 const port = 3001;
 
 // --- Middleware for Live Transpilation ---
-app.use(async (req, res, next) => {
-    if (req.url.endsWith('.tsx') || req.url.endsWith('.ts')) {
-        try {
-            const filePath = path.join(__dirname, '..', req.url);
-            
-            // Prevent server crash if a .tsx file is not found
-            if (!await fs.pathExists(filePath)) {
-                return res.status(404).send('// File not found');
-            }
-            
-            const source = await fs.readFile(filePath, 'utf8');
-            const result = await transform(source, {
-                loader: req.url.endsWith('.ts') ? 'ts' : 'tsx',
-                target: 'esnext',
-            });
-            res.setHeader('Content-Type', 'application/javascript');
-            res.send(result.code);
-        } catch (e) {
-            console.error('ESBuild transpilation failed:', e);
-            res.status(500).send('// Transpilation Error');
+// FIX: Replaced the generic app.use with an explicit .get handler for .ts/.tsx files.
+// This is more robust and prevents the static middleware from incorrectly handling these files
+// with the wrong MIME type.
+app.get(/\.(ts|tsx)$/, async (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '..', req.path); // Use req.path for safety
+        
+        if (!await fs.pathExists(filePath)) {
+            return res.status(404).send('// File not found');
         }
-    } else {
-        next();
+        
+        const source = await fs.readFile(filePath, 'utf8');
+        const result = await transform(source, {
+            loader: req.path.endsWith('.ts') ? 'ts' : 'tsx',
+            target: 'esnext',
+        });
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(result.code);
+    } catch (e) {
+        console.error('ESBuild transpilation failed:', e);
+        res.status(500).send(`// Transpilation Error: ${e.message}`);
     }
 });
 
 
 // --- Static File Serving ---
+// This will serve files like index.html, env.js, and any other static assets.
 app.use(express.static(path.join(__dirname, '..')));
 
 // Helper to run shell commands
