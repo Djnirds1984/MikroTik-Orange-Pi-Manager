@@ -122,29 +122,48 @@ const streamCommand = (req, res, command, args, cwd, name) => {
 
 // --- API Endpoints ---
 
-app.get('/api/version-info', (req, res) => {
-    const packageJsonPath = path.join(__dirname, 'package.json');
-    const packageJsonPromise = fsp.readFile(packageJsonPath, 'utf-8').then(JSON.parse);
-    
-    const commitPromise = new Promise((resolve) => {
-        exec('git rev-parse HEAD', (err, stdout) => {
-            if (err) {
-                console.error('Could not get git commit:', err);
-                resolve('N/A');
-            } else {
-                resolve(stdout.trim());
-            }
+const execPromise = (command, options) => {
+    return new Promise((resolve, reject) => {
+        exec(command, options, (err, stdout) => {
+            if (err) return reject(err);
+            resolve(stdout.trim());
         });
     });
+};
 
-    Promise.all([packageJsonPromise, commitPromise])
-        .then(([packageJson, commit]) => {
-            res.json({ version: packageJson.version, commit });
-        })
-        .catch(error => {
-             console.error("Could not read version info:", error);
-             res.status(500).json({ error: "Could not determine server version." });
+app.get('/api/updater-info', async (req, res) => {
+    try {
+        const projectRoot = path.join(__dirname, '..');
+        const packageJsonPath = path.join(__dirname, 'package.json');
+        const packageJson = JSON.parse(await fsp.readFile(packageJsonPath, 'utf-8'));
+        
+        const commit = await execPromise('git rev-parse HEAD', { cwd: projectRoot }).catch(() => 'N/A');
+        const branch = await execPromise('git rev-parse --abbrev-ref HEAD', { cwd: projectRoot }).catch(() => 'N/A');
+        const remoteUrl = await execPromise('git config --get remote.origin.url', { cwd: projectRoot }).catch(() => 'N/A');
+
+        let owner = null;
+        let repo = null;
+
+        if (remoteUrl !== 'N/A') {
+            const match = remoteUrl.match(/(?:[:\/])([\w.-]+)\/([\w.-]+?)(?:\.git)?$/);
+            if (match && match.length === 3) {
+                owner = match[1];
+                repo = match[2];
+            }
+        }
+        
+        res.json({
+            version: packageJson.version,
+            commit,
+            branch,
+            owner,
+            repo
         });
+
+    } catch (error) {
+        console.error("Could not read updater info:", error);
+        res.status(500).json({ error: "Could not determine server version or git info." });
+    }
 });
 
 app.get('/api/list-backups', async (req, res) => {

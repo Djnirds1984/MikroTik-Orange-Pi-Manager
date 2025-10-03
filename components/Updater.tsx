@@ -3,9 +3,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Loader } from './Loader.tsx';
 import { CloudArrowUpIcon, UpdateIcon, CheckCircleIcon, ExclamationTriangleIcon } from '../constants.tsx';
 
-const GITHUB_REPO_API = "https://api.github.com/repos/Djnirds1984/MikroTik-Orange-Pi-Manager";
-const GITHUB_BRANCH = "main"; // Or 'master', depending on the repo's default branch
-
 type Status = 'idle' | 'checking' | 'up-to-date' | 'update-available' | 'error' | 'updating' | 'rolling-back';
 
 interface LatestCommitInfo {
@@ -13,6 +10,12 @@ interface LatestCommitInfo {
     message: string;
     author: string;
     date: string;
+}
+
+interface RepoInfo {
+    owner: string | null;
+    repo: string | null;
+    branch: string | null;
 }
 
 const StatusDisplay: React.FC<{ status: Status, errorMessage?: string | null, latestCommitInfo?: LatestCommitInfo | null }> = ({ status, errorMessage, latestCommitInfo }) => {
@@ -34,6 +37,7 @@ export const Updater: React.FC = () => {
     const [status, setStatus] = useState<Status>('idle');
     const [currentVersion, setCurrentVersion] = useState<string>('?.?.?');
     const [currentCommit, setCurrentCommit] = useState<string>('...');
+    const [repoInfo, setRepoInfo] = useState<RepoInfo | null>(null);
     const [latestCommitInfo, setLatestCommitInfo] = useState<LatestCommitInfo | null>(null);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [processLog, setProcessLog] = useState<string[]>([]);
@@ -42,12 +46,13 @@ export const Updater: React.FC = () => {
     useEffect(() => {
         const fetchInitialData = async () => {
             try {
-                // Fetch current version info
-                const versionResponse = await fetch('/api/version-info');
-                if (!versionResponse.ok) throw new Error('Failed to fetch version info');
-                const versionData = await versionResponse.json();
-                setCurrentVersion(versionData.version);
-                setCurrentCommit(versionData.commit);
+                // Fetch current version and git info
+                const infoResponse = await fetch('/api/updater-info');
+                if (!infoResponse.ok) throw new Error('Failed to fetch updater info from server');
+                const infoData = await infoResponse.json();
+                setCurrentVersion(infoData.version);
+                setCurrentCommit(infoData.commit);
+                setRepoInfo({ owner: infoData.owner, repo: infoData.repo, branch: infoData.branch });
 
                 // Fetch available backups
                 const backupsResponse = await fetch('/api/list-backups');
@@ -65,13 +70,19 @@ export const Updater: React.FC = () => {
     }, []);
 
     const handleCheckForUpdates = useCallback(async () => {
-        if (currentCommit === 'N/A' || currentCommit === '...') return;
+        if (currentCommit === 'N/A' || !repoInfo) return;
         setStatus('checking');
         setLatestCommitInfo(null);
         setErrorMessage(null);
 
         try {
-            const response = await fetch(`${GITHUB_REPO_API}/commits/${GITHUB_BRANCH}`);
+            if (!repoInfo.owner || !repoInfo.repo || !repoInfo.branch) {
+                throw new Error("Git repository info is missing or invalid. Cannot check for updates.");
+            }
+            
+            const { owner, repo, branch } = repoInfo;
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${branch}`);
+            
             if (!response.ok) throw new Error(`GitHub API responded with status ${response.status}`);
             const data = await response.json();
             
@@ -92,7 +103,7 @@ export const Updater: React.FC = () => {
             setStatus('error');
             setErrorMessage((error as Error).message);
         }
-    }, [currentCommit]);
+    }, [currentCommit, repoInfo]);
 
     const handleUpgrade = useCallback(() => {
         if (!window.confirm("This will update the application and restart the server. Are you sure?")) return;
