@@ -13,7 +13,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Middleware for on-the-fly TSX/TS transpilation
+// Middleware for on-the-fly TSX/TS transpilation with enhanced error reporting
 app.use(async (req, res, next) => {
     if (req.path.endsWith('.tsx') || req.path.endsWith('.ts')) {
         const filePath = path.join(__dirname, '..', req.path);
@@ -26,15 +26,46 @@ app.use(async (req, res, next) => {
                     format: 'esm',
                     platform: 'browser',
                     jsx: 'automatic',
-                    // CRITICAL FIX: Mark packages loaded via importmap as external
-                    // This prevents the server from trying to bundle them, fixing the crash.
                     external: ['react', 'react-dom/*', '@google/genai', 'recharts'],
                 });
                 res.set('Content-Type', 'application/javascript');
                 res.send(result.outputFiles[0].text);
             } catch (e) {
-                console.error('ESBuild error:', e);
-                res.status(500).send('Error transpiling file');
+                console.error('ESBuild transpilation failed:', e);
+
+                // --- DEBUGGING CODE START ---
+                // This block catches the error and sends a detailed report to the browser.
+                const errorMessage = (e.errors || []).map(err => {
+                    return `> Error: ${err.text}\n  at ${err.location.file}:${err.location.line}:${err.location.column}`;
+                }).join('\n\n') || e.message;
+
+                res.set('Content-Type', 'text/html');
+                res.status(500).send(`
+                    <html lang="en">
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Server Error</title>
+                        <style>
+                            body { font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: #111827; color: #f3f4f6; padding: 2rem; }
+                            .container { max-width: 900px; margin: 0 auto; background-color: #1f2937; border: 1px solid #374151; border-radius: 0.5rem; padding: 2rem; }
+                            h1 { color: #f87171; border-bottom: 1px solid #4b5563; padding-bottom: 0.5rem; }
+                            pre { background-color: #111827; padding: 1rem; border-radius: 0.25rem; white-space: pre-wrap; word-wrap: break-word; font-size: 0.9em; }
+                            code { color: #d1d5db; }
+                            p { color: #9ca3af; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <h1>500 - Internal Server Error</h1>
+                            <p>The server failed to process the file: <strong>${req.path}</strong>. This is usually caused by a syntax error or an incorrect import path in one of your application files.</p>
+                            <h2>Error Details:</h2>
+                            <pre><code>${errorMessage.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
+                        </div>
+                    </body>
+                    </html>
+                `);
+                // --- DEBUGGING CODE END ---
             }
         } else {
             res.status(404).send('File not found');
@@ -43,6 +74,7 @@ app.use(async (req, res, next) => {
         next();
     }
 });
+
 
 // State for traffic calculation
 let trafficState = {};
@@ -323,7 +355,6 @@ app.get('/api/list-backups', (req, res) => {
     res.json(backups);
 });
 
-// FIX: Changed endpoint to GET and read 'backupFile' from query to support EventSource on the client.
 app.get('/api/rollback', (req, res) => {
      res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -387,7 +418,6 @@ app.get('*', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-// CRITICAL FIX: Listen on '0.0.0.0' to accept connections from other devices on the network.
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`MikroTik Manager server running. Access it at http://<your_ip_address>:${PORT}`);
 });
