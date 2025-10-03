@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const esbuild = require('esbuild');
 const axios = require('axios');
+const https = require('https');
 const { exec, spawn } = require('child_process');
 const archiver = require('archiver');
 const fsExtra = require('fs-extra');
@@ -86,11 +87,16 @@ const createRouterApi = (routerConfig) => {
         username: user,
         password: password || '',
     };
+    
+    // For self-signed certificates, which MikroTik uses by default for https.
+    const agent = (protocol === 'https') 
+        ? new https.Agent({ rejectUnauthorized: false }) 
+        : undefined;
+
     return axios.create({
         baseURL: `${protocol}://${host}:${port}`,
         auth,
-        // For self-signed certificates, you might need this in a real scenario:
-        // httpsAgent: new https.Agent({ rejectUnauthorized: false })
+        httpsAgent: agent
     });
 };
 
