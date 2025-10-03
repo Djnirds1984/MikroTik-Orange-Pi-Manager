@@ -4,12 +4,39 @@ const cors = require('cors');
 const axios = require('axios');
 const https = require('https');
 const path = require('path');
+const fs = require('fs').promises;
+const esbuild = require('esbuild');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware to transpile TSX/TS files on the fly for development
+app.get(/\.(tsx|ts)$/, async (req, res, next) => {
+    try {
+        // Resolve file path relative to the project root
+        const filePath = path.join(__dirname, '..', req.path);
+        const fileContent = await fs.readFile(filePath, 'utf-8');
+        
+        const result = await esbuild.transform(fileContent, {
+            loader: req.path.endsWith('.tsx') ? 'tsx' : 'ts',
+            jsx: 'automatic', // Use the new JSX transform
+            target: 'esnext'
+        });
+
+        res.set('Content-Type', 'application/javascript; charset=utf-8');
+        res.send(result.code);
+    } catch (error) {
+        // If file doesn't exist, pass to next middleware (like 404 handler)
+        if (error.code === 'ENOENT') {
+            return next();
+        }
+        console.error(`Error transpiling ${req.path}:`, error);
+        res.status(500).send('Error during server-side transpilation');
+    }
+});
 
 // Helper function to create an Axios instance for a specific router
 const createApiClient = ({ host, user, password, port, useSsl = false }) => {
@@ -181,10 +208,11 @@ app.post('/api/hotspot-clients', (req, res) => {
 // --- Frontend Serving ---
 const staticPath = path.join(__dirname, '..');
 
-// Serve static files from the root directory
+// Serve static files from the root directory.
+// Our custom middleware will catch .tsx/.ts requests first.
 app.use(express.static(staticPath));
 
-// For any other route, serve the index.html file for the React app
+// For any other route, serve the index.html file for the React app (Single Page App support)
 app.get('*', (req, res) => {
     res.sendFile(path.join(staticPath, 'index.html'));
 });
