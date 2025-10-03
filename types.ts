@@ -66,11 +66,17 @@ export interface PppoeClient {
     uptime: string;
 }
 
+export interface PppProfile {
+    id: string;
+    name: string;
+}
+
 export interface BillingPlan {
     name: string;
     price: number;
-    uploadSpeed: number; // in Mbps
-    downloadSpeed: number; // in Mbps
+    currency: string;
+    cycle: 'Monthly' | 'Quarterly' | 'Yearly';
+    pppoeProfile: string;
     description: string;
 }
 

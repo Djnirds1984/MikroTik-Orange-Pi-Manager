@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -50,7 +51,8 @@ const App: React.FC = () => {
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
       case 'billing':
-          return <Billing />;
+          // Fix: Pass selectedRouter prop to Billing component as it is required.
+          return <Billing selectedRouter={selectedRouter} />;
       case 'updater':
         return <Updater />;
       default:

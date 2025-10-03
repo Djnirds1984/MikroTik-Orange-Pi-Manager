@@ -1,25 +1,34 @@
+
 import React, { useState, useEffect } from 'react';
-import type { BillingPlan, BillingPlanWithId } from '../types';
+import type { BillingPlan, BillingPlanWithId, PppProfile, RouterConfigWithId } from '../types';
 import { useBillingPlans } from '../hooks/useBillingPlans';
-import { EditIcon, TrashIcon, SignalIcon } from '../constants';
+import { getPppProfiles } from '../services/mikrotikService';
+import { EditIcon, TrashIcon, SignalIcon, RouterIcon } from '../constants';
+import { Loader } from './Loader';
 
 // Form component for adding/editing plans
 const PlanForm: React.FC<{
     onSave: (plan: BillingPlan | BillingPlanWithId) => void;
     onCancel: () => void;
     initialData?: BillingPlanWithId | null;
-}> = ({ onSave, onCancel, initialData }) => {
-    const [plan, setPlan] = useState<BillingPlan>(
-        { name: '', price: 0, uploadSpeed: 0, downloadSpeed: 0, description: '' }
-    );
+    profiles: PppProfile[];
+    isLoadingProfiles: boolean;
+}> = ({ onSave, onCancel, initialData, profiles, isLoadingProfiles }) => {
+    // Fix: Explicitly type defaultPlanState to prevent type inference issues with the 'cycle' property.
+    const defaultPlanState: BillingPlan = { name: '', price: 0, currency: 'USD', cycle: 'Monthly', pppoeProfile: '', description: '' };
+    const [plan, setPlan] = useState<BillingPlan>(initialData || defaultPlanState);
     
     useEffect(() => {
-        setPlan(initialData || { name: '', price: 0, uploadSpeed: 0, downloadSpeed: 0, description: '' });
-    }, [initialData]);
+        const initialState = { ...defaultPlanState, ...(initialData || {}) };
+        if (!initialState.pppoeProfile && profiles.length > 0) {
+            initialState.pppoeProfile = profiles[0].name;
+        }
+        setPlan(initialState);
+    }, [initialData, profiles]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        setPlan(prev => ({ ...prev, [name]: name === 'price' || name === 'uploadSpeed' || name === 'downloadSpeed' ? parseFloat(value) || 0 : value }));
+        setPlan(prev => ({ ...prev, [name]: name === 'price' ? parseFloat(value) || 0 : value }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -31,27 +40,39 @@ const PlanForm: React.FC<{
         <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
             <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? `Edit '${initialData.name}'` : 'Add New Billing Plan'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-300">Plan Name</label>
-                    <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., Premium 100Mbps" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label htmlFor="name" className="block text-sm font-medium text-slate-300">Plan Name</label>
+                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., Premium 100Mbps" />
+                    </div>
+                    <div>
+                        <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-300">PPPoE Profile</label>
+                        <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500 disabled:opacity-50">
+                            {isLoadingProfiles ? <option>Loading profiles...</option> : profiles.length === 0 ? <option>No profiles found</option> : profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                        </select>
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-slate-300">Price ($)</label>
+                        <label htmlFor="price" className="block text-sm font-medium text-slate-300">Price</label>
                         <input type="number" name="price" value={plan.price} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                     </div>
                      <div>
-                        <label htmlFor="downloadSpeed" className="block text-sm font-medium text-slate-300">Download (Mbps)</label>
-                        <input type="number" name="downloadSpeed" value={plan.downloadSpeed} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        <label htmlFor="currency" className="block text-sm font-medium text-slate-300">Currency</label>
+                        <input type="text" name="currency" value={plan.currency} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                     </div>
                      <div>
-                        <label htmlFor="uploadSpeed" className="block text-sm font-medium text-slate-300">Upload (Mbps)</label>
-                        <input type="number" name="uploadSpeed" value={plan.uploadSpeed} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        <label htmlFor="cycle" className="block text-sm font-medium text-slate-300">Cycle</label>
+                        <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
+                            <option>Monthly</option>
+                            <option>Quarterly</option>
+                            <option>Yearly</option>
+                        </select>
                     </div>
                 </div>
                 <div>
                     <label htmlFor="description" className="block text-sm font-medium text-slate-300">Description</label>
-                    <textarea name="description" value={plan.description} onChange={handleChange} rows={3} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="A brief description of the plan."></textarea>
+                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="A brief description of the plan."></textarea>
                 </div>
                 <div className="flex items-center justify-end space-x-4 pt-4">
                     <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
@@ -62,10 +83,29 @@ const PlanForm: React.FC<{
     );
 };
 
-export const Billing: React.FC = () => {
+interface BillingProps {
+  selectedRouter: RouterConfigWithId | null;
+}
+
+export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     const { plans, addPlan, updatePlan, deletePlan } = useBillingPlans();
     const [editingPlan, setEditingPlan] = useState<BillingPlanWithId | null>(null);
     const [isAdding, setIsAdding] = useState(false);
+    const [profiles, setProfiles] = useState<PppProfile[]>([]);
+    const [isLoadingProfiles, setIsLoadingProfiles] = useState(false);
+
+    useEffect(() => {
+        if ((isAdding || editingPlan) && selectedRouter) {
+            setIsLoadingProfiles(true);
+            getPppProfiles(selectedRouter)
+                .then(setProfiles)
+                .catch(err => {
+                    console.error("Failed to fetch PPP profiles:", err);
+                    setProfiles([]);
+                })
+                .finally(() => setIsLoadingProfiles(false));
+        }
+    }, [isAdding, editingPlan, selectedRouter]);
 
     const handleSave = (planData: BillingPlan | BillingPlanWithId) => {
         if ('id' in planData && planData.id) {
@@ -84,11 +124,19 @@ export const Billing: React.FC = () => {
     };
     
     const handleAddNew = () => {
+        if (!selectedRouter) {
+            alert("Please select a router before adding a new plan.");
+            return;
+        }
         setIsAdding(true);
         setEditingPlan(null);
     }
     
     const handleEdit = (plan: BillingPlanWithId) => {
+        if (!selectedRouter) {
+            alert("Please select a router before editing a plan.");
+            return;
+        }
         setEditingPlan(plan);
         setIsAdding(false);
     }
@@ -111,28 +159,38 @@ export const Billing: React.FC = () => {
 
             {(isAdding || editingPlan) && (
                 <div className="mb-8">
-                    <PlanForm
-                        onSave={handleSave}
-                        onCancel={handleCancel}
-                        initialData={editingPlan}
-                    />
+                    { !selectedRouter ? (
+                        <div className="text-center p-8 bg-slate-800 rounded-lg border border-yellow-700 text-yellow-300">
+                           <p>Please select a router from the top bar to manage billing plans.</p>
+                        </div>
+                    ) : (
+                        <PlanForm
+                            onSave={handleSave}
+                            onCancel={handleCancel}
+                            initialData={editingPlan}
+                            profiles={profiles}
+                            isLoadingProfiles={isLoadingProfiles}
+                        />
+                    )}
                 </div>
             )}
 
             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
                 <ul role="list" className="divide-y divide-slate-700">
                     {plans.map((plan) => (
-                        <li key={plan.id} className="p-4 flex items-center justify-between hover:bg-slate-700/50">
-                            <div className="flex items-center gap-4">
-                                <SignalIcon className="h-8 w-8 text-orange-400" />
+                        <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-700/50">
+                            <div className="flex items-center gap-4 mb-2 sm:mb-0">
+                                <SignalIcon className="h-8 w-8 text-orange-400 flex-shrink-0" />
                                 <div>
                                     <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
                                     <p className="text-sm text-slate-400">
-                                        ${plan.price}/mo - {plan.downloadSpeed}/{plan.uploadSpeed} Mbps
+                                        <span className="font-bold text-slate-200">{plan.price} {plan.currency}</span> / {plan.cycle}
+                                        <span className="mx-2 text-slate-600">|</span>
+                                        Profile: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
                                     </p>
                                 </div>
                             </div>
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-2 self-end sm:self-center">
                                 <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-orange-400">
                                     <EditIcon className="h-5 w-5" />
                                 </button>
