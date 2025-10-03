@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection, ZeroTierInterface } from '../types.ts';
 
 // The new, dedicated API backend runs on port 3002
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -102,4 +102,21 @@ export const deletePppSecret = (router: RouterConfigWithId, secretId: string): P
 
 export const processPppPayment = (router: RouterConfigWithId, secret: PppSecret, plan: BillingPlan, nonPaymentProfile: string, discountDays: number, paymentDate: string): Promise<any> => {
     return fetchData('/api/ppp/process-payment', router, { secret, plan, nonPaymentProfile, discountDays, paymentDate });
+};
+
+// --- ZeroTier Services ---
+export const getZeroTierInterfaces = (router: RouterConfigWithId): Promise<ZeroTierInterface[]> => {
+    return fetchData('/api/zerotier', router);
+};
+
+export const addZeroTierInterface = (router: RouterConfigWithId, networkId: string): Promise<any> => {
+    return fetchData('/api/zerotier/add', router, { networkId });
+};
+
+export const updateZeroTierInterface = (router: RouterConfigWithId, interfaceId: string, disabled: 'true' | 'false'): Promise<any> => {
+    return fetchData('/api/zerotier/update', router, { interfaceId, disabled });
+};
+
+export const deleteZeroTierInterface = (router: RouterConfigWithId, interfaceId: string): Promise<any> => {
+    return fetchData('/api/zerotier/delete', router, { interfaceId });
 };

@@ -107,3 +107,14 @@ export const UsersIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m-7.5-2.952a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zm-9 4.5a9.094 9.094 0 01-3.741-.479 3 3 0 014.682-2.72m7.5-2.952a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
     </svg>
 );
+
+export const ZeroTierIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h7.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 12h7.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 17.25h7.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9 9 0 100-18 9 9 0 000 18z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l-3.75-3.75" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12l3.75 3.75" />
+    </svg>
+);

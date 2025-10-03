@@ -51,9 +51,29 @@ This guide provides instructions on how to test the various components of the ap
 
 ---
 
-## 2. PPPoE & Billing System Testing
+## 2. ZeroTier Management (`/zerotier` page)
 
-### 2.1. PPPoE Profiles (`/pppoe` page)
+### Prerequisite
+- Ensure the `zerotier` package is installed and enabled on your MikroTik router. Run `/zerotier set enabled=yes` in the terminal.
+
+-   **Test Joining a Network:**
+    1.  Navigate to the "ZeroTier" page.
+    2.  Click "Join Network".
+    3.  Enter a valid 16-digit ZeroTier Network ID.
+    4.  Click "Join Network". **Expected Result:** The new network appears in the list after a brief delay. The status might be `REQUESTING_CONFIGURATION` initially, then change to `OK`.
+-   **Test Disabling/Enabling:**
+    1.  Click the toggle switch in the "Enabled" column for the network you just added.
+    2.  **Expected Result:** The toggle switch changes state. On the router, the interface should now be disabled.
+    3.  Click the toggle again. **Expected Result:** The interface is re-enabled.
+-   **Test Leaving a Network:**
+    1.  Click the "Delete" icon next to the network and confirm.
+    2.  **Expected Result:** The ZeroTier interface is removed from the list.
+
+---
+
+## 3. PPPoE & Billing System Testing
+
+### 3.1. PPPoE Profiles (`/pppoe` page)
 
 -   **Test Adding a Profile:**
     1.  Navigate to the "PPPoE Profiles" page.
@@ -68,7 +88,7 @@ This guide provides instructions on how to test the various components of the ap
     1.  Click the "Delete" icon on the `Test-10M` profile and confirm.
     2.  **Expected Result:** The profile is removed from the list.
 
-### 2.2. Billing Plans (`/billing` page)
+### 3.2. Billing Plans (`/billing` page)
 
 -   **Test Adding a Plan:**
     1.  Navigate to the "Billing Plans" page.
@@ -76,7 +96,7 @@ This guide provides instructions on how to test the various components of the ap
     3.  Fill in the form, linking it to a PPPoE profile that exists on your router.
     4.  Click "Save Plan". **Expected Result:** The new plan appears in the list. (Note: This is saved in browser local storage).
 
-### 2.3. PPPoE Users & Payments (`/users` page)
+### 3.3. PPPoE Users & Payments (`/users` page)
 
 -   **Test Adding a User:**
     1.  Navigate to the "PPPoE Users" page.
@@ -98,9 +118,9 @@ This guide provides instructions on how to test the various components of the ap
 
 ---
 
-## 3. Updater Functionality Testing (`/updater` page)
+## 4. Updater Functionality Testing (`/updater` page)
 
-### 3.1. Test Update Availability
+### 4.1. Test Update Availability
 
 1.  **Simulate a remote change:**
     -   On another machine (or on GitHub directly), commit and push a small change to your repository (e.g., add a line to this `TESTING.md` file).
@@ -109,13 +129,13 @@ This guide provides instructions on how to test the various components of the ap
     -   Click "Check for Updates".
     -   **Expected Result:** The status changes to "An update is available" and the "Update Now" button appears.
 
-### 3.2. Test the Update & Backup Process
+### 4.2. Test the Update & Backup Process
 
 1.  With an update available, click "**Update Now**".
 2.  **Expected Result:** The update log appears, showing progress. The process should end with a restart message, and the page should automatically reload after ~10 seconds.
 3.  After reloading, go back to the Updater page. **Expected Result:** A new backup file (`backup-....tar.gz`) is listed under "Available Backups".
 
-### 3.3. Test the Rollback Process
+### 4.3. Test the Rollback Process
 
 1.  Click the "Restore" button next to the backup file you just created.
 2.  Confirm the action.

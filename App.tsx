@@ -9,6 +9,7 @@ import { Updater } from './components/Updater.tsx';
 import { Pppoe } from './components/Pppoe.tsx';
 import { Users } from './components/Users.tsx';
 import { Billing } from './components/Billing.tsx';
+import { ZeroTier } from './components/ZeroTier.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import type { View } from './types.ts';
 
@@ -55,6 +56,8 @@ const App: React.FC = () => {
           return <Users selectedRouter={selectedRouter} />;
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
+      case 'zerotier':
+          return <ZeroTier selectedRouter={selectedRouter} />;
       case 'updater':
         return <Updater />;
       default:
@@ -69,6 +72,7 @@ const App: React.FC = () => {
     pppoe: 'PPPoE Profiles',
     users: 'PPPoE Users',
     billing: 'Billing Plans',
+    zerotier: 'ZeroTier Management',
     updater: 'Panel Updater',
   };
 

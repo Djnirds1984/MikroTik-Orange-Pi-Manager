@@ -255,6 +255,42 @@ app.post('/api/ppp/process-payment', (req, res) => {
     });
 });
 
+// --- ZeroTier ---
+app.post('/api/zerotier', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const response = await apiClient.get('/zerotier');
+        res.status(200).json(response.data.map(zt => ({ ...zt, id: zt['.id'] })));
+    });
+});
+
+app.post('/api/zerotier/add', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { networkId } = req.body;
+        const response = await apiClient.put('/zerotier', {
+            "network": networkId,
+            "disabled": "false"
+        });
+        res.status(201).json(response.data);
+    });
+});
+
+app.post('/api/zerotier/update', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { interfaceId, disabled } = req.body;
+        const response = await apiClient.patch(`/zerotier/${interfaceId}`, { disabled });
+        res.status(200).json(response.data);
+    });
+});
+
+app.post('/api/zerotier/delete', (req, res) => {
+    handleApiRequest(req, res, async (apiClient) => {
+        const { interfaceId } = req.body;
+        await apiClient.delete(`/zerotier/${interfaceId}`);
+        res.status(204).send();
+    });
+});
+
+
 app.listen(port, () => {
     console.log(`MikroTik Manager API backend running. Listening on port ${port}`);
 });

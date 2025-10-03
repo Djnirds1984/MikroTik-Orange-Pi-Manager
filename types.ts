@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier';
 
 export interface RouterConfig {
   name: string;
@@ -56,6 +56,9 @@ export type PppProfileData = Omit<PppProfile, 'id'>;
 export interface PppSecret {
     id: string;
     name: string;
+    // Fix: Add optional password property. The MikroTik API requires this for creating/updating
+    // secrets, but doesn't return it on GET requests for security. This fixes type errors.
+    password?: string;
     service: string;
     profile: string;
     comment?: string;
@@ -85,4 +88,13 @@ export interface BillingPlan {
 
 export interface BillingPlanWithId extends BillingPlan {
     id: string;
+}
+
+export interface ZeroTierInterface {
+    id: string;
+    name: string;
+    'network-id': string;
+    status: string;
+    disabled: 'true' | 'false';
+    'mac-address': string;
 }

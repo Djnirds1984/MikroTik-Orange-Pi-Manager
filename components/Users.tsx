@@ -105,8 +105,9 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
         if (initialData) {
             dataToSave = { ...initialData, ...dataToSave };
             if (!secret.password) {
-                // @ts-ignore
-                delete dataToSave.password;
+                // Fix: The PppSecret type now includes the optional `password` property,
+                // so we can safely delete it without a @ts-ignore comment.
+                delete (dataToSave as PppSecret).password;
             }
         }
         

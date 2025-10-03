@@ -11,6 +11,7 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 -   **AI Script Assistant:** Describe a networking task in plain English (e.g., "Block Facebook for the guest network"), and the AI will generate the corresponding RouterOS terminal script.
 -   **PPPoE Management:** Full CRUD management for PPPoE profiles and users (secrets).
 -   **Billing System:** Create billing plans and process payments for PPPoE users, with automated scheduler integration for managing expired accounts.
+-   **ZeroTier Management:** Join, leave, enable, and disable ZeroTier networks directly from the UI.
 -   **Updater:** A one-click updater to fetch the latest version of the panel from your GitHub repository, including automatic backups and rollback functionality.
 -   **Responsive Design:** A clean, modern UI that works on both desktop and mobile browsers.
 
@@ -93,13 +94,18 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 
 ### **Step 1: MikroTik Router Configuration**
 
-You must enable the **REST API** on your router. In the terminal, run:
-```routeros
-/ip service enable www
-# OR for HTTPS (recommended)
-/ip service enable www-ssl
-```
-The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the correct port when adding the router in the panel. It is also recommended to create a dedicated user group with appropriate permissions for the API user.
+-   **Enable REST API:** You must enable the **REST API** on your router. In the terminal, run:
+    ```routeros
+    /ip service enable www
+    # OR for HTTPS (recommended)
+    /ip service enable www-ssl
+    ```
+    The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the correct port when adding the router in the panel. It is also recommended to create a dedicated user group with appropriate permissions for the API user.
+
+-   **Enable ZeroTier Package (Optional):** For the ZeroTier Management feature to work, ensure the `zerotier` package is installed and enabled on your router.
+    ```routeros
+    /zerotier set enabled=yes
+    ```
 
 ### **Step 2: Prepare the Application**
 
