@@ -152,15 +152,17 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
 interface PaymentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onProcess: (discountDays: number, paymentDate: string) => void;
+    onProcess: (discountDays: number, paymentDate: string, nonPaymentProfile: string) => void;
     user: PppSecret | null;
     plans: BillingPlanWithId[];
+    profiles: PppProfile[];
     isLoading: boolean;
 }
 
-const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess, user, plans, isLoading }) => {
+const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess, user, plans, profiles, isLoading }) => {
     const [paymentDate, setPaymentDate] = useState('');
     const [discountDays, setDiscountDays] = useState(0);
+    const [expiryProfile, setExpiryProfile] = useState('');
 
     const currentUserPlan = useMemo(() => {
         if (!user) return null;
@@ -172,8 +174,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
         if (isOpen) {
             setPaymentDate(new Date().toISOString().split('T')[0]);
             setDiscountDays(0);
+            const defaultProfile = profiles.find(p => p.name.toLowerCase().includes('expired'))?.name || profiles[0]?.name || '';
+            setExpiryProfile(defaultProfile);
         }
-    }, [isOpen]);
+    }, [isOpen, profiles]);
 
     if (!isOpen || !user) return null;
 
@@ -183,7 +187,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
     const finalAmount = planPrice - discountAmount;
 
     const handleSubmit = () => {
-        onProcess(discountDays, paymentDate);
+        onProcess(discountDays, paymentDate, expiryProfile);
     };
 
     return (
@@ -199,6 +203,24 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
                         <div>
                             <label htmlFor="discountDays" className="block text-sm font-medium text-slate-300">Discount for Downtime (Days)</label>
                             <input type="number" name="discountDays" id="discountDays" value={discountDays} onChange={(e) => setDiscountDays(Number(e.target.value))} min="0" className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        </div>
+                        <div>
+                            <label htmlFor="expiryProfile" className="block text-sm font-medium text-slate-300">Profile on Expiry</label>
+                            <select 
+                                name="expiryProfile" 
+                                id="expiryProfile" 
+                                value={expiryProfile} 
+                                onChange={(e) => setExpiryProfile(e.target.value)} 
+                                required 
+                                className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                            >
+                                {profiles.length > 0 ? (
+                                    profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)
+                                ) : (
+                                    <option value="" disabled>No profiles loaded</option>
+                                )}
+                            </select>
+                            <p className="text-xs text-slate-500 mt-1">The user will be moved to this profile when their plan expires.</p>
                         </div>
                     </div>
 
@@ -225,7 +247,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                    <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan || !expiryProfile} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
                         {isLoading ? 'Processing...' : 'Confirm Payment'}
                     </button>
                 </div>
@@ -251,9 +273,6 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [payingSecret, setPayingSecret] = useState<PppSecret | null>(null);
     const { plans } = useBillingPlans();
-
-    // In a real app, this should be a configurable setting.
-    const nonPaymentProfile = 'expired-profile'; 
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -357,9 +376,14 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         setIsPaymentModalOpen(true);
     };
 
-    const handleProcessPayment = async (discountDays: number, paymentDate: string) => {
+    const handleProcessPayment = async (discountDays: number, paymentDate: string, nonPaymentProfile: string) => {
         if (!selectedRouter || !payingSecret) return;
         
+        if (!nonPaymentProfile) {
+            alert("Please select a profile for when the plan expires.");
+            return;
+        }
+
         const commentData = parseComment(payingSecret.comment);
         const currentUserPlan = plans.find(p => p.name === commentData.plan);
         if (!currentUserPlan) {
@@ -427,13 +451,14 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                 onProcess={handleProcessPayment}
                 user={payingSecret}
                 plans={plans}
+                profiles={profiles}
                 isLoading={isSubmitting}
             />
 
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-100">PPPoE Users</h2>
                  <p className="text-sm text-slate-500">
-                    NOTE: The payment system requires a PPPoE profile named <code className="font-mono bg-slate-700 px-1 rounded text-xs">{nonPaymentProfile}</code> to exist on your router.
+                    NOTE: The payment system uses the MikroTik scheduler to automatically change a user's profile upon their due date.
                 </p>
                 <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
                     Add New User
