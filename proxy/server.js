@@ -353,12 +353,14 @@ app.get('/api/update-status', (req, res) => {
             const base = await run('git merge-base @ @{u}');
 
             if (local === remote) {
-                sendSse(res, { status: 'uptodate', message: 'You are running the latest version.', local });
+                sendSse(res, { status: 'uptodate', message: 'Your panel is updated.', local });
             } else if (local === base) {
-                sendSse(res, { status: 'available', message: 'A new version is available.', local, remote });
+                sendSse(res, { status: 'available', message: 'Update is available.', local, remote });
             } else {
                 sendSse(res, { status: 'diverged', message: 'Local changes detected. Please commit or stash changes.', local, remote });
             }
+            // Add a "finished" event to signal a graceful close
+            sendSse(res, { status: 'finished' });
         } catch (err) {
             sendSse(res, { status: 'error', message: err.message, log: err.stack });
         } finally {
