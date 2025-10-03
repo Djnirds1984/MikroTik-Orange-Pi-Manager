@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon } from './constants.tsx';
+import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 
 type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'diverged' | 'error' | 'updating' | 'restarting' | 'rollingback';

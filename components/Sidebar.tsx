@@ -1,5 +1,5 @@
 import React from 'react';
-import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon } from './constants.tsx';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon } from '../constants.tsx';
 import type { View } from '../types.ts';
 
 interface SidebarProps {
