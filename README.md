@@ -16,7 +16,7 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 
 ## Technical Architecture
 
-To improve stability and reliability, this project now uses a **two-process architecture**, managed by a single `ecosystem.config.cjs` file for `pm2`.
+To improve stability and reliability, this project now uses a **two-process architecture**, managed by a single `ecosystem.config.js` file for `pm2`.
 
 1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
 2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server that uses the official **MikroTik REST API**. It handles all communication with your routers and exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
@@ -41,7 +41,7 @@ This two-process model provides a robust separation of concerns, ensuring the ap
     2.  Open the `env.js` file and replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key.
 
 ### **Installation and Startup**
-This new method uses an `ecosystem.config.cjs` file to manage both servers with a single command.
+This new method uses an `ecosystem.config.js` file to manage both servers with a single command.
 
 1. **Clone the repository:**
    ```bash
@@ -61,7 +61,7 @@ This new method uses an `ecosystem.config.cjs` file to manage both servers with 
 3. **Start the Application with PM2:**
    **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running this command.**
    ```bash
-   pm2 start ecosystem.config.cjs
+   pm2 start ecosystem.config.js
    ```
 
 4. **Check the status:**
@@ -77,7 +77,7 @@ This new method uses an `ecosystem.config.cjs` file to manage both servers with 
 
 ## Deployment on Orange Pi One (Step-by-Step Guide)
 
-This guide shows how to deploy both servers using `pm2` and the new `ecosystem.config.cjs` for simpler, more reliable process management.
+This guide shows how to deploy both servers using `pm2` and the new `ecosystem.config.js` for simpler, more reliable process management.
 
 ### **Prerequisites**
 
@@ -114,7 +114,7 @@ The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the co
 1.  **Start Both Servers:**
     **IMPORTANT: Ensure you are in the project's root directory (`/var/www/html/MikroTik-Orange-Pi-Manager`) before running this command.**
     ```bash
-    pm2 start ecosystem.config.cjs
+    pm2 start ecosystem.config.js
     ```
 
 2.  **Verify the Status:**

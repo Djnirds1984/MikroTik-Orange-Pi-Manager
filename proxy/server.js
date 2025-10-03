@@ -101,13 +101,13 @@ app.get('/api/update-status', async (res) => {
 });
 
 const restartApp = () => {
-    // FIX: Use the ecosystem file with the correct .cjs extension to reliably restart all processes.
+    // FIX: Use the ecosystem file with the correct .js extension to reliably restart all processes.
     if (process.env.PM2_HOME) {
         const pm2 = require('pm2');
         pm2.connect(err => {
             if (err) { console.error(err); return; }
             // Restart all apps defined in the ecosystem config file.
-            pm2.restart('ecosystem.config.cjs', (err) => {
+            pm2.restart('ecosystem.config.js', (err) => {
                 pm2.disconnect();
                 if (err) console.error('PM2 restart failed', err);
             });

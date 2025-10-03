@@ -1,6 +1,12 @@
-// ecosystem.config.cjs
-// IMPORTANT: This file is now a .cjs file to ensure it's loaded as a CommonJS module.
-module.exports = {
+// ecosystem.config.js - Now uses ES Module syntax
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Recreate __dirname for ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default {
   apps : [{
     name   : "mikrotik-manager",
     script : "./proxy/server.js",
