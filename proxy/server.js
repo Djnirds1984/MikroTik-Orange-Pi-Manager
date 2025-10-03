@@ -349,6 +349,67 @@ app.post('/api/hotspot-clients', (req, res) => {
     });
 });
 
+app.post('/api/pppoe-settings', (req, res) => {
+    handleRequest(req, res, async (client) => {
+        const [profileRes, aaaRes, radiusRes] = await Promise.all([
+            client.get('/ppp/profile'),
+            client.get('/ppp/aaa'),
+            client.get('/radius').catch(() => ({ data: [] })), // Gracefully handle no RADIUS config
+        ]);
+
+        const aaaConfig = aaaRes.data;
+        const defaultProfile = profileRes.data.find(p => p.default === 'true') || profileRes.data[0];
+
+        if (!defaultProfile) {
+            throw new Error('No default PPP profile found.');
+        }
+
+        const useRadius = defaultProfile['use-radius'] === 'true';
+        let radiusConfig = null;
+        if (useRadius && radiusRes.data.length > 0) {
+            const primaryRadius = radiusRes.data[0];
+            radiusConfig = {
+                address: primaryRadius.address,
+                secret: '********', // Always mask the secret
+                timeout: primaryRadius.timeout,
+            };
+        }
+
+        return {
+            useRadius,
+            defaultProfile: defaultProfile.name,
+            authentication: {
+                pap: aaaConfig['use-pap'] === 'true',
+                chap: aaaConfig['use-chap'] === 'true',
+                mschap1: aaaConfig['use-mschap1'] === 'true',
+                mschap2: aaaConfig['use-mschap2'] === 'true',
+            },
+            radiusConfig,
+        };
+    });
+});
+
+app.post('/api/pppoe-active', (req, res) => {
+    handleRequest(req, res, async (client) => {
+        try {
+            const response = await client.get('/ppp/active');
+            return response.data.map(client => ({
+                id: client['.id'],
+                name: client.name,
+                service: client.service,
+                callerId: client['caller-id'],
+                address: client.address,
+                uptime: client.uptime,
+            }));
+        } catch (err) {
+            if (axios.isAxiosError(err) && err.response?.data?.detail?.includes("no such command")) {
+                return []; // Return empty if PPP package is disabled/not installed
+            }
+            throw err;
+        }
+    });
+});
+
 // --- Frontend Serving ---
 const staticPath = path.join(__dirname, '..');
 app.use(express.static(staticPath));

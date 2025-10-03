@@ -1,4 +1,4 @@
-import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse } from '../types.ts';
+import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse, PppoeSettings, PppoeClient } from '../types.ts';
 
 const API_BASE_URL = '/api';
 
@@ -32,6 +32,14 @@ export const getInterfaces = async (router: RouterConfigWithId): Promise<Interfa
   
 export const getHotspotClients = async (router: RouterConfigWithId): Promise<HotspotClient[]> => {
   return fetchData<HotspotClient[]>('/hotspot-clients', router);
+};
+
+export const getPppoeSettings = async (router: RouterConfigWithId): Promise<PppoeSettings> => {
+    return fetchData<PppoeSettings>('/pppoe-settings', router);
+};
+
+export const getPppoeActiveClients = async (router: RouterConfigWithId): Promise<PppoeClient[]> => {
+    return fetchData<PppoeClient[]>('/pppoe-active', router);
 };
   
 export const getLogs = async (): Promise<LogEntry[]> => {

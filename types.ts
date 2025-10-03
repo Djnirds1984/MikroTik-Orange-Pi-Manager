@@ -24,6 +24,32 @@ export interface HotspotClient {
   signal: string;
 }
 
+export interface PppoeClient {
+    id: string;
+    name: string;
+    service: string;
+    callerId: string;
+    address: string;
+    uptime: string;
+}
+
+export interface RadiusConfig {
+    address: string;
+    secret: string; // Masked on arrival
+    timeout: string;
+}
+export interface PppoeSettings {
+    useRadius: boolean;
+    defaultProfile: string;
+    authentication: {
+        pap: boolean;
+        chap: boolean;
+        mschap1: boolean;
+        mschap2: boolean;
+    },
+    radiusConfig: RadiusConfig | null;
+}
+
 export interface LogEntry {
   time: string;
   topic: string;

@@ -6,12 +6,14 @@ import { Dashboard } from './components/Dashboard.tsx';
 import { Scripting } from './components/Scripting.tsx';
 import { Updater } from './components/Updater.tsx';
 import { Routers } from './components/Routers.tsx';
+import { Pppoe } from './components/Pppoe.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 
-type View = 'dashboard' | 'scripting' | 'updater' | 'routers';
+type View = 'dashboard' | 'pppoe' | 'scripting' | 'updater' | 'routers';
 
 const VIEW_TITLES: Record<View, string> = {
   dashboard: 'Dashboard',
+  pppoe: 'PPPoE Manager',
   scripting: 'AI Script Assistant',
   updater: 'Panel Updater',
   routers: 'Manage Routers',
@@ -59,6 +61,7 @@ const App: React.FC = () => {
         />
         <main className="flex-grow container mx-auto px-8 py-8">
           {currentView === 'dashboard' && <Dashboard selectedRouter={selectedRouter} />}
+          {currentView === 'pppoe' && <Pppoe selectedRouter={selectedRouter} />}
           {currentView === 'scripting' && <Scripting />}
           {currentView === 'updater' && <Updater />}
           {currentView === 'routers' && (
