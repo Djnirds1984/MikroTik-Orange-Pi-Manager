@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const https = require('https');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -59,6 +60,8 @@ const handleRequest = async (req, res, callback) => {
         res.status(500).json({ error: errorMessage });
     }
 };
+
+// --- API Endpoints ---
 
 // Test connection endpoint
 app.post('/api/test-connection', async (req, res) => {
@@ -175,7 +178,18 @@ app.post('/api/hotspot-clients', (req, res) => {
     });
 });
 
+// --- Frontend Serving ---
+const staticPath = path.join(__dirname, '..');
+
+// Serve static files from the root directory
+app.use(express.static(staticPath));
+
+// For any other route, serve the index.html file for the React app
+app.get('*', (req, res) => {
+    res.sendFile(path.join(staticPath, 'index.html'));
+});
+
 
 app.listen(PORT, () => {
-    console.log(`MikroTik stateless REST proxy server listening on port ${PORT}`);
+    console.log(`MikroTik Manager server running. Access it at http://localhost:${PORT}`);
 });

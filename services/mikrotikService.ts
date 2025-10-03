@@ -1,6 +1,6 @@
 import type { SystemInfo, Interface, HotspotClient, LogEntry, RouterConfig, RouterConfigWithId, TestConnectionResponse } from '../types';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 const fetchData = async <T>(endpoint: string, router: RouterConfigWithId): Promise<T> => {
   try {
