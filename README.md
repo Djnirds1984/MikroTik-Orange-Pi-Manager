@@ -196,6 +196,45 @@ You are all set!
 
 When you push new changes to your GitHub repository, you can easily update the application on your Orange Pi.
 
+### **Making Updates Easier (Passwordless `git pull`)**
+
+To avoid typing your GitHub username and password every time you run `git pull`, it's highly recommended to set up an SSH key. This is a secure, one-time setup.
+
+**1. Generate an SSH Key on your Orange Pi:**
+   - If you don't already have a key, this command will create one. Press Enter at each prompt to accept the default location and skip setting a passphrase.
+   ```bash
+   ssh-keygen -t ed25519 -C "your_email@example.com"
+   ```
+
+**2. Display your Public Key:**
+   - This will print your public key to the terminal. Copy the entire output, starting with `ssh-ed25519` and ending with your email address.
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+
+**3. Add the SSH Key to your GitHub Account:**
+   - Go to your GitHub SSH settings page: [https://github.com/settings/keys](https://github.com/settings/keys)
+   - Click "**New SSH key**".
+   - Give it a descriptive **Title** (e.g., "Orange Pi Manager").
+   - Paste the key you copied from the terminal into the "**Key**" field.
+   - Click "**Add SSH key**".
+
+**4. Update your Git Remote URL:**
+   - For Git to use your new key, you need to tell it to connect via SSH instead of HTTPS.
+   - First, navigate to your project directory on the Orange Pi:
+     ```bash
+     cd ~/MikroTik-Orange-Pi-Manager
+     ```
+   - Then, change the remote URL. **IMPORTANT: Replace `Djnirds1984/MikroTik-Orange-Pi-Manager` with your own GitHub username and repository name.**
+     ```bash
+     git remote set-url origin git@github.com:Djnirds1984/MikroTik-Orange-Pi-Manager.git
+     ```
+   - You can verify the change with `git remote -v`. The URLs should now start with `git@github.com:...`.
+
+Now, your `git pull` commands will be authenticated securely using your SSH key, with no password required.
+
+### **Pulling the Latest Code**
+
 1.  **Connect to your Orange Pi via SSH.**
 
 2.  **Navigate to the project directory:**
