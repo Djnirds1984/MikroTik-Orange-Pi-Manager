@@ -261,19 +261,48 @@ const backupsDir = path.join(projectRoot, 'backups');
 
 const sendSse = (res, data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
+// Helper for running simple commands and getting a promise.
+// Crucially, it sets GIT_TERMINAL_PROMPT=0 to prevent git from hanging on credential prompts.
+const run = (cmd) => new Promise((resolve, reject) => {
+    const options = {
+        cwd: projectRoot,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    };
+    exec(cmd, options, (err, stdout, stderr) => {
+        if (err) {
+            return reject(new Error(stderr || err.message));
+        }
+        resolve(stdout.trim());
+    });
+});
+
+// Helper for running commands that stream output over SSE.
+// Also prevents git hangs.
+const runStream = (res, cmd, args, opts) => {
+    const defaultOptions = {
+        cwd: projectRoot,
+        shell: false,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    };
+    const finalOpts = { ...defaultOptions, ...opts };
+    if (opts && opts.env) {
+        finalOpts.env = { ...defaultOptions.env, ...opts.env };
+    }
+    
+    const proc = spawn(cmd, args, finalOpts);
+    proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
+    proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
+    return new Promise((resolve, reject) => proc.on('close', code => {
+        if (code === 0) resolve(code);
+        else reject(new Error(`Command '${cmd} ${args.join(' ')}' failed with code ${code}`));
+    }));
+};
+
+
 app.get('/api/update-status', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
-
-    const run = (cmd) => new Promise((resolve, reject) => {
-        exec(cmd, { cwd: projectRoot }, (err, stdout, stderr) => {
-            if (err) {
-                return reject(new Error(stderr || err.message));
-            }
-            resolve(stdout.trim());
-        });
-    });
 
     (async () => {
         try {
@@ -303,16 +332,6 @@ app.get('/api/update-app', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
 
-    const runStream = (cmd, args, opts) => {
-        const proc = spawn(cmd, args, { cwd: projectRoot, shell: false, ...opts });
-        proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
-        proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
-        return new Promise((resolve, reject) => proc.on('close', code => {
-            if (code === 0) resolve(code);
-            else reject(new Error(`Command failed with code ${code}`));
-        }));
-    };
-
     (async () => {
         try {
             // Backup
@@ -338,13 +357,13 @@ app.get('/api/update-app', (req, res) => {
 
             // Update
             sendSse(res, { log: '\n--- Pulling latest code from Git ---' });
-            await runStream('git', ['pull']);
+            await runStream(res, 'git', ['pull']);
             
             sendSse(res, { log: '\n--- Installing dependencies ---' });
-            await runStream('npm', ['install'], { cwd: path.join(projectRoot, 'proxy') });
+            await runStream(res, 'npm', ['install'], { cwd: path.join(projectRoot, 'proxy') });
 
             sendSse(res, { log: '\n--- Restarting application with PM2 ---' });
-            await runStream('pm2', ['restart', 'mikrotik-manager']);
+            await runStream(res, 'pm2', ['restart', 'mikrotik-manager']);
 
             sendSse(res, { status: 'restarting' });
 
@@ -376,16 +395,6 @@ app.get('/api/rollback', (req, res) => {
         return res.end();
     }
     
-    const runStream = (cmd, args, opts) => {
-        const proc = spawn(cmd, args, { cwd: projectRoot, shell: false, ...opts });
-        proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
-        proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
-        return new Promise((resolve, reject) => proc.on('close', code => {
-             if (code === 0) resolve(code);
-            else reject(new Error(`Command failed with code ${code}`));
-        }));
-    };
-    
     (async () => {
         try {
             sendSse(res, { log: `--- Starting rollback to ${backupFile} ---` });
@@ -402,10 +411,10 @@ app.get('/api/rollback', (req, res) => {
             await tar.x({ file: backupPath, cwd: projectRoot });
 
             sendSse(res, { log: '\n--- Restoring dependencies ---' });
-            await runStream('npm', ['install'], { cwd: path.join(projectRoot, 'proxy') });
+            await runStream(res, 'npm', ['install'], { cwd: path.join(projectRoot, 'proxy') });
 
             sendSse(res, { log: '\n--- Restarting application with PM2 ---' });
-            await runStream('pm2', ['restart', 'mikrotik-manager']);
+            await runStream(res, 'pm2', ['restart', 'mikrotik-manager']);
 
             sendSse(res, { status: 'restarting' });
 
