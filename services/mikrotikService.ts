@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppoeSettings, PppoeClient, PppProfile, BillingPlan } from '../types';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppoeSettings, PppoeClient, PppProfile, BillingPlan } from '../types.ts';
 
 // Generic fetch helper for our backend API
 const fetchData = async (path: string, routerConfig: RouterConfigWithId) => {

@@ -6,11 +6,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-// Fix: Removed .ts extension from import paths.
-import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService';
-import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types';
-import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants';
-import { Loader } from './Loader';
+import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService.ts';
+import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types.ts';
+import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants.tsx';
+import { Loader } from './Loader.tsx';
 
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (

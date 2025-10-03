@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import type { BillingPlan, BillingPlanWithId, PppProfile, RouterConfigWithId } from '../types';
-import { useBillingPlans } from '../hooks/useBillingPlans';
-import { getPppProfiles } from '../services/mikrotikService';
-import { EditIcon, TrashIcon, SignalIcon, RouterIcon } from '../constants';
-import { Loader } from './Loader';
+import type { BillingPlan, BillingPlanWithId, PppProfile, RouterConfigWithId } from '../types.ts';
+import { useBillingPlans } from '../hooks/useBillingPlans.ts';
+import { getPppProfiles } from '../services/mikrotikService.ts';
+import { EditIcon, TrashIcon, SignalIcon, RouterIcon } from '../constants.tsx';
+import { Loader } from './Loader.tsx';
 
 // Form component for adding/editing plans
 const PlanForm: React.FC<{
@@ -14,7 +14,6 @@ const PlanForm: React.FC<{
     profiles: PppProfile[];
     isLoadingProfiles: boolean;
 }> = ({ onSave, onCancel, initialData, profiles, isLoadingProfiles }) => {
-    // Fix: Explicitly type defaultPlanState to prevent type inference issues with the 'cycle' property.
     const defaultPlanState: BillingPlan = { name: '', price: 0, currency: 'USD', cycle: 'Monthly', pppoeProfile: '', description: '' };
     const [plan, setPlan] = useState<BillingPlan>(initialData || defaultPlanState);
     

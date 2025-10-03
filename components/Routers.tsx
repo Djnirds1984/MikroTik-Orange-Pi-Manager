@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-// Fix: Removed .ts extension from import paths.
-import type { RouterConfig, RouterConfigWithId } from '../types';
-import { testRouterConnection } from '../services/mikrotikService';
-import { EditIcon, TrashIcon, RouterIcon } from '../constants';
+import type { RouterConfig, RouterConfigWithId } from '../types.ts';
+import { testRouterConnection } from '../services/mikrotikService.ts';
+import { EditIcon, TrashIcon, RouterIcon } from '../constants.tsx';
 
 interface RouterFormProps {
     onSave: (routerConfig: RouterConfig | RouterConfigWithId) => void;

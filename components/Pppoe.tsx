@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-// Fix: Removed .ts extension from import paths.
-import type { RouterConfigWithId, PppoeSettings, PppoeClient } from '../types';
-import { getPppoeSettings, getPppoeActiveClients } from '../services/mikrotikService';
-import { Loader } from './Loader';
-import { RouterIcon } from '../constants';
+import type { RouterConfigWithId, PppoeSettings, PppoeClient } from '../types.ts';
+import { getPppoeSettings, getPppoeActiveClients } from '../services/mikrotikService.ts';
+import { Loader } from './Loader.tsx';
+import { RouterIcon } from '../constants.tsx';
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
   <div className={`bg-slate-800 border border-slate-700 rounded-lg p-6 ${className}`}>

@@ -25,8 +25,8 @@ app.use(async (req, res, next) => {
                     write: false,
                     format: 'esm',
                     platform: 'browser',
-                    jsxFactory: 'React.createElement',
-                    jsxFragment: 'React.Fragment',
+                    // FIX: Use modern JSX transform for React 17+
+                    jsx: 'automatic',
                 });
                 res.set('Content-Type', 'application/javascript');
                 res.send(result.outputFiles[0].text);
@@ -251,8 +251,8 @@ app.get('/api/update-app', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
 
-    const runStream = (cmd, args) => {
-        const proc = spawn(cmd, args, { cwd: projectRoot, shell: true });
+    const runStream = (cmd, args, opts) => {
+        const proc = spawn(cmd, args, { cwd: projectRoot, shell: true, ...opts });
         proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
         proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
         return new Promise(resolve => proc.on('close', resolve));

@@ -1,15 +1,15 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Sidebar } from './components/Sidebar';
-import { TopBar } from './components/TopBar';
-import { Dashboard } from './components/Dashboard';
-import { Scripting } from './components/Scripting';
-import { Routers } from './components/Routers';
-import { Updater } from './components/Updater';
-import { Pppoe } from './components/Pppoe';
-import { Billing } from './components/Billing';
-import { useRouters } from './hooks/useRouters';
-import type { View } from './types';
+import { Sidebar } from './components/Sidebar.tsx';
+import { TopBar } from './components/TopBar.tsx';
+import { Dashboard } from './components/Dashboard.tsx';
+import { Scripting } from './components/Scripting.tsx';
+import { Routers } from './components/Routers.tsx';
+import { Updater } from './components/Updater.tsx';
+import { Pppoe } from './components/Pppoe.tsx';
+import { Billing } from './components/Billing.tsx';
+import { useRouters } from './hooks/useRouters.ts';
+import type { View } from './types.ts';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
@@ -51,7 +51,6 @@ const App: React.FC = () => {
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
       case 'billing':
-          // Fix: Pass selectedRouter prop to Billing component as it is required.
           return <Billing selectedRouter={selectedRouter} />;
       case 'updater':
         return <Updater />;

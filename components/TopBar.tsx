@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-// Fix: Removed .ts extension from import path.
-import type { RouterConfigWithId, View } from '../types';
+import type { RouterConfigWithId, View } from '../types.ts';
 
 interface TopBarProps {
   title: string;

@@ -1,10 +1,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import type { BillingPlan, BillingPlanWithId } from '../types';
+import type { BillingPlan, BillingPlanWithId } from '../types.ts';
 
 const STORAGE_KEY = 'mikrotikBillingPlans';
 
-// Fix: Update initial plans to match the BillingPlan type. Removed 'uploadSpeed' and 'downloadSpeed' and added 'currency', 'cycle', and 'pppoeProfile'.
 const initialPlans: BillingPlan[] = [
     { name: 'Basic 5Mbps', price: 10, currency: 'USD', cycle: 'Monthly', pppoeProfile: 'profile-5m', description: 'Good for basic browsing and email.' },
     { name: 'Standard 25Mbps', price: 25, currency: 'USD', cycle: 'Monthly', pppoeProfile: 'profile-25m', description: 'Ideal for streaming HD video on one device.' },
