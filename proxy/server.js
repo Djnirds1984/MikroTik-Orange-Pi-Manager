@@ -25,8 +25,10 @@ app.use(async (req, res, next) => {
                     write: false,
                     format: 'esm',
                     platform: 'browser',
-                    // FIX: Use modern JSX transform for React 17+
                     jsx: 'automatic',
+                    // CRITICAL FIX: Mark packages loaded via importmap as external
+                    // This prevents the server from trying to bundle them, fixing the crash.
+                    external: ['react', 'react-dom/*', '@google/genai', 'recharts'],
                 });
                 res.set('Content-Type', 'application/javascript');
                 res.send(result.outputFiles[0].text);
@@ -145,7 +147,8 @@ app.post('/api/hotspot-clients', async (req, res) => {
             signal: client['signal-strength'] || 'N/A',
         })));
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        // Hotspot might not exist, so fail gracefully
+        res.json([]);
     }
 });
 
@@ -217,34 +220,42 @@ const backupsDir = path.join(projectRoot, 'backups');
 
 const sendSse = (res, data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-app.get('/api/update-status', async (req, res) => {
+app.get('/api/update-status', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
 
     const run = (cmd) => new Promise((resolve, reject) => {
-        exec(cmd, { cwd: projectRoot }, (err, stdout) => err ? reject(err) : resolve(stdout.trim()));
+        exec(cmd, { cwd: projectRoot }, (err, stdout, stderr) => {
+            if (err) {
+                return reject(new Error(stderr || err.message));
+            }
+            resolve(stdout.trim());
+        });
     });
 
-    try {
-        await run('git remote update');
-        const local = await run('git rev-parse @');
-        const remote = await run('git rev-parse @{u}');
-        const base = await run('git merge-base @ @{u}');
+    (async () => {
+        try {
+            await run('git remote update');
+            const local = await run('git rev-parse @');
+            const remote = await run('git rev-parse @{u}');
+            const base = await run('git merge-base @ @{u}');
 
-        if (local === remote) {
-            sendSse(res, { status: 'uptodate', message: 'You are running the latest version.' });
-        } else if (local === base) {
-            sendSse(res, { status: 'available', message: 'A new version is available.' });
-        } else {
-             sendSse(res, { status: 'diverged', message: 'Local changes detected. Please commit or stash changes.' });
+            if (local === remote) {
+                sendSse(res, { status: 'uptodate', message: 'You are running the latest version.', local });
+            } else if (local === base) {
+                sendSse(res, { status: 'available', message: 'A new version is available.', local, remote });
+            } else {
+                sendSse(res, { status: 'diverged', message: 'Local changes detected. Please commit or stash changes.', local, remote });
+            }
+        } catch (err) {
+            sendSse(res, { status: 'error', message: err.message });
+        } finally {
+            res.end();
         }
-    } catch (err) {
-        sendSse(res, { status: 'error', message: err.message });
-    } finally {
-        res.end();
-    }
+    })();
 });
+
 
 app.get('/api/update-app', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
@@ -252,10 +263,13 @@ app.get('/api/update-app', (req, res) => {
     res.flushHeaders();
 
     const runStream = (cmd, args, opts) => {
-        const proc = spawn(cmd, args, { cwd: projectRoot, shell: true, ...opts });
+        const proc = spawn(cmd, args, { cwd: projectRoot, shell: false, ...opts });
         proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
         proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
-        return new Promise(resolve => proc.on('close', resolve));
+        return new Promise((resolve, reject) => proc.on('close', code => {
+            if (code === 0) resolve(code);
+            else reject(new Error(`Command failed with code ${code}`));
+        }));
     };
 
     (async () => {
@@ -266,12 +280,19 @@ app.get('/api/update-app', (req, res) => {
             const backupName = `backup-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
             const output = fs.createWriteStream(path.join(backupsDir, backupName));
             const archive = archiver('tar', { gzip: true });
+            
+            const end = new Promise((resolve, reject) => {
+                output.on('close', resolve);
+                archive.on('error', reject);
+            });
+
             archive.pipe(output);
             archive.glob('**/*', {
                 cwd: projectRoot,
                 ignore: ['node_modules/**', '.git/**', 'backups/**']
             });
             await archive.finalize();
+            await end;
             sendSse(res, { log: `Backup created: ${backupName}` });
 
             // Update
@@ -302,24 +323,34 @@ app.get('/api/list-backups', (req, res) => {
     res.json(backups);
 });
 
-app.post('/api/rollback', (req, res) => {
+// FIX: Changed endpoint to GET and read 'backupFile' from query to support EventSource on the client.
+app.get('/api/rollback', (req, res) => {
      res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
-    const { backupFile } = req.body;
+    const { backupFile } = req.query;
     const backupPath = path.join(backupsDir, backupFile);
 
-    if (!fs.existsSync(backupPath)) {
+    if (!backupFile || !fs.existsSync(backupPath)) {
         sendSse(res, { status: 'error', message: 'Backup file not found.' });
         return res.end();
     }
+    
+    const runStream = (cmd, args, opts) => {
+        const proc = spawn(cmd, args, { cwd: projectRoot, shell: false, ...opts });
+        proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
+        proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
+        return new Promise((resolve, reject) => proc.on('close', code => {
+             if (code === 0) resolve(code);
+            else reject(new Error(`Command failed with code ${code}`));
+        }));
+    };
     
     (async () => {
         try {
             sendSse(res, { log: `--- Starting rollback to ${backupFile} ---` });
             sendSse(res, { log: `Removing current application files...` });
 
-            // Remove everything except backups, .git, node_modules
             const files = fs.readdirSync(projectRoot);
             for (const file of files) {
                 if (file !== 'backups' && file !== '.git' && file !== 'node_modules') {
@@ -329,13 +360,6 @@ app.post('/api/rollback', (req, res) => {
 
             sendSse(res, { log: `Extracting backup...` });
             await tar.x({ file: backupPath, cwd: projectRoot });
-
-            const runStream = (cmd, args, opts) => {
-                const proc = spawn(cmd, args, { cwd: projectRoot, shell: true, ...opts });
-                proc.stdout.on('data', data => sendSse(res, { log: data.toString() }));
-                proc.stderr.on('data', data => sendSse(res, { log: data.toString() }));
-                return new Promise(resolve => proc.on('close', resolve));
-            };
 
             sendSse(res, { log: '\n--- Restoring dependencies ---' });
             await runStream('npm', ['install'], { cwd: path.join(projectRoot, 'proxy') });
