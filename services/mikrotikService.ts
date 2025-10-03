@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection } from '../types.ts';
 
 // Generic fetch helper for our backend API
 const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: Record<string, any> = {}) => {
@@ -77,4 +77,29 @@ export const updatePppProfile = (router: RouterConfigWithId, profileData: PppPro
 
 export const deletePppProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
     return fetchData('/api/ppp/profiles/delete', router, { profileId });
+};
+
+// --- PPPoE Secret Services ---
+export const getPppSecrets = (router: RouterConfigWithId): Promise<PppSecret[]> => {
+    return fetchData('/api/ppp/secrets', router);
+};
+
+export const getPppActive = (router: RouterConfigWithId): Promise<PppActiveConnection[]> => {
+    return fetchData('/api/ppp/active', router);
+};
+
+export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretData): Promise<any> => {
+    return fetchData('/api/ppp/secrets/add', router, { secretData });
+};
+
+export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
+    return fetchData('/api/ppp/secrets/update', router, { secretData });
+};
+
+export const deletePppSecret = (router: RouterConfigWithId, secretId: string): Promise<any> => {
+    return fetchData('/api/ppp/secrets/delete', router, { secretId });
+};
+
+export const processPppPayment = (router: RouterConfigWithId, secret: PppSecret, plan: BillingPlan, nonPaymentProfile: string): Promise<any> => {
+    return fetchData('/api/ppp/process-payment', router, { secret, plan, nonPaymentProfile });
 };

@@ -7,6 +7,7 @@ import { Scripting } from './components/Scripting.tsx';
 import { Routers } from './components/Routers.tsx';
 import { Updater } from './components/Updater.tsx';
 import { Pppoe } from './components/Pppoe.tsx';
+import { Users } from './components/Users.tsx';
 import { Billing } from './components/Billing.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import type { View } from './types.ts';
@@ -50,6 +51,8 @@ const App: React.FC = () => {
         return <Routers routers={routers} onAddRouter={addRouter} onUpdateRouter={updateRouter} onDeleteRouter={deleteRouter} />;
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
+      case 'users':
+          return <Users selectedRouter={selectedRouter} />;
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
       case 'updater':
@@ -63,7 +66,8 @@ const App: React.FC = () => {
     dashboard: 'Dashboard',
     scripting: 'AI Script Generator',
     routers: 'Router Management',
-    pppoe: 'PPPoE Server',
+    pppoe: 'PPPoE Profiles',
+    users: 'PPPoE Users',
     billing: 'Billing Plans',
     updater: 'Panel Updater',
   };

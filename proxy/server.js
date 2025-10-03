@@ -281,6 +281,145 @@ app.post('/api/ppp/profiles/delete', async (req, res) => {
     }
 });
 
+// --- PPPoE Secret (User) Management ---
+
+app.post('/api/ppp/secrets', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const secrets = await fetchAll(api, '/rest/ppp/secret');
+        res.json(secrets.map(s => ({
+            id: s['.id'],
+            name: s.name,
+            service: s.service,
+            profile: s.profile,
+            comment: s.comment,
+        })));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.post('/api/ppp/active', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const active = await fetchAll(api, '/rest/ppp/active');
+        res.json(active.map(a => ({
+            id: a['.id'],
+            name: a.name,
+            uptime: a.uptime,
+        })));
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.post('/api/ppp/secrets/add', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { secretData } = req.body;
+        const payload = cleanPayload({
+            name: secretData.name,
+            password: secretData.password,
+            service: secretData.service || 'ppp',
+            profile: secretData.profile,
+            comment: secretData.comment,
+        });
+        const response = await api.put('/rest/ppp/secret', payload);
+        res.status(201).json(response.data);
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
+app.post('/api/ppp/secrets/update', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { secretData } = req.body;
+        const payload = cleanPayload({
+            '.id': secretData.id,
+            name: secretData.name,
+            password: secretData.password,
+            service: secretData.service,
+            profile: secretData.profile,
+            comment: secretData.comment,
+        });
+        const response = await api.patch('/rest/ppp/secret', payload);
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
+app.post('/api/ppp/secrets/delete', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { secretId } = req.body;
+        await api.delete(`/rest/ppp/secret/${secretId}`);
+        res.status(204).send();
+    } catch (error) {
+        res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
+app.post('/api/ppp/process-payment', async (req, res) => {
+    try {
+        const api = createRouterApi(req.body.routerConfig);
+        const { secret, plan, nonPaymentProfile } = req.body;
+
+        // 1. Calculate new due date (30 days from now)
+        const today = new Date();
+        const newDueDate = new Date(today.setDate(today.getDate() + 30));
+        const dueDateString = newDueDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+        // 2. Prepare the new comment
+        let commentJson = {};
+        try {
+            if (secret.comment) commentJson = JSON.parse(secret.comment);
+        } catch { /* ignore parsing errors, start fresh */ }
+        
+        commentJson.dueDate = dueDateString;
+        commentJson.plan = plan.name;
+        const newComment = JSON.stringify(commentJson);
+
+        // 3. Update the user's secret with new profile and comment
+        await api.patch('/rest/ppp/secret', {
+            '.id': secret.id,
+            profile: plan.pppoeProfile,
+            comment: newComment,
+        });
+
+        // 4. Manage the scheduler
+        const schedulerName = `ppp-due-check-${secret.name}`;
+        const scriptName = `ppp-expire-script-${secret.name}`;
+        const scriptSource = `/ppp secret set [find name="${secret.name}"] profile="${nonPaymentProfile}"`;
+        const startDate = newDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).replace(',', '');
+
+        // Find and remove old scheduler/script
+        const [schedulers, scripts] = await Promise.all([
+            fetchAll(api, `/rest/system/scheduler?name=${schedulerName}`),
+            fetchAll(api, `/rest/system/script?name=${scriptName}`),
+        ]);
+        if (schedulers.length > 0) await api.delete(`/rest/system/scheduler/${schedulers[0]['.id']}`);
+        if (scripts.length > 0) await api.delete(`/rest/system/script/${scripts[0]['.id']}`);
+
+        // Add new script
+        await api.put('/rest/system/script', { name: scriptName, source: scriptSource });
+
+        // Add new scheduler
+        await api.put('/rest/system/scheduler', {
+            name: schedulerName,
+            'on-event': scriptName,
+            'start-date': startDate,
+            'start-time': '00:00:01', // Run just after midnight
+        });
+
+        res.json({ success: true, message: 'Payment processed and scheduler updated.' });
+
+    } catch (error) {
+         res.status(500).json({ message: error.response?.data?.detail || error.message });
+    }
+});
+
 
 // --- Updater Endpoints ---
 const projectRoot = path.join(__dirname, '..');

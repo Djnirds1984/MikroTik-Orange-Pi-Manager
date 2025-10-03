@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'billing' | 'updater';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater';
 
 export interface RouterConfig {
   name: string;
@@ -52,6 +52,22 @@ export interface PppProfile {
 }
 
 export type PppProfileData = Omit<PppProfile, 'id'>;
+
+export interface PppSecret {
+    id: string;
+    name: string;
+    service: string;
+    profile: string;
+    comment?: string;
+}
+
+export type PppSecretData = Omit<PppSecret, 'id'>;
+
+export interface PppActiveConnection {
+    id: string;
+    name: string;
+    uptime: string;
+}
 
 export interface IpPool {
     id: string;
