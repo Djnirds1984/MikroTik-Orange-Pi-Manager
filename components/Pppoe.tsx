@@ -15,18 +15,18 @@ interface ProfileFormModalProps {
 }
 
 const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, onSave, initialData, pools, isLoading }) => {
-    const [profile, setProfile] = useState<PppProfileData>({ name: '', localAddress: 'none', remoteAddress: 'none', rateLimit: '' });
+    const [profile, setProfile] = useState<PppProfileData>({ name: '', localAddress: '', remoteAddress: 'none', rateLimit: '' });
 
     useEffect(() => {
         if (initialData) {
             setProfile({
                 name: initialData.name,
-                localAddress: initialData.localAddress || 'none',
+                localAddress: initialData.localAddress || '',
                 remoteAddress: initialData.remoteAddress || 'none',
                 rateLimit: initialData.rateLimit || '',
             });
         } else {
-            setProfile({ name: '', localAddress: 'none', remoteAddress: 'none', rateLimit: '' });
+            setProfile({ name: '', localAddress: '', remoteAddress: 'none', rateLimit: '' });
         }
     }, [initialData, isOpen]);
 
@@ -41,7 +41,6 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
         e.preventDefault();
         const dataToSave = {
             ...profile,
-            localAddress: profile.localAddress === 'none' ? '' : profile.localAddress,
             remoteAddress: profile.remoteAddress === 'none' ? '' : profile.remoteAddress,
         };
         onSave(initialData ? { ...dataToSave, id: initialData.id } : dataToSave);
@@ -61,10 +60,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="localAddress" className="block text-sm font-medium text-slate-300">Local Address</label>
-                                    <select name="localAddress" id="localAddress" value={profile.localAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
-                                        <option value="none">none</option>
-                                        {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                    </select>
+                                    <input type="text" name="localAddress" id="localAddress" value={profile.localAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., 10.0.0.1" />
                                 </div>
                                 <div>
                                     <label htmlFor="remoteAddress" className="block text-sm font-medium text-slate-300">Remote Address (Pool)</label>
