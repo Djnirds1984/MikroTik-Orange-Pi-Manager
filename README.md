@@ -19,14 +19,14 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 To improve stability and reliability, this project now uses a **two-process architecture**, managed by a single `ecosystem.config.js` file for `pm2`.
 
 1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
-2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server. It handles all communication with your MikroTik routers. It exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
+2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server that uses the official **MikroTik REST API**. It handles all communication with your routers and exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
 
 This two-process model provides a robust separation of concerns, ensuring the application remains stable.
 
 ### Tech Stack
 
 -   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
--   **Backend:** Node.js, Express.js, `node-mikrotik-api`
+-   **Backend:** Node.js, Express.js, Axios (for MikroTik REST API)
 -   **AI:** Google Gemini API (`@google/genai`)
 
 ---
@@ -89,129 +89,17 @@ This guide shows how to deploy both servers using `pm2` and the new `ecosystem.c
 
 ### **Step 1: MikroTik Router Configuration**
 
-Enable the REST API service (`www`) on each router you want to manage. It's highly recommended to create a dedicated read-only user for this purpose.
+You must enable the **REST API** on your router. In the terminal, run:
+```routeros
+/ip service enable www
+# OR for HTTPS (recommended)
+/ip service enable www-ssl
+```
+The default port for `www` is 80 and for `www-ssl` is 443. Ensure you use the correct port when adding the router in the panel. It is also recommended to create a dedicated user group with appropriate permissions for the API user.
 
 ### **Step 2: Clone and Prepare the Application**
 
 1.  **Navigate to the Project Directory:**
     Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
     ```bash
-    cd /var/www/html/MikroTik-Orange-Pi-Manager
-    ```
-
-2.  **Install Dependencies for Both Servers:**
-    ```bash
-    # Install for UI Server
-    cd proxy
-    npm install
-    cd ..
-    
-    # Install for API Backend Server
-    cd api-backend
-    npm install
-    cd ..
-    ```
-
-3.  **(Optional) Configure the AI Assistant:**
-    Edit `env.js` and add your Gemini API key.
-
-### **Step 3: Start Both Servers with PM2**
-
-1.  **Start the Application with a single command:**
-    ```bash
-    pm2 start ecosystem.config.js
-    ```
-    
-2.  **Check that both are running:**
-    ```bash
-    pm2 list
-    # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
-    ```
-
-3.  **Enable PM2 to Start on Boot:**
-    ```bash
-    pm2 startup
-    # It will give you a command to copy/paste. Run it.
-    pm2 save
-    ```
-    Your application is now running persistently. The UI is on port 3001 and the API on port 3002.
-
-### **Step 4: (Optional but Recommended) Configure Nginx as a Reverse Proxy**
-
-If you want to access the UI on the standard port 80, you can use Nginx.
-
-1.  **Create/Edit your Nginx config:** `sudo nano /etc/nginx/sites-available/mikrotik-manager`
-2.  **Use the following configuration.** This forwards web traffic to the UI server on port 3001.
-    ```nginx
-    server {
-        listen 80 default_server;
-        server_name _;
-
-        location / {
-            proxy_pass http://localhost:3001;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_cache_bypass $http_upgrade;
-        }
-    }
-    ```
-3.  **Enable the site and restart Nginx:**
-    ```bash
-    # Ensure you've removed the default site link first
-    sudo systemctl restart nginx
-    ```
-    You can now access the panel directly via your Orange Pi's IP address.
-
----
-
-## Updating the Application
-
-### **Requirement: Configure SSH for Git**
-
-The one-click updater **requires** SSH key authentication with GitHub.
-
-### **Using the Updater**
-
-The built-in updater will now handle updating both servers. When you click "Update Now":
-1.  A backup of the entire application is created.
-2.  The latest code is pulled from Git.
-3.  `npm install` is run in both the `proxy` and `api-backend` directories.
-4.  `pm2` is instructed to restart **both** servers using the `ecosystem.config.js` file.
-
----
-
-## Manual Recovery (Emergency Restore)
-
-If the panel becomes inaccessible, you can restore a backup from the command line.
-
-**1. SSH into your Orange Pi and Stop the Application:**
-   ```bash
-   # This stops all processes in the ecosystem file
-   pm2 stop ecosystem.config.js
-   ```
-
-**2. Navigate to the project directory:** `cd /var/www/html/MikroTik-Orange-Pi-Manager`
-
-**3. Find Your Backup File:** `ls -l backups/`
-
-**4. Clear Old Files and Extract the Backup:**
-   ```bash
-   # This preserves your .git, backups, proxy, api-backend, and ecosystem.config.js directories
-   find . -maxdepth 1 -mindepth 1 ! -name 'backups' ! -name '.git' ! -name 'proxy' ! -name 'api-backend' ! -name 'ecosystem.config.js' -exec rm -rf {} +
-
-   # Extract your chosen backup. Replace YOUR_BACKUP_FILE.tar.gz
-   tar -xzf backups/YOUR_BACKUP_FILE.tar.gz -C .
-   ```
-
-**5. Re-install Dependencies and Restart:**
-   ```bash
-   # Re-install for both servers
-   cd proxy && npm install && cd ..
-   cd api-backend && npm install && cd ..
-
-   # Restart the application with pm2
-   pm2 restart ecosystem.config.js
-   ```
-Your application should now be restored.
+    cd /var/w
