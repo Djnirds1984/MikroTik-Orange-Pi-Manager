@@ -129,23 +129,28 @@ app.post('/api/hotspot-clients', (req, res) => {
 });
 
 // Generic CRUD handlers
-const getData = (path) => (api) => api.get(path).then(res => res.data);
-const addData = (path) => (api, body) => api.put(path, body.data);
-const updateData = (path) => (api, body) => api.patch(`${path}/${body.data.id}`, body.data);
-const deleteData = (path) => (api, body) => api.delete(`${path}/${body.id}`);
+const getData = (path) => (api) => api.get(path).then(res => res.data.map(item => ({ ...item, id: item['.id'] })));
 
 // PPPoE Profiles
 app.post('/api/ppp/profiles', (req, res) => handleApiRequest(req, res, getData('/ppp/profile')));
 app.post('/api/ip/pools', (req, res) => handleApiRequest(req, res, getData('/ip/pool')));
 app.post('/api/ppp/profiles/add', (req, res) => handleApiRequest(req, res, (api, body) => api.put('/ppp/profile', body.profileData)));
-app.post('/api/ppp/profiles/update', (req, res) => handleApiRequest(req, res, (api, body) => api.patch(`/ppp/profile/${body.profileData.id}`, body.profileData)));
+app.post('/api/ppp/profiles/update', (req, res) => handleApiRequest(req, res, (api, body) => {
+    // FIX: Destructure the ID and payload. The '.id' property is read-only and must not be in the PATCH payload.
+    const { id, ...updatePayload } = body.profileData;
+    return api.patch(`/ppp/profile/${id}`, updatePayload);
+}));
 app.post('/api/ppp/profiles/delete', (req, res) => handleApiRequest(req, res, (api, body) => api.delete(`/ppp/profile/${body.profileId}`)));
 
 // PPPoE Secrets (Users)
 app.post('/api/ppp/secrets', (req, res) => handleApiRequest(req, res, getData('/ppp/secret')));
 app.post('/api/ppp/active', (req, res) => handleApiRequest(req, res, getData('/ppp/active')));
 app.post('/api/ppp/secrets/add', (req, res) => handleApiRequest(req, res, (api, body) => api.put('/ppp/secret', body.secretData)));
-app.post('/api/ppp/secrets/update', (req, res) => handleApiRequest(req, res, (api, body) => api.patch(`/ppp/secret/${body.secretData.id}`, body.secretData)));
+app.post('/api/ppp/secrets/update', (req, res) => handleApiRequest(req, res, (api, body) => {
+    // FIX: Destructure the ID and payload to prevent sending the read-only '.id' property.
+    const { id, ...updatePayload } = body.secretData;
+    return api.patch(`/ppp/secret/${id}`, updatePayload);
+}));
 app.post('/api/ppp/secrets/delete', (req, res) => handleApiRequest(req, res, (api, body) => api.delete(`/ppp/secret/${body.secretId}`)));
 
 
