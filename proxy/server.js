@@ -101,17 +101,15 @@ app.get('/api/update-status', async (res) => {
 });
 
 const restartApp = () => {
+    // FIX: Use the ecosystem file to reliably restart all processes.
     if (process.env.PM2_HOME) {
         const pm2 = require('pm2');
         pm2.connect(err => {
             if (err) { console.error(err); return; }
-            // Restart both processes
-            pm2.restart('mikrotik-manager', (err) => {
-                if (err) console.error('PM2 UI restart failed', err);
-                pm2.restart('mikrotik-api-backend', (err) => {
-                    pm2.disconnect();
-                    if (err) console.error('PM2 API restart failed', err);
-                });
+            // Restart all apps defined in the ecosystem config file.
+            pm2.restart('ecosystem.config.js', (err) => {
+                pm2.disconnect();
+                if (err) console.error('PM2 restart failed', err);
             });
         });
     }
@@ -183,7 +181,7 @@ app.get('/api/rollback', async (req, res) => {
         // Find and remove items, preserving key directories
         const items = await fs.promises.readdir(appDir);
         for (const item of items) {
-            if (!['backups', '.git', 'proxy', 'api-backend'].includes(item)) {
+            if (!['backups', '.git', 'proxy', 'api-backend', 'ecosystem.config.js'].includes(item)) {
                 await fsExtra.remove(path.join(appDir, item));
             }
         }

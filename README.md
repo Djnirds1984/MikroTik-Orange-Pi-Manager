@@ -16,10 +16,10 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 
 ## Technical Architecture
 
-To improve stability and reliability, this project now uses a **two-process architecture**.
+To improve stability and reliability, this project now uses a **two-process architecture**, managed by a single `ecosystem.config.js` file for `pm2`.
 
-1.  **Frontend UI Server (`/proxy`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
-2.  **API Backend Server (`/api-backend`):** This is a separate, dedicated Node.js/Express server. It handles all communication with your MikroTik routers. It exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
+1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
+2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server. It handles all communication with your MikroTik routers. It exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
 
 This two-process model provides a robust separation of concerns, ensuring the application remains stable.
 
@@ -35,12 +35,13 @@ This two-process model provides a robust separation of concerns, ensuring the ap
 
 ### **Prerequisites**
 - **Node.js**: Ensure you have Node.js v20.x or later installed.
+- **PM2**: `npm install -g pm2`
 - **(Optional) Gemini API Key**: For the "AI Script" feature to work, you need a Google Gemini API key.
     1.  Get your key from [Google AI Studio](https://aistudio.google.com/app/apikey).
     2.  Open the `env.js` file and replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key.
 
 ### **Installation and Startup**
-You will need two separate terminal windows to run both servers.
+This new method uses an `ecosystem.config.js` file to manage both servers with a single command.
 
 1. **Clone the repository:**
    ```bash
@@ -48,36 +49,43 @@ You will need two separate terminal windows to run both servers.
    cd MikroTik-Orange-Pi-Manager
    ```
 
-2. **Terminal 1: Start the Frontend UI Server**
+2. **Install Dependencies for Both Servers:**
    ```bash
+   # Install for UI Server
    cd proxy
    npm install
-   npm start 
-   # This will start the UI server on http://localhost:3001
-   ```
-
-3. **Terminal 2: Start the API Backend Server**
-   ```bash
-   # From the root project directory
+   cd ..
+   
+   # Install for API Backend Server
    cd api-backend
    npm install
-   npm start
-   # This will start the API backend on http://localhost:3002
+   cd ..
    ```
 
-4. **Access the application:**
+3. **Start the Application with PM2:**
+   ```bash
+   pm2 start ecosystem.config.js
+   ```
+
+4. **Check the status:**
+   ```bash
+   pm2 list
+   # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
+   ```
+   
+5. **Access the application:**
    Open your web browser and navigate to **`http://localhost:3001`**. The UI served from port 3001 will automatically communicate with the backend on port 3002.
 
 ---
 
 ## Deployment on Orange Pi One (Step-by-Step Guide)
 
-This guide shows how to deploy both servers using `pm2` for process management.
+This guide shows how to deploy both servers using `pm2` and the new `ecosystem.config.js` for simpler, more reliable process management.
 
 ### **Prerequisites**
 
 -   An Orange Pi One (or similar SBC) with Armbian/Debian and SSH access.
--   Node.js v20+, Git, and PM2 installed. (See previous README versions for detailed setup).
+-   Node.js v20+, Git, and PM2 installed.
 
 ### **Step 1: MikroTik Router Configuration**
 
@@ -109,23 +117,18 @@ Enable the REST API service (`www`) on each router you want to manage. It's high
 
 ### **Step 3: Start Both Servers with PM2**
 
-1.  **Start the Frontend UI Server:**
+1.  **Start the Application with a single command:**
     ```bash
-    pm2 start proxy/server.js --name "mikrotik-manager"
+    pm2 start ecosystem.config.js
     ```
     
-2.  **Start the API Backend Server:**
-    ```bash
-    pm2 start api-backend/server.js --name "mikrotik-api-backend"
-    ```
-
-3.  **Check that both are running:**
+2.  **Check that both are running:**
     ```bash
     pm2 list
     # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
     ```
 
-4.  **Enable PM2 to Start on Boot:**
+3.  **Enable PM2 to Start on Boot:**
     ```bash
     pm2 startup
     # It will give you a command to copy/paste. Run it.
@@ -167,7 +170,7 @@ If you want to access the UI on the standard port 80, you can use Nginx.
 
 ### **Requirement: Configure SSH for Git**
 
-The one-click updater **requires** SSH key authentication with GitHub. See previous README versions for the one-time setup guide.
+The one-click updater **requires** SSH key authentication with GitHub.
 
 ### **Using the Updater**
 
@@ -175,7 +178,7 @@ The built-in updater will now handle updating both servers. When you click "Upda
 1.  A backup of the entire application is created.
 2.  The latest code is pulled from Git.
 3.  `npm install` is run in both the `proxy` and `api-backend` directories.
-4.  `pm2` is instructed to restart both the `mikrotik-manager` and `mikrotik-api-backend` processes.
+4.  `pm2` is instructed to restart **both** servers using the `ecosystem.config.js` file.
 
 ---
 
@@ -183,10 +186,10 @@ The built-in updater will now handle updating both servers. When you click "Upda
 
 If the panel becomes inaccessible, you can restore a backup from the command line.
 
-**1. SSH into your Orange Pi and Stop Both Processes:**
+**1. SSH into your Orange Pi and Stop the Application:**
    ```bash
-   pm2 stop mikrotik-manager
-   pm2 stop mikrotik-api-backend
+   # This stops all processes in the ecosystem file
+   pm2 stop ecosystem.config.js
    ```
 
 **2. Navigate to the project directory:** `cd /var/www/html/MikroTik-Orange-Pi-Manager`
@@ -195,8 +198,8 @@ If the panel becomes inaccessible, you can restore a backup from the command lin
 
 **4. Clear Old Files and Extract the Backup:**
    ```bash
-   # This preserves your .git, backups, proxy, and api-backend directories
-   find . -maxdepth 1 -mindepth 1 ! -name 'backups' ! -name '.git' ! -name 'proxy' ! -name 'api-backend' -exec rm -rf {} +
+   # This preserves your .git, backups, proxy, api-backend, and ecosystem.config.js directories
+   find . -maxdepth 1 -mindepth 1 ! -name 'backups' ! -name '.git' ! -name 'proxy' ! -name 'api-backend' ! -name 'ecosystem.config.js' -exec rm -rf {} +
 
    # Extract your chosen backup. Replace YOUR_BACKUP_FILE.tar.gz
    tar -xzf backups/YOUR_BACKUP_FILE.tar.gz -C .
@@ -208,8 +211,7 @@ If the panel becomes inaccessible, you can restore a backup from the command lin
    cd proxy && npm install && cd ..
    cd api-backend && npm install && cd ..
 
-   # Restart with pm2
-   pm2 restart mikrotik-manager
-   pm2 restart mikrotik-api-backend
+   # Restart the application with pm2
+   pm2 restart ecosystem.config.js
    ```
 Your application should now be restored.
