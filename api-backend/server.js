@@ -1,222 +1,223 @@
 const express = require('express');
 const cors = require('cors');
-const https = require('https');
 const axios = require('axios');
+const https = require('https');
 
 const app = express();
 const port = 3002;
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
 // --- Helper Functions ---
 
-const createApiClient = (routerConfig) => {
-    const isSsl = routerConfig.port === 443 || String(routerConfig.port).endsWith('443');
-    const protocol = isSsl ? 'https' : 'http';
-    const baseURL = `${protocol}://${routerConfig.host}:${routerConfig.port}/rest`;
+// Converts camelCase to kebab-case for MikroTik API compatibility
+const camelToKebab = (str) => str.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`);
 
-    return axios.create({
-        baseURL,
-        auth: {
-            username: routerConfig.user,
-            password: routerConfig.password || '',
-        },
-        httpsAgent: new https.Agent({
-            rejectUnauthorized: false // Allow self-signed certificates
-        }),
-        timeout: 10000, // 10 second timeout
-    });
+// Converts object keys from camelCase to kebab-case recursively
+const convertKeysToKebab = (obj) => {
+    if (typeof obj !== 'object' || obj === null) return obj;
+    if (Array.isArray(obj)) return obj.map(convertKeysToKebab);
+    return Object.keys(obj).reduce((acc, key) => {
+        acc[camelToKebab(key)] = obj[key];
+        return acc;
+    }, {});
 };
 
-const handleApiRequest = async (req, res, handler) => {
+// Main request handler to create API instance and handle errors
+const handleApiRequest = async (req, res, callback) => {
     const { routerConfig } = req.body;
     if (!routerConfig) {
         return res.status(400).json({ message: 'Router configuration is missing.' });
     }
 
-    const apiClient = createApiClient(routerConfig);
+    const { host, user, password, port } = routerConfig;
+    const protocol = [443, 8729].includes(port) ? 'https' : 'http';
+    
+    const api = axios.create({
+        baseURL: `${protocol}://${host}:${port}`,
+        auth: {
+            username: user,
+            password: password || '',
+        },
+        httpsAgent: new https.Agent({
+            rejectUnauthorized: false,
+        }),
+    });
+
     try {
-        const result = await handler(apiClient, req.body);
-        res.json(result);
+        await callback(api, req, res);
     } catch (error) {
-        let errorMessage = 'An unknown API error occurred';
-        if (axios.isAxiosError(error)) {
-            if (error.response) {
-                errorMessage = error.response.data?.detail || error.response.data?.message || `Request failed with status ${error.response.status}`;
-            } else if (error.request) {
-                errorMessage = 'No response from router. Check host, port, and firewall.';
-            } else {
-                errorMessage = error.message;
-            }
-        } else if (error instanceof Error) {
-            errorMessage = error.message;
-        }
-        console.error(`API Error on ${req.path}:`, errorMessage, error);
-        res.status(500).json({ message: `MikroTik REST API Error: ${errorMessage}` });
+        console.error(`API Error for ${host}:`, { 
+            status: error.response?.status, 
+            data: error.response?.data,
+            message: error.message 
+        });
+        const status = error.response?.status || 500;
+        const message = error.response?.data?.message || error.response?.data?.detail || 'An unexpected error occurred on the API backend.';
+        res.status(status).json({ message: `MikroTik REST API Error: ${message}` });
     }
 };
 
 // --- API Endpoints ---
 
-app.post('/api/test-connection', (req, res) => {
-    handleApiRequest(req, res, async (api) => {
-        const response = await api.get('/system/resource');
-        const resource = Array.isArray(response.data) ? response.data[0] : response.data;
-        return { success: true, message: `Successfully connected to ${resource['board-name']}!` };
-    });
-});
-
-app.post('/api/system-info', (req, res) => {
-    handleApiRequest(req, res, async (api) => {
-        const [resourceRes, routerboardRes] = await Promise.all([
-            api.get('/system/resource'),
-            api.get('/system/routerboard'),
-        ]);
-        const resource = Array.isArray(resourceRes.data) ? resourceRes.data[0] : resourceRes.data;
-        const routerboard = Array.isArray(routerboardRes.data) ? routerboardRes.data[0] : routerboardRes.data;
-        
-        const totalMemoryBytes = parseInt(resource['total-memory'], 10);
-        const freeMemoryBytes = parseInt(resource['free-memory'], 10);
-        return {
-            boardName: resource['board-name'] || 'N/A',
-            version: routerboard['current-firmware'] || resource['version'] || 'N/A',
-            cpuLoad: parseInt(resource['cpu-load'], 10) || 0,
-            uptime: resource.uptime || 'N/A',
-            memoryUsage: totalMemoryBytes > 0 ? Math.round(((totalMemoryBytes - freeMemoryBytes) / totalMemoryBytes) * 100) : 0,
-            totalMemory: `${(totalMemoryBytes / 1024 / 1024).toFixed(2)} MB`,
-        };
-    });
-});
-
-app.post('/api/interfaces', (req, res) => {
-    handleApiRequest(req, res, async (api) => {
-        const interfacesRes = await api.get('/interface');
-        const interfaces = interfacesRes.data;
-        const interfaceNames = interfaces.map(i => i.name).join(',');
-
-        const monitorRes = await api.post('/interface/monitor-traffic', {
-            interface: interfaceNames,
-            once: "",
-        });
-        
-        return monitorRes.data.map(iface => {
-            const originalIface = interfaces.find(i => i.name === iface.name);
-            return {
-                name: iface.name,
-                type: originalIface?.type || 'unknown',
-                rxRate: parseInt(iface['rx-bits-per-second'], 10),
-                txRate: parseInt(iface['tx-bits-per-second'], 10),
-            };
-        });
-    });
-});
-
-app.post('/api/hotspot-clients', (req, res) => {
-    handleApiRequest(req, res, async (api) => {
-        try {
-            const response = await api.get('/ip/hotspot/active');
-            return response.data.map(client => ({
-                macAddress: client['mac-address'],
-                uptime: client.uptime,
-                signal: client['signal-strength'] || 'N/A',
-            }));
-        } catch (e) {
-            return []; // Hotspot package might not be installed
-        }
-    });
-});
-
-// Generic CRUD handlers
-const getData = (path) => (api) => api.get(path).then(res => res.data.map(item => ({ ...item, id: item['.id'] })));
-
-// PPPoE Profiles
-app.post('/api/ppp/profiles', (req, res) => handleApiRequest(req, res, getData('/ppp/profile')));
-app.post('/api/ip/pools', (req, res) => handleApiRequest(req, res, getData('/ip/pool')));
-app.post('/api/ppp/profiles/add', (req, res) => handleApiRequest(req, res, (api, body) => api.put('/ppp/profile', body.profileData)));
-app.post('/api/ppp/profiles/update', (req, res) => handleApiRequest(req, res, (api, body) => {
-    // FIX: Destructure the ID and payload. The '.id' property is read-only and must not be in the PATCH payload.
-    const { id, ...updatePayload } = body.profileData;
-    return api.patch(`/ppp/profile/${id}`, updatePayload);
+app.post('/api/test-connection', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.get('/rest/system/identity');
+    res.json({ success: true, message: `Connection successful! Router name: ${response.data.name}` });
 }));
-app.post('/api/ppp/profiles/delete', (req, res) => handleApiRequest(req, res, (api, body) => api.delete(`/ppp/profile/${body.profileId}`)));
 
-// PPPoE Secrets (Users)
-app.post('/api/ppp/secrets', (req, res) => handleApiRequest(req, res, getData('/ppp/secret')));
-app.post('/api/ppp/active', (req, res) => handleApiRequest(req, res, getData('/ppp/active')));
-app.post('/api/ppp/secrets/add', (req, res) => handleApiRequest(req, res, (api, body) => api.put('/ppp/secret', body.secretData)));
-app.post('/api/ppp/secrets/update', (req, res) => handleApiRequest(req, res, (api, body) => {
-    // FIX: Destructure the ID and payload to prevent sending the read-only '.id' property.
-    const { id, ...updatePayload } = body.secretData;
-    return api.patch(`/ppp/secret/${id}`, updatePayload);
+app.post('/api/system-info', (req, res) => handleApiRequest(req, res, async (api) => {
+    const [resourceRes, routerboardRes] = await Promise.all([
+        api.get('/rest/system/resource'),
+        api.get('/rest/routerboard'),
+    ]);
+    const resource = resourceRes.data;
+    res.json({
+        boardName: resource['board-name'],
+        version: resource.version,
+        cpuLoad: resource['cpu-load'],
+        uptime: resource.uptime,
+        totalMemory: `${Math.round(resource['total-memory'] / 1024 / 1024)} MB`,
+        memoryUsage: Math.round(((resource['total-memory'] - resource['free-memory']) / resource['total-memory']) * 100),
+    });
 }));
-app.post('/api/ppp/secrets/delete', (req, res) => handleApiRequest(req, res, (api, body) => api.delete(`/ppp/secret/${body.secretId}`)));
 
+app.post('/api/interfaces', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.post('/rest/interface/monitor', { once: true });
+    res.json(response.data.map(iface => ({
+        name: iface.name,
+        type: iface.type,
+        rxRate: parseInt(iface['rx-bits-per-second'], 10),
+        txRate: parseInt(iface['tx-bits-per-second'], 10),
+    })));
+}));
 
-// Payment Processing
+app.post('/api/hotspot-clients', (req, res) => handleApiRequest(req, res, async (api) => {
+    try {
+        const response = await api.get('/rest/ip/hotspot/active');
+        res.json(response.data.map(client => ({
+            macAddress: client['mac-address'],
+            uptime: client.uptime,
+            signal: client['signal-strength'] || 'N/A',
+        })));
+    } catch (error) {
+        if (error.response?.status === 404) return res.json([]);
+        throw error;
+    }
+}));
+
+// --- PPPoE Profile Endpoints ---
+app.post('/api/ppp/profiles', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.get('/rest/ppp/profile');
+    res.json(response.data.map(p => ({
+        id: p['.id'], name: p.name, localAddress: p['local-address'],
+        remoteAddress: p['remote-address'], rateLimit: p['rate-limit'],
+    })));
+}));
+
+app.post('/api/ppp/profiles/add', (req, res) => handleApiRequest(req, res, async (api) => {
+    const { profileData } = req.body;
+    const response = await api.put('/rest/ppp/profile', convertKeysToKebab(profileData));
+    res.status(201).json(response.data);
+}));
+
+app.post('/api/ppp/profiles/update', (req, res) => handleApiRequest(req, res, async (api) => {
+    const { profileData } = req.body;
+    const { id, ...dataToUpdate } = profileData;
+    const response = await api.patch(`/rest/ppp/profile/${id}`, convertKeysToKebab(dataToUpdate));
+    res.json(response.data);
+}));
+
+app.post('/api/ppp/profiles/delete', (req, res) => handleApiRequest(req, res, async (api) => {
+    await api.delete(`/rest/ppp/profile/${req.body.profileId}`);
+    res.status(204).send();
+}));
+
+// --- IP Pool Endpoints ---
+app.post('/api/ip/pools', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.get('/rest/ip/pool');
+    res.json(response.data.map(p => ({ id: p['.id'], name: p.name })));
+}));
+
+// --- PPPoE Secret (User) Endpoints ---
+app.post('/api/ppp/secrets', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.get('/rest/ppp/secret');
+    res.json(response.data.map(s => ({
+        id: s['.id'], name: s.name, service: s.service, profile: s.profile, comment: s.comment,
+    })));
+}));
+
+app.post('/api/ppp/active', (req, res) => handleApiRequest(req, res, async (api) => {
+    const response = await api.get('/rest/ppp/active');
+    res.json(response.data.map(a => ({ id: a['.id'], name: a.name, uptime: a.uptime })));
+}));
+
+app.post('/api/ppp/secrets/add', (req, res) => handleApiRequest(req, res, async (api) => {
+    const { secretData } = req.body;
+    const response = await api.put('/rest/ppp/secret', convertKeysToKebab(secretData));
+    res.status(201).json(response.data);
+}));
+
+app.post('/api/ppp/secrets/update', (req, res) => handleApiRequest(req, res, async (api) => {
+    const { secretData } = req.body;
+    const { id, ...dataToUpdate } = secretData;
+    const response = await api.patch(`/rest/ppp/secret/${id}`, convertKeysToKebab(dataToUpdate));
+    res.json(response.data);
+}));
+
+app.post('/api/ppp/secrets/delete', (req, res) => handleApiRequest(req, res, async (api) => {
+    await api.delete(`/rest/ppp/secret/${req.body.secretId}`);
+    res.status(204).send();
+}));
+
+// --- Payment Processing ---
 const formatSchedulerDate = (date) => {
-  const d = new Date(date);
-  const month = d.toLocaleString('en-US', { month: 'short' }).toLowerCase();
-  const day = d.getDate().toString().padStart(2, '0');
-  const year = d.getFullYear();
-  return `${month}/${day}/${year}`;
+    const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+    return `${monthNames[date.getMonth()]}/${String(date.getDate()).padStart(2, '0')}/${date.getFullYear()}`;
 };
 
-const parseComment = (comment) => {
-    if (!comment) return {};
-    try { return JSON.parse(comment); } catch { return {}; }
-};
+app.post('/api/ppp/process-payment', (req, res) => handleApiRequest(req, res, async (api) => {
+    const { secret, plan, nonPaymentProfile, paymentDate } = req.body;
+    const commentData = JSON.parse(secret.comment || '{}');
+    const oldDueDate = commentData.dueDate ? new Date(commentData.dueDate) : new Date(paymentDate);
+    const payDate = new Date(paymentDate);
 
-app.post('/api/ppp/process-payment', (req, res) => {
-    handleApiRequest(req, res, async (api, body) => {
-        const { secret, plan, nonPaymentProfile, paymentDate } = body;
+    const startDate = oldDueDate > payDate ? oldDueDate : payDate;
+    const newDueDate = new Date(startDate);
+    newDueDate.setDate(newDueDate.getDate() + 30);
 
-        const commentData = parseComment(secret.comment);
-        const startDate = new Date(commentData.dueDate && new Date(commentData.dueDate) > new Date() ? commentData.dueDate : paymentDate);
-        
-        const newDueDate = new Date(startDate);
-        newDueDate.setDate(newDueDate.getDate() + 30);
-        
-        const newComment = JSON.stringify({
-            plan: plan.name,
-            dueDate: newDueDate.toISOString().split('T')[0],
-        });
+    const newComment = JSON.stringify({ plan: plan.name, dueDate: newDueDate.toISOString().split('T')[0] });
+    await api.patch(`/rest/ppp/secret/${secret.id}`, { comment: newComment });
 
-        // 1. Update secret comment
-        await api.patch(`/ppp/secret/${secret.id}`, { comment: newComment });
+    try {
+        const scriptName = `expire-${secret.name}`;
+        const schedulerName = `expire-sched-${secret.name}`;
+        const scriptSource = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
 
-        try {
-            const scriptName = `expire-${secret.name}`;
-            const schedulerName = `sched-expire-${secret.name}`;
-            const scriptContent = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
+        const [scriptRes, schedRes] = await Promise.all([
+            api.get('/rest/system/script', { params: { "?name": scriptName } }),
+            api.get('/rest/system/scheduler', { params: { "?name": schedulerName } }),
+        ]);
 
-            // 2. Upsert Script
-            const scriptRes = await api.get(`/system/script?name=${scriptName}`);
-            if (scriptRes.data.length > 0) {
-                await api.patch(`/system/script/${scriptRes.data[0]['.id']}`, { source: scriptContent });
-            } else {
-                await api.put('/system/script', { name: scriptName, source: scriptContent });
-            }
-
-            // 3. Upsert Scheduler
-            const schedulerRes = await api.get(`/system/scheduler?name=${schedulerName}`);
-            const formattedDueDate = formatSchedulerDate(newDueDate);
-            if (schedulerRes.data.length > 0) {
-                await api.patch(`/system/scheduler/${schedulerRes.data[0]['.id']}`, { 'start-date': formattedDueDate, 'on-event': scriptName });
-            } else {
-                await api.put('/system/scheduler', { name: schedulerName, 'start-date': formattedDueDate, 'start-time': '00:00:01', interval: '0s', 'on-event': scriptName });
-            }
-        } catch (e) {
-            console.error("Could not update scheduler (this is non-critical). Error:", e.response?.data?.detail || e.message);
+        if (scriptRes.data.length > 0) {
+            await api.patch(`/rest/system/script/${scriptRes.data[0]['.id']}`, { source: scriptSource });
+        } else {
+            await api.put('/rest/system/script', { name: scriptName, source: scriptSource });
         }
 
-        return { success: true, message: 'Payment processed.' };
-    });
-});
+        if (schedRes.data.length > 0) {
+            await api.patch(`/rest/system/scheduler/${schedRes.data[0]['.id']}`, { 'start-date': formatSchedulerDate(newDueDate), 'on-event': scriptName });
+        } else {
+            await api.put('/rest/system/scheduler', { name: schedulerName, 'start-date': formatSchedulerDate(newDueDate), 'start-time': '00:00:01', 'on-event': scriptName });
+        }
+    } catch (e) {
+        console.warn(`Could not update scheduler (is it installed?): ${e.message}`);
+    }
+
+    res.json({ success: true, message: 'Payment processed.' });
+}));
 
 
-// Start Server
 app.listen(port, () => {
-    console.log(`MikroTik REST API Backend running. Awaiting requests from UI on port 3001.`);
+    console.log(`MikroTik Manager API backend running. Listening on port ${port}`);
 });
