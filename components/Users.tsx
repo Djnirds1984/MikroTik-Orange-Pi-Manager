@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, PppSecret, PppProfile, PppActiveConnection, BillingPlan, PppSecretData } from '../types.ts';
+import type { RouterConfigWithId, PppSecret, PppProfile, PppActiveConnection, BillingPlan, PppSecretData, BillingPlanWithId } from '../types.ts';
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
@@ -12,32 +12,67 @@ interface SecretFormModalProps {
     onClose: () => void;
     onSave: (secretData: PppSecret | PppSecretData) => void;
     initialData: PppSecret | null;
-    profiles: PppProfile[];
+    plans: BillingPlanWithId[];
     isLoading: boolean;
-    profileError?: string;
 }
 
-const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSave, initialData, profiles, isLoading, profileError }) => {
-    const [secret, setSecret] = useState<PppSecretData & { password?: string }>({ name: '', service: 'pppoe', profile: '', comment: '' });
+const parseCommentForPlan = (comment?: string): string => {
+    if (!comment) return '';
+    try {
+        const data = JSON.parse(comment);
+        return data.plan || '';
+    } catch {
+        // If it's not valid JSON, it's probably not a plan comment.
+        return '';
+    }
+};
+
+
+const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSave, initialData, plans, isLoading }) => {
+    const [secret, setSecret] = useState<Partial<PppSecretData> & { password?: string }>({ name: '', service: 'pppoe' });
+    const [selectedPlanName, setSelectedPlanName] = useState('');
 
     useEffect(() => {
-        if (initialData) {
-            setSecret({ ...initialData, password: '' });
-        } else {
-            setSecret({ name: '', service: 'pppoe', profile: profiles[0]?.name || '', comment: '', password: '' });
+        if (isOpen) {
+            if (initialData) {
+                setSecret({ ...initialData, password: '' });
+                const currentPlan = parseCommentForPlan(initialData.comment);
+                setSelectedPlanName(currentPlan);
+            } else {
+                setSecret({ name: '', service: 'pppoe', password: '' });
+                setSelectedPlanName(plans[0]?.name || '');
+            }
         }
-    }, [initialData, isOpen, profiles]);
+    }, [initialData, isOpen, plans]);
 
     if (!isOpen) return null;
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleSecretChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setSecret(s => ({ ...s, [name]: value }));
     };
 
+    const handlePlanChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedPlanName(e.target.value);
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(initialData ? { ...secret, id: initialData.id } : secret);
+        const selectedPlan = plans.find(p => p.name === selectedPlanName);
+        if (!selectedPlan) {
+            alert('Please select a valid billing plan.');
+            return;
+        }
+
+        const dataToSave = {
+            ...secret,
+            name: secret.name!,
+            service: secret.service!,
+            profile: selectedPlan.pppoeProfile,
+            comment: JSON.stringify({ plan: selectedPlan.name }),
+        };
+
+        onSave(initialData ? { ...dataToSave, id: initialData.id } : dataToSave);
     };
     
     return (
@@ -50,17 +85,17 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="name" className="block text-sm font-medium text-slate-300">Username</label>
-                                    <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                                    <input type="text" name="name" id="name" value={secret.name} onChange={handleSecretChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                                 </div>
                                 <div>
                                     <label htmlFor="password" className="block text-sm font-medium text-slate-300">Password</label>
-                                    <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                                    <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleSecretChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="service" className="block text-sm font-medium text-slate-300">Service</label>
-                                    <select name="service" id="service" value={secret.service} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                    <select name="service" id="service" value={secret.service} onChange={handleSecretChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
                                         <option value="pppoe">pppoe</option>
                                         <option value="any">any</option>
                                         <option value="l2tp">l2tp</option>
@@ -68,22 +103,17 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                                     </select>
                                 </div>
                                 <div>
-                                    <label htmlFor="profile" className="block text-sm font-medium text-slate-300">Profile</label>
-                                    <select name="profile" id="profile" value={secret.profile} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
-                                        {profileError && <option disabled>Error loading profiles</option>}
-                                        {profiles.length > 0 ? profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>) : <option disabled>No profiles found</option>}
+                                    <label htmlFor="billingPlan" className="block text-sm font-medium text-slate-300">Billing Plan</label>
+                                    <select name="billingPlan" id="billingPlan" value={selectedPlanName} onChange={handlePlanChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                        {plans.length > 0 ? plans.map(p => <option key={p.id} value={p.name}>{p.name}</option>) : <option disabled>No billing plans found</option>}
                                     </select>
                                 </div>
-                            </div>
-                            <div>
-                                <label htmlFor="comment" className="block text-sm font-medium text-slate-300">Comment</label>
-                                <input type="text" name="comment" id="comment" value={secret.comment} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" placeholder="Optional info or payment details in JSON" />
                             </div>
                         </div>
                     </div>
                     <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">
+                        <button type="submit" disabled={isLoading || plans.length === 0} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50">
                             {isLoading ? 'Saving...' : 'Save User'}
                         </button>
                     </div>
@@ -329,7 +359,7 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                 onClose={() => setIsFormModalOpen(false)}
                 onSave={handleSave}
                 initialData={editingSecret}
-                profiles={profiles}
+                plans={plans}
                 isLoading={isSubmitting}
             />
             <PaymentModal
@@ -349,6 +379,8 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                 </button>
             </div>
             
+            <p className="text-sm text-slate-400 mb-4">NOTE: The payment system requires the user's billing plan to be stored in their 'comment' field. Ensure this profile exists on your router.</p>
+
             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -385,8 +417,8 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                                         ) : <span className="text-slate-500">N/A</span>}
                                     </td>
                                     <td className="px-6 py-4 text-right space-x-1">
-                                        <button onClick={() => handleOpenPayment(secret)} className="p-2 text-slate-400 hover:text-green-400 rounded-md" title="Process Payment">
-                                            <SignalIcon className="h-5 w-5" />
+                                         <button onClick={() => handleOpenPayment(secret)} className="px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-500 rounded-md" title="Process Payment">
+                                            Pay
                                         </button>
                                         <button onClick={() => handleEdit(secret)} className="p-2 text-slate-400 hover:text-orange-400 rounded-md" title="Edit User">
                                             <EditIcon className="h-5 w-5" />
