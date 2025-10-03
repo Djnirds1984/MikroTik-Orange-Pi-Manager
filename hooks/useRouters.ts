@@ -26,7 +26,8 @@ export const useRouters = () => {
     const addRouter = (routerConfig: RouterConfig) => {
         const newRouter: RouterConfigWithId = {
             ...routerConfig,
-            id: crypto.randomUUID(),
+            // Use a more compatible method for generating a unique ID to support all browsers
+            id: `router_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
         };
         saveRouters([...routers, newRouter]);
     };
