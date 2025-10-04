@@ -24,6 +24,22 @@ const camelToKebab = (obj) => {
     }, {});
 };
 
+// FIX: Added helper to convert kebab-case keys from MikroTik to camelCase for the frontend
+const kebabToCamel = (obj) => {
+    if (typeof obj !== 'object' || obj === null) {
+        return obj;
+    }
+    if (Array.isArray(obj)) {
+        return obj.map(kebabToCamel);
+    }
+    return Object.keys(obj).reduce((acc, key) => {
+        const camelKey = key.replace(/-(\w)/g, (_, c) => c.toUpperCase());
+        acc[camelKey] = kebabToCamel(obj[key]);
+        return acc;
+    }, {});
+};
+
+
 // Helper to create a configured axios instance for a specific router
 const createApiClient = (routerConfig) => {
     const { host, port, user, password } = routerConfig;
@@ -115,7 +131,13 @@ app.post('/api/hotspot-clients', (req, res) => {
 app.post('/api/ppp/profiles', (req, res) => {
     handleApiRequest(req, res, async (apiClient) => {
         const response = await apiClient.get('/ppp/profile');
-        res.status(200).json(response.data.map(p => ({ ...p, id: p['.id'] })));
+        // FIX: Transform kebab-case keys from the API to camelCase for the frontend.
+        const data = response.data.map(p => {
+            const camelCased = kebabToCamel(p);
+            camelCased.id = p['.id']; // Ensure 'id' field is correctly mapped.
+            return camelCased;
+        });
+        res.status(200).json(data);
     });
 });
 
