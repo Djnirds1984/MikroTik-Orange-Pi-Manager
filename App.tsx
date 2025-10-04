@@ -57,7 +57,7 @@ const App: React.FC = () => {
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
       case 'zerotier':
-          return <ZeroTier selectedRouter={selectedRouter} />;
+          return <ZeroTier />;
       case 'updater':
         return <Updater />;
       default:

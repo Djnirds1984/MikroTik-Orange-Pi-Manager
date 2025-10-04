@@ -213,6 +213,73 @@ app.get('/api/rollback', async (req, res) => {
     }
 });
 
+// --- ZeroTier Panel Management API Endpoints ---
+app.get('/api/zt/status', async (req, res) => {
+    try {
+        const networksJson = await runCommand('zerotier-cli -j listnetworks');
+        const networks = JSON.parse(networksJson);
+        const infoJson = await runCommand('zerotier-cli -j info');
+        const info = JSON.parse(infoJson);
+        res.status(200).json({ info, networks });
+    } catch (error) {
+        console.error('ZeroTier status failed:', error);
+        if (error.message.includes('command not found') || error.message.includes('Cannot connect')) {
+            return res.status(503).json({ 
+                message: 'zerotier-cli not found or ZeroTier service is not running on the server.',
+                error: error.message 
+            });
+        }
+        res.status(500).json({ message: 'Failed to get ZeroTier status.', error: error.message });
+    }
+});
+
+app.post('/api/zt/join', express.json(), async (req, res) => {
+    const { networkId } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId)) {
+        return res.status(400).json({ message: 'A valid 16-digit Network ID is required.' });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli join ${networkId}`);
+        res.status(200).json({ message: `Successfully sent join request for network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier join failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to join network ${networkId}.`, error: error.message });
+    }
+});
+
+app.post('/api/zt/leave', express.json(), async (req, res) => {
+    const { networkId } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId)) {
+        return res.status(400).json({ message: 'A valid 16-digit Network ID is required.' });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli leave ${networkId}`);
+        res.status(200).json({ message: `Successfully left network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier leave failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to leave network ${networkId}.`, error: error.message });
+    }
+});
+
+app.post('/api/zt/set', express.json(), async (req, res) => {
+    const { networkId, setting, value } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId) || !setting || typeof value !== 'boolean') {
+        return res.status(400).json({ message: 'Invalid request. networkId, setting, and a boolean value are required.' });
+    }
+    const allowedSettings = ['allowManaged', 'allowGlobal', 'allowDefault'];
+    if(!allowedSettings.includes(setting)) {
+        return res.status(400).json({ message: `Invalid setting. Allowed settings are: ${allowedSettings.join(', ')}` });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli set ${networkId} ${setting}=${value}`);
+        res.status(200).json({ message: `Set ${setting} to ${value} for network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier set failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to set ${setting} for network ${networkId}.`, error: error.message });
+    }
+});
+
+
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));
 });

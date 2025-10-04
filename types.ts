@@ -90,11 +90,47 @@ export interface BillingPlanWithId extends BillingPlan {
     id: string;
 }
 
-export interface ZeroTierInterface {
-    id: string;
+// New types for Panel's ZeroTier service
+export interface ZeroTierInfo {
+    address: string;
+    clock: number;
+    config: {
+        settings: {
+            primaryPort: number;
+            secondaryPort: number;
+            tertiaryPort: number;
+            portMappingEnabled: boolean;
+            allowNonRoutable: boolean;
+        }
+    };
+    online: boolean;
+    planetWorldId: number;
+    planetWorldTimestamp: number;
+    version: string;
+    versionBuild: number;
+    versionMajor: number;
+    versionMinor: number;
+    versionRev: number;
+}
+
+export interface ZeroTierNetwork {
+    nwid: string;
     name: string;
-    'network-id': string;
+    mac: string;
     status: string;
-    disabled: 'true' | 'false';
-    'mac-address': string;
+    type: 'PRIVATE' | 'PUBLIC';
+    dev?: string;
+    broadcastEnabled: boolean;
+    allowManaged: boolean;
+    allowGlobal: boolean;
+    allowDefault: boolean;
+    allowDNS: boolean;
+    assignedAddresses: string[];
+    portDeviceName?: string;
+    portError?: number;
+}
+
+export interface ZeroTierStatusResponse {
+    info: ZeroTierInfo;
+    networks: ZeroTierNetwork[];
 }
