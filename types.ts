@@ -141,3 +141,9 @@ export interface AIFixResponse {
     explanation: string;
     fixedCode: string;
 }
+
+// Type for the AI Help Chat feature
+export interface ChatMessage {
+    role: 'user' | 'model';
+    content: string;
+}

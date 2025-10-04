@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -10,6 +11,7 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Users } from './components/Users.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
+import { Help } from './components/Help.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import type { View } from './types.ts';
 
@@ -91,6 +93,7 @@ const App: React.FC = () => {
           {renderView()}
         </div>
       </main>
+      <Help currentView={currentView} selectedRouter={selectedRouter} />
     </div>
   );
 };

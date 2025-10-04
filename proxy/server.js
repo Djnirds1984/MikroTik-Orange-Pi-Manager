@@ -380,6 +380,56 @@ app.post('/api/fixer/apply-fix', express.text({ type: 'text/plain' }), async (re
     }
 });
 
+// --- AI Help & Report Generation API ---
+app.post('/api/generate-report', express.json(), async (req, res) => {
+    const { view, routerName, geminiAnalysis } = req.body;
+    
+    let ztStatus = 'ZeroTier status could not be retrieved.';
+    try {
+        const ztInfo = await runCommand('zerotier-cli -j info');
+        const ztNetworks = await runCommand('zerotier-cli -j listnetworks');
+        ztStatus = `--- ZeroTier Info ---\n${JSON.stringify(JSON.parse(ztInfo), null, 2)}\n\n--- ZeroTier Networks ---\n${JSON.stringify(JSON.parse(ztNetworks), null, 2)}`;
+    } catch (e) {
+        ztStatus = `Could not get ZeroTier status. Error: ${e.message}`;
+    }
+
+    let backendCode = 'Backend code could not be read.';
+    try {
+        backendCode = await fs.readFile(TARGET_FILE_PATH, 'utf-8');
+    } catch (e) {
+        backendCode = `Could not read backend code. Error: ${e.message}`;
+    }
+
+    const report = `
+=========================================
+      AI SYSTEM DIAGNOSTIC REPORT
+=========================================
+Report Generated: ${new Date().toISOString()}
+
+--- CONTEXT ---
+- Current Page: ${view}
+- Selected Router: ${routerName || 'None'}
+
+--- AI ANALYSIS ---
+${geminiAnalysis}
+
+=========================================
+      RAW SYSTEM DATA
+=========================================
+
+--- PANEL HOST ZEROTIER STATUS ---
+${ztStatus}
+
+--- BACKEND SERVER CODE (api-backend/server.js) ---
+${backendCode}
+`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename=system-report.txt');
+    res.send(report);
+});
+
+
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));
