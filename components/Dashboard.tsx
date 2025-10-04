@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
+  XAxis,
   YAxis,
   Tooltip,
   ResponsiveContainer,
+  Legend,
+  CartesianGrid
 } from 'recharts';
-import { getSystemInfo, getInterfaces, getHotspotClients } from '../services/mikrotikService.ts';
-import type { SystemInfo, InterfaceWithHistory, HotspotClient, RouterConfigWithId } from '../types.ts';
-import { EthernetIcon, WifiIcon, TunnelIcon, VlanIcon, RouterIcon } from '../constants.tsx';
+import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
+import type { SystemInfo, InterfaceWithHistory, RouterConfigWithId } from '../types.ts';
+import { RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
-  <div className={`bg-slate-800 border border-slate-700 rounded-lg p-4 ${className}`}>
+  <div className={`bg-slate-800 border border-slate-700 rounded-lg p-6 ${className}`}>
     <h3 className="text-lg font-semibold text-orange-400 mb-4">{title}</h3>
     {children}
   </div>
@@ -38,16 +41,6 @@ const InfoItem: React.FC<{ label: string, value: string | number }> = ({ label, 
   </div>
 );
 
-const getInterfaceIcon = (type: string) => {
-    switch (type) {
-        case 'ether': return <EthernetIcon className="w-5 h-5 text-sky-400" />;
-        case 'wlan': return <WifiIcon className="w-5 h-5 text-green-400" />;
-        case 'eoip': return <TunnelIcon className="w-5 h-5 text-purple-400" />;
-        case 'vlan': return <VlanIcon className="w-5 h-5 text-yellow-400" />;
-        default: return <EthernetIcon className="w-5 h-5 text-slate-500" />;
-    }
-}
-
 const formatRate = (bps: number): string => {
     if (typeof bps !== 'number' || isNaN(bps)) return '0 bps';
     if (bps < 1000) return `${bps} bps`;
@@ -63,39 +56,41 @@ interface DashboardProps {
 export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
-    const [hotspotClients, setHotspotClients] = useState<HotspotClient[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [selectedInterfaceName, setSelectedInterfaceName] = useState<string | null>(null);
 
     const initialFetch = useCallback(async () => {
         if (!selectedRouter) {
             setIsLoading(false);
             setSystemInfo(null);
             setInterfaces([]);
-            setHotspotClients([]);
+            setSelectedInterfaceName(null);
             return;
         }
         setIsLoading(true);
         setError(null);
         try {
-            const [sysInfoData, interfacesData, hotspotData] = await Promise.all([
+            const [sysInfoData, interfacesData] = await Promise.all([
               getSystemInfo(selectedRouter),
               getInterfaces(selectedRouter),
-              getHotspotClients(selectedRouter),
             ]);
     
             setSystemInfo(sysInfoData);
-            setHotspotClients(hotspotData);
     
             const interfacesWithHistory = interfacesData.map(iface => {
                 const initialRxMbps = iface.rxRate / 1000000;
                 const initialTxMbps = iface.txRate / 1000000;
                 return {
                     ...iface,
-                    trafficHistory: Array(20).fill({ rx: initialRxMbps, tx: initialTxMbps }),
+                    trafficHistory: Array(30).fill({ name: '', rx: initialRxMbps, tx: initialTxMbps }),
                 };
             });
             setInterfaces(interfacesWithHistory);
+
+            if (interfacesData.length > 0) {
+                setSelectedInterfaceName(interfacesData[0].name);
+            }
     
           } catch (err) {
             console.error("Failed to fetch dashboard data:", err);
@@ -123,7 +118,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                         const newRxMbps = updatedData.rxRate / 1000000;
                         const newTxMbps = updatedData.txRate / 1000000;
 
-                        const newHistory = [...currentIface.trafficHistory.slice(1), { rx: Number(newRxMbps.toFixed(2)), tx: Number(newTxMbps.toFixed(2)) }];
+                        const newHistory = [...currentIface.trafficHistory.slice(1), { name: '', rx: Number(newRxMbps.toFixed(2)), tx: Number(newTxMbps.toFixed(2)) }];
 
                         return {
                             ...currentIface,
@@ -140,6 +135,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
 
         return () => clearInterval(interval);
     }, [isLoading, error, interfaces, selectedRouter]);
+
+    const selectedInterfaceData = useMemo(() => 
+        interfaces.find(iface => iface.name === selectedInterfaceName),
+        [interfaces, selectedInterfaceName]
+    );
 
   if (!selectedRouter) {
     return (
@@ -166,14 +166,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
         <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
             <p className="text-xl font-semibold text-red-400">Failed to load router data.</p>
             <p className="mt-2 text-slate-400 text-sm">{error}</p>
+            <button onClick={initialFetch} className="mt-6 px-4 py-2 bg-red-600/50 hover:bg-red-500/50 rounded-lg font-semibold">
+                Try Again
+            </button>
         </div>
      );
   }
 
   return (
-    <div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <DashboardCard title="System Information" className="md:col-span-2 lg:col-span-1">
+    <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <DashboardCard title="System Information">
                 <div className="space-y-3">
                     <InfoItem label="Board Name" value={systemInfo.boardName} />
                     <InfoItem label="RouterOS Version" value={systemInfo.version} />
@@ -183,76 +186,77 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
             </DashboardCard>
 
             <DashboardCard title="Resource Usage">
-                <div className="space-y-4">
+                <div className="space-y-4 pt-2">
                     <ProgressBar value={systemInfo.cpuLoad} label="CPU Load" />
                     <ProgressBar value={systemInfo.memoryUsage} label="Memory Usage" />
                 </div>
             </DashboardCard>
-
-            <DashboardCard title="Hotspot Clients">
-                {hotspotClients.length > 0 ? (
-                    <div className="flow-root">
-                        <ul role="list" className="-my-2 divide-y divide-slate-700">
-                            {hotspotClients.map(client => (
-                                <li key={client.macAddress} className="py-3 flex items-center justify-between">
-                                    <p className="text-sm font-mono text-slate-300">{client.macAddress}</p>
-                                    <div className="text-right">
-                                        <p className="text-xs text-slate-400">{client.uptime}</p>
-                                        <p className="text-xs font-semibold text-green-400">{client.signal}</p>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                ) : <p className="text-slate-500 text-sm">No active hotspot clients.</p>}
-            </DashboardCard>
-            
-            <DashboardCard title="Interface Traffic" className="md:col-span-2 lg:col-span-3">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-400 uppercase bg-slate-800">
-                            <tr>
-                                <th scope="col" className="px-4 py-2 w-12"></th>
-                                <th scope="col" className="px-4 py-2">Name</th>
-                                <th scope="col" className="px-4 py-2">Live Traffic (Mbit/s)</th>
-                                <th scope="col" className="px-4 py-2 text-right">RX</th>
-                                <th scope="col" className="px-4 py-2 text-right">TX</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                           {interfaces.map(iface => (
-                                <tr key={iface.name} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
-                                    <td className="px-4 py-1">{getInterfaceIcon(iface.type)}</td>
-                                    <td className="px-4 py-1 font-mono text-slate-200">{iface.name}</td>
-                                    <td className="px-4 py-1 h-16 w-2/5">
-                                        <ResponsiveContainer width="100%" height={50}>
-                                            <LineChart data={iface.trafficHistory} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
-                                                <Tooltip
-                                                    contentStyle={{
-                                                        backgroundColor: 'rgba(30, 41, 59, 0.9)',
-                                                        borderColor: '#334155',
-                                                        fontSize: '12px',
-                                                        borderRadius: '0.5rem',
-                                                    }}
-                                                    labelStyle={{ display: 'none' }}
-                                                    itemStyle={{ padding: 0 }}
-                                                    formatter={(value: number, name: string) => [`${value.toFixed(2)} Mbit/s`, name.toUpperCase()]}
-                                                />
-                                                <Line type="monotone" dataKey="rx" stroke="#22d3ee" strokeWidth={2} dot={false} isAnimationActive={false} name="RX" />
-                                                <Line type="monotone" dataKey="tx" stroke="#4ade80" strokeWidth={2} dot={false} isAnimationActive={false} name="TX" />
-                                                <YAxis domain={['auto', 'auto']} hide={true} />
-                                            </LineChart>
-                                        </ResponsiveContainer>
-                                    </td>
-                                    <td className="px-4 py-1 text-right font-mono text-cyan-400">{formatRate(iface.rxRate)}</td>
-                                    <td className="px-4 py-1 text-right font-mono text-green-400">{formatRate(iface.txRate)}</td>
-                                </tr>
-                           ))}
-                        </tbody>
-                    </table>
-                </div>
-            </DashboardCard>
         </div>
+
+        <DashboardCard title="Live Interface Traffic">
+            {interfaces.length > 0 && selectedInterfaceData ? (
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="interface-selector" className="sr-only">Select Interface</label>
+                        <select
+                            id="interface-selector"
+                            value={selectedInterfaceName || ''}
+                            onChange={(e) => setSelectedInterfaceName(e.target.value)}
+                            className="block w-full max-w-xs bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
+                        >
+                            {interfaces.map(iface => <option key={iface.name} value={iface.name}>{iface.name}</option>)}
+                        </select>
+                    </div>
+
+                    <div className="h-80 w-full pt-4">
+                        <ResponsiveContainer>
+                            <AreaChart data={selectedInterfaceData.trafficHistory} margin={{ top: 5, right: 20, left: 25, bottom: 5 }}>
+                                <defs>
+                                    <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#22d3ee" stopOpacity={0}/>
+                                    </linearGradient>
+                                    <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#4ade80" stopOpacity={0.8}/>
+                                        <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
+                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#64748b" />
+                                <YAxis unit="M" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#64748b" />
+                                <Tooltip
+                                    contentStyle={{
+                                        backgroundColor: 'rgba(30, 41, 59, 0.9)',
+                                        borderColor: '#334155',
+                                        fontSize: '12px',
+                                        borderRadius: '0.5rem',
+                                    }}
+                                    labelStyle={{ display: 'none' }}
+                                    itemStyle={{ padding: 0 }}
+                                    formatter={(value: number, name: string) => [`${value.toFixed(2)} Mbit/s`, name === 'rx' ? 'Download' : 'Upload']}
+                                />
+                                <Legend wrapperStyle={{ fontSize: '14px' }} />
+                                <Area type="monotone" dataKey="rx" stroke="#22d3ee" fill="url(#colorRx)" name="Download" isAnimationActive={false} />
+                                <Area type="monotone" dataKey="tx" stroke="#4ade80" fill="url(#colorTx)" name="Upload" isAnimationActive={false} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 text-center border-t border-slate-700/50">
+                        <div>
+                            <p className="text-sm text-slate-400 uppercase tracking-wider">Download</p>
+                            <p className="text-3xl font-bold text-cyan-400">{formatRate(selectedInterfaceData.rxRate)}</p>
+                        </div>
+                         <div>
+                            <p className="text-sm text-slate-400 uppercase tracking-wider">Upload</p>
+                            <p className="text-3xl font-bold text-green-400">{formatRate(selectedInterfaceData.txRate)}</p>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <p className="text-slate-500 text-center py-8">No interfaces found on this router.</p>
+            )}
+        </DashboardCard>
     </div>
   );
 };
