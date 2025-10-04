@@ -2,7 +2,7 @@ const express = require('express');
 const { transform } = require('esbuild');
 const path = require('path');
 const fs = require('fs-extra');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process'); // Import spawn
 const archiver = require('archiver');
 const tar = require('tar');
 
@@ -245,6 +245,44 @@ app.get('/api/zt/status', async (req, res) => {
         });
     }
 });
+
+app.get('/api/zt/install', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    sendSse(res, { log: '>>> Starting ZeroTier installation...' });
+    sendSse(res, { log: '>>> This may take a few minutes. Please do not close this window.' });
+    
+    // Using 'bash -c' to handle the pipe. This command requires passwordless sudo for the user running the server.
+    const installProcess = spawn('sudo', ['bash', '-c', 'curl -s https://install.zerotier.com | bash']);
+
+    installProcess.stdout.on('data', (data) => {
+        sendSse(res, { log: data.toString() });
+    });
+
+    installProcess.stderr.on('data', (data) => {
+        // Official installer script sometimes uses stderr for progress messages, so we log them normally.
+        sendSse(res, { log: data.toString() });
+    });
+
+    installProcess.on('close', (code) => {
+        if (code === 0) {
+            sendSse(res, { status: 'success', log: '\n>>> Installation completed successfully!' });
+        } else {
+            sendSse(res, { status: 'error', message: `Installation process exited with code ${code}. Please check the log for details.` });
+        }
+        sendSse(res, { status: 'finished' });
+        res.end();
+    });
+
+    installProcess.on('error', (err) => {
+        sendSse(res, { status: 'error', message: `Failed to start installation process: ${err.message}` });
+        sendSse(res, { status: 'finished' });
+        res.end();
+    });
+});
+
 
 app.post('/api/zt/join', express.json(), async (req, res) => {
     const { networkId } = req.body;

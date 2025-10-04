@@ -1,19 +1,34 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ZeroTierNetwork, ZeroTierInfo } from '../types.ts';
 import { getZeroTierStatus, joinZeroTierNetwork, leaveZeroTierNetwork, setZeroTierNetworkSetting } from '../services/zeroTierPanelService.ts';
 import { Loader } from './Loader.tsx';
-import { TrashIcon, ZeroTierIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { TrashIcon, ZeroTierIcon, ExclamationTriangleIcon, CheckCircleIcon } from '../constants.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
 
-// --- Add Network Modal ---
-interface AddNetworkModalProps {
+// --- Local Components ---
+const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
+    const logContainerRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (logContainerRef.current) {
+            logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+        }
+    }, [logs]);
+
+    return (
+        <div ref={logContainerRef} className="bg-slate-900 text-xs font-mono text-slate-300 p-4 rounded-md h-64 overflow-y-auto border border-slate-600">
+            {logs.map((log, index) => (
+                <pre key={index} className="whitespace-pre-wrap break-words">{log}</pre>
+            ))}
+        </div>
+    );
+};
+
+const AddNetworkModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     onSave: (networkId: string) => void;
     isLoading: boolean;
-}
-
-const AddNetworkModal: React.FC<AddNetworkModalProps> = ({ isOpen, onClose, onSave, isLoading }) => {
+}> = ({ isOpen, onClose, onSave, isLoading }) => {
     const [networkId, setNetworkId] = useState('');
 
     useEffect(() => {
@@ -63,7 +78,6 @@ const AddNetworkModal: React.FC<AddNetworkModalProps> = ({ isOpen, onClose, onSa
     );
 };
 
-// --- Toggle Switch Component ---
 const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
     <label className="relative inline-flex items-center cursor-pointer">
         <input
@@ -80,14 +94,17 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 
 // --- Main Component ---
 export const ZeroTier: React.FC = () => {
-    const [status, setStatus] = useState<'loading' | 'ready' | 'not_installed' | 'service_down' | 'error'>('loading');
+    const [status, setStatus] = useState<'loading' | 'ready' | 'not_installed' | 'service_down' | 'error' | 'installing' | 'install_success'>('loading');
     const [data, setData] = useState<{ info: ZeroTierInfo; networks: ZeroTierNetwork[] } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [installLogs, setInstallLogs] = useState<string[]>([]);
+
 
     const fetchData = useCallback(async () => {
         setStatus('loading');
+        setInstallLogs([]); // Clear logs on fetch
         try {
             const result = await getZeroTierStatus();
             setData(result);
@@ -110,12 +127,40 @@ export const ZeroTier: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    const handleInstall = () => {
+        setStatus('installing');
+        setInstallLogs([]);
+        const eventSource = new EventSource('/api/zt/install');
+
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            if (data.log) {
+                setInstallLogs(prev => [...prev, data.log.trim()]);
+            }
+            if (data.status === 'success') {
+                 setStatus('install_success');
+            }
+            if (data.status === 'error') {
+                setStatus('error');
+                setErrorMessage(data.message || "Installation failed. Check the logs.");
+            }
+            if (data.status === 'finished') {
+                eventSource.close();
+            }
+        };
+        eventSource.onerror = () => {
+            setStatus('error');
+            setErrorMessage('Connection to the server was lost during installation.');
+            eventSource.close();
+        };
+    };
+
     const handleJoin = async (networkId: string) => {
         setIsSubmitting(true);
         try {
             await joinZeroTierNetwork(networkId);
             setIsModalOpen(false);
-            setTimeout(fetchData, 1000); // Give a moment for the service to update
+            setTimeout(fetchData, 1000);
         } catch (err) {
             alert(`Error joining network: ${(err as Error).message}`);
         } finally {
@@ -148,7 +193,7 @@ export const ZeroTier: React.FC = () => {
             await setZeroTierNetworkSetting(nwid, setting, value);
         } catch (err) {
             alert(`Error updating setting: ${(err as Error).message}`);
-            fetchData(); // Revert on error
+            fetchData();
         }
     };
 
@@ -173,24 +218,41 @@ export const ZeroTier: React.FC = () => {
         );
     }
 
-    if (status === 'not_installed') {
+    if (status === 'not_installed' || status === 'installing' || status === 'install_success') {
         return (
-            <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-3xl mx-auto text-center">
-                <ZeroTierIcon className="w-16 h-16 text-orange-500 mx-auto mb-4" />
-                <h2 className="text-2xl font-bold text-slate-100">ZeroTier One Not Found</h2>
-                <p className="mt-2 text-slate-400">The `zerotier-cli` command was not found on this system. Please install it to continue.</p>
-                
-                <div className="text-left my-6 bg-slate-900/50 p-6 rounded-lg">
-                    <h3 className="text-lg font-semibold text-slate-200 mb-2">Installation Command</h3>
-                    <p className="text-sm text-slate-400 mb-4">Run the following command in your server's terminal (e.g., via SSH) to install ZeroTier:</p>
-                    <div className="bg-slate-800 rounded-lg border border-slate-700 min-h-[60px]">
-                         <CodeBlock script="curl -s https://install.zerotier.com | sudo bash" />
-                    </div>
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-3xl mx-auto">
+                <div className="text-center">
+                    <ZeroTierIcon className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-slate-100">ZeroTier One Not Found</h2>
+                    <p className="mt-2 text-slate-400">The `zerotier-cli` command was not found on this system. Please install it to continue.</p>
                 </div>
                 
-                <button onClick={fetchData} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold">
-                    Re-check Status
-                </button>
+                {status === 'installing' && (
+                    <div className="mt-6">
+                        <h3 className="text-lg font-semibold text-slate-200 mb-2">Installation in Progress...</h3>
+                        <LogViewer logs={installLogs} />
+                    </div>
+                )}
+                
+                {status === 'install_success' && (
+                     <div className="mt-6 p-4 rounded-lg bg-green-900/50 border border-green-700 text-center">
+                        <CheckCircleIcon className="w-12 h-12 text-green-400 mx-auto mb-2" />
+                        <h3 className="text-lg font-semibold text-green-300">Installation Successful!</h3>
+                        <p className="text-green-400/80 text-sm">You can now re-check the status to manage ZeroTier.</p>
+                    </div>
+                )}
+                
+                {status !== 'installing' && (
+                    <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-700">
+                        <button onClick={handleInstall} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold w-full sm:w-auto">
+                           Install Automatically
+                        </button>
+                        <button onClick={fetchData} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg font-semibold w-full sm:w-auto">
+                           Re-check Status
+                        </button>
+                    </div>
+                )}
+                 <p className="text-xs text-slate-500 mt-4 text-center">Note: The automatic installer requires the panel's user to have passwordless `sudo` permissions.</p>
             </div>
         );
     }
