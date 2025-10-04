@@ -96,36 +96,42 @@ app.post('/api/interfaces', (req, res) => {
         const interfacesResponse = await apiClient.get('/interface');
         const allInterfaces = interfacesResponse.data;
 
-        if (!allInterfaces || allInterfaces.length === 0) {
+        if (!allInterfaces || !Array.isArray(allInterfaces)) {
             return res.status(200).json([]);
         }
 
         // Step 2: Get a list of active interface names to monitor
         const activeInterfaceNames = allInterfaces
-            .filter(iface => iface.disabled === 'false')
+            .filter(iface => iface.disabled === 'false' && iface.name)
             .map(iface => iface.name);
 
         let monitoredDataMap = new Map();
 
-        // Only try to monitor if there are active interfaces
+        // Step 3: Try to monitor active interfaces to get live traffic data
         if (activeInterfaceNames.length > 0) {
-            // Step 3: Monitor active interfaces to get live traffic data
-            const monitorResponse = await apiClient.post('/interface/monitor', {
-                "once": "",
-                "interface": activeInterfaceNames.join(',')
-            });
-            monitoredDataMap = new Map(monitorResponse.data.map(m => [m.name, m]));
+            try {
+                const monitorResponse = await apiClient.post('/interface/monitor', {
+                    "once": "",
+                    "interface": activeInterfaceNames.join(',')
+                });
+                 if (monitorResponse.data && Array.isArray(monitorResponse.data)) {
+                    monitoredDataMap = new Map(monitorResponse.data.map(m => [m.name, m]));
+                }
+            } catch (monitorError) {
+                // If monitoring fails (e.g., 400 error on some devices), log it but don't crash.
+                // The dashboard will load, but traffic data will be zero.
+                console.error(`Warning: '/interface/monitor' failed. Traffic data will be incomplete. Error: ${monitorError.message}`);
+            }
         }
 
-        // Step 4: Combine static data with live traffic data
+        // Step 4: Combine static data with live traffic data (or defaults)
         const interfaces = allInterfaces.map(iface => {
             const monitoredData = monitoredDataMap.get(iface.name);
             return {
                 name: iface.name,
                 type: iface.type,
-                // Use monitored data if available, otherwise default to 0
-                rxRate: monitoredData ? parseInt(monitoredData['rx-bits-per-second'], 10) : 0,
-                txRate: monitoredData ? parseInt(monitoredData['tx-bits-per-second'], 10) : 0,
+                rxRate: monitoredData ? parseInt(monitoredData['rx-bits-per-second'], 10) || 0 : 0,
+                txRate: monitoredData ? parseInt(monitoredData['tx-bits-per-second'], 10) || 0 : 0,
             };
         });
 
