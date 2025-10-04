@@ -222,14 +222,24 @@ app.get('/api/zt/status', async (req, res) => {
         const info = JSON.parse(infoJson);
         res.status(200).json({ info, networks });
     } catch (error) {
-        console.error('ZeroTier status failed:', error);
-        if (error.message.includes('command not found') || error.message.includes('Cannot connect')) {
-            return res.status(503).json({ 
-                message: 'zerotier-cli not found or ZeroTier service is not running on the server.',
-                error: error.message 
+        console.error('ZeroTier status check failed:', error.message);
+        if (error.message.includes('command not found')) {
+            return res.status(404).json({ 
+                code: 'ZEROTIER_NOT_INSTALLED',
+                message: 'zerotier-cli was not found. The ZeroTier One service is likely not installed on the host system.'
             });
         }
-        res.status(500).json({ message: 'Failed to get ZeroTier status.', error: error.message });
+        if (error.message.includes('Cannot connect')) {
+            return res.status(503).json({
+                code: 'ZEROTIER_SERVICE_DOWN',
+                message: 'Could not connect to the ZeroTier One service. It may be stopped or malfunctioning.'
+            });
+        }
+        res.status(500).json({ 
+            code: 'UNKNOWN_ERROR',
+            message: 'Failed to get ZeroTier status.', 
+            error: error.message 
+        });
     }
 });
 

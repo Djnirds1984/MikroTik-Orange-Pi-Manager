@@ -18,6 +18,10 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         if (contentType && contentType.includes("application/json")) {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
+            // Attach the JSON response to the error object for inspection in the catch block.
+            const error = new Error(errorMsg);
+            (error as any).data = errorData;
+            throw error;
         } else {
             errorMsg = await response.text();
         }

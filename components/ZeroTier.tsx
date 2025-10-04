@@ -3,6 +3,61 @@ import type { ZeroTierNetwork, ZeroTierInfo } from '../types.ts';
 import { getZeroTierStatus, joinZeroTierNetwork, leaveZeroTierNetwork, setZeroTierNetworkSetting } from '../services/zeroTierPanelService.ts';
 import { Loader } from './Loader.tsx';
 import { TrashIcon, ZeroTierIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { CodeBlock } from './CodeBlock.tsx';
+
+// --- Informational Components for Different States ---
+
+const InstallationGuide: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
+    <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-3xl mx-auto text-center">
+        <ZeroTierIcon className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-slate-100">ZeroTier One Not Found</h2>
+        <p className="mt-2 text-slate-400">The `zerotier-cli` command was not found on this system. Please install it to continue.</p>
+        
+        <div className="text-left my-6 bg-slate-900/50 p-6 rounded-lg">
+            <h3 className="text-lg font-semibold text-slate-200 mb-2">Installation Command</h3>
+            <p className="text-sm text-slate-400 mb-4">Run the following command in your server's terminal (e.g., via SSH) to install ZeroTier:</p>
+            <div className="bg-slate-800 rounded-lg border border-slate-700 min-h-[60px]">
+                 <CodeBlock script="curl -s https://install.zerotier.com | sudo bash" />
+            </div>
+        </div>
+        
+        <button onClick={onRetry} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold">
+            Re-check Status
+        </button>
+    </div>
+);
+
+const ServiceDownGuide: React.FC<{ onRetry: () => void }> = ({ onRetry }) => (
+    <div className="bg-slate-800 border border-yellow-700/50 rounded-lg p-8 max-w-3xl mx-auto text-center">
+        <ExclamationTriangleIcon className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-slate-100">ZeroTier Service Unavailable</h2>
+        <p className="mt-2 text-slate-400">We found ZeroTier, but couldn't connect to its service. It may be stopped or malfunctioning.</p>
+        
+        <div className="text-left my-6 bg-slate-900/50 p-6 rounded-lg">
+            <h3 className="text-lg font-semibold text-slate-200 mb-2">How to Fix</h3>
+            <p className="text-sm text-slate-400 mb-4">Run the following commands in your server's terminal to start and enable the service:</p>
+            <div className="bg-slate-800 rounded-lg border border-slate-700">
+                <CodeBlock script={`sudo systemctl start zerotier-one.service\nsudo systemctl enable zerotier-one.service`} />
+            </div>
+        </div>
+        
+        <button onClick={onRetry} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold">
+            Re-check Status
+        </button>
+    </div>
+);
+
+const GenericError: React.FC<{ message: string; onRetry: () => void }> = ({ message, onRetry }) => (
+     <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
+        <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mb-4" />
+        <p className="text-xl font-semibold text-red-400">Failed to load ZeroTier data.</p>
+        <p className="mt-2 text-slate-400 text-sm">{message}</p>
+        <button onClick={onRetry} className="mt-6 px-4 py-2 bg-red-600/50 hover:bg-red-500/50 rounded-lg font-semibold">
+            Try Again
+        </button>
+    </div>
+);
+
 
 // --- Add Network Modal ---
 interface AddNetworkModalProps {
@@ -72,129 +127,45 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
     </label>
 );
 
-// --- Main Component ---
-export const ZeroTier: React.FC = () => {
-    const [networks, setNetworks] = useState<ZeroTierNetwork[]>([]);
-    const [ztInfo, setZtInfo] = useState<ZeroTierInfo | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const { info, networks } = await getZeroTierStatus();
-            setZtInfo(info);
-            setNetworks(networks);
-        } catch (err) {
-            console.error("Failed to fetch ZeroTier status:", err);
-            setError((err as Error).message);
-        } finally {
-            setIsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    const handleSave = async (networkId: string) => {
-        setIsSubmitting(true);
-        try {
-            await joinZeroTierNetwork(networkId);
-            setIsModalOpen(false);
-            setTimeout(fetchData, 1000); // Give a moment for the service to update
-        } catch (err) {
-            alert(`Error joining network: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDelete = async (nwid: string) => {
-        if (!window.confirm(`Are you sure you want to leave network ${nwid}?`)) return;
-        setIsSubmitting(true);
-        try {
-            await leaveZeroTierNetwork(nwid);
-            await fetchData();
-        } catch (err) {
-            alert(`Error leaving network: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleToggle = async (nwid: string, setting: 'allowManaged' | 'allowGlobal' | 'allowDefault', value: boolean) => {
-        // Optimistically update UI
-        setNetworks(prev => prev.map(n => n.nwid === nwid ? { ...n, [setting]: value } : n));
-        try {
-            await setZeroTierNetworkSetting(nwid, setting, value);
-        } catch (err) {
-            alert(`Error updating setting: ${(err as Error).message}`);
-            // Revert on error
-            fetchData();
-        }
-    };
+// --- Main ZeroTier Management UI ---
+const ZeroTierManager: React.FC<{
+    info: ZeroTierInfo;
+    networks: ZeroTierNetwork[];
+    onJoin: () => void;
+    onLeave: (nwid: string) => void;
+    onToggle: (nwid: string, setting: 'allowManaged' | 'allowGlobal' | 'allowDefault', value: boolean) => void;
+    isSubmitting: boolean;
+}> = ({ info, networks, onJoin, onLeave, onToggle, isSubmitting }) => {
 
     const getStatusChip = (status: string) => {
         switch (status) {
             case 'OK': return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-500/20 text-green-400">OK</span>;
             case 'ACCESS_DENIED': return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-500/20 text-red-400">Access Denied</span>;
             case 'NOT_FOUND': return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-500/20 text-yellow-400">Not Found</span>;
-             case 'REQUESTING_CONFIGURATION': return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400">Configuring...</span>;
+            case 'REQUESTING_CONFIGURATION': return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400">Configuring...</span>;
             default: return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-600/50 text-slate-400">{status}</span>;
         }
     };
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-64">
-                <Loader />
-                <p className="mt-4 text-orange-400">Fetching ZeroTier status from panel host...</p>
-            </div>
-        );
-    }
-    
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
-                <ExclamationTriangleIcon className="w-12 h-12 text-red-500 mb-4" />
-                <p className="text-xl font-semibold text-red-400">Failed to load ZeroTier data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{error}</p>
-                 <p className="mt-4 text-xs text-slate-500">Please ensure the ZeroTier One service is installed and running on the machine hosting this panel.</p>
-            </div>
-        );
-    }
-
     return (
-        <div className="max-w-7xl mx-auto space-y-8">
-            <AddNetworkModal
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSave={handleSave}
-                isLoading={isSubmitting}
-            />
-
+         <div className="max-w-7xl mx-auto space-y-8">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <div>
                     <h2 className="text-3xl font-bold text-slate-100">ZeroTier Panel Management</h2>
                     <p className="text-slate-400 mt-1">Manage the ZeroTier service running on this panel's host.</p>
                 </div>
-                <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg self-start sm:self-center">
+                <button onClick={onJoin} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg self-start sm:self-center">
                     Join Network
                 </button>
             </div>
 
-            {ztInfo && (
-                <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="font-mono"><span className="text-slate-400">Node ID:</span> <span className="text-orange-300">{ztInfo.address}</span></div>
-                    <div><span className="text-slate-400">Version:</span> <span className="text-slate-200">{ztInfo.version}</span></div>
-                    <div><span className="text-slate-400">Online:</span> <span className={ztInfo.online ? 'text-green-400' : 'text-red-400'}>{ztInfo.online ? 'Yes' : 'No'}</span></div>
-                    <div><span className="text-slate-400">Port Mapping:</span> <span className="text-slate-200">{ztInfo.config.settings.portMappingEnabled ? 'Enabled' : 'Disabled'}</span></div>
-                </div>
-            )}
+            <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="font-mono"><span className="text-slate-400">Node ID:</span> <span className="text-orange-300">{info.address}</span></div>
+                <div><span className="text-slate-400">Version:</span> <span className="text-slate-200">{info.version}</span></div>
+                <div><span className="text-slate-400">Online:</span> <span className={info.online ? 'text-green-400' : 'text-red-400'}>{info.online ? 'Yes' : 'No'}</span></div>
+                <div><span className="text-slate-400">Port Mapping:</span> <span className="text-slate-200">{info.config.settings.portMappingEnabled ? 'Enabled' : 'Disabled'}</span></div>
+            </div>
 
             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
@@ -221,11 +192,11 @@ export const ZeroTier: React.FC = () => {
                                     <td className="px-4 py-4 font-mono text-slate-300 text-xs">
                                         {net.assignedAddresses.map(ip => <div key={ip}>{ip}</div>)}
                                     </td>
-                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowManaged} onChange={() => handleToggle(net.nwid, 'allowManaged', !net.allowManaged)} /></td>
-                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowGlobal} onChange={() => handleToggle(net.nwid, 'allowGlobal', !net.allowGlobal)} /></td>
-                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowDefault} onChange={() => handleToggle(net.nwid, 'allowDefault', !net.allowDefault)} /></td>
+                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowManaged} onChange={() => onToggle(net.nwid, 'allowManaged', !net.allowManaged)} /></td>
+                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowGlobal} onChange={() => onToggle(net.nwid, 'allowGlobal', !net.allowGlobal)} /></td>
+                                    <td className="px-4 py-4 text-center"><ToggleSwitch checked={net.allowDefault} onChange={() => onToggle(net.nwid, 'allowDefault', !net.allowDefault)} /></td>
                                     <td className="px-4 py-4 text-right">
-                                        <button onClick={() => handleDelete(net.nwid)} disabled={isSubmitting} className="p-2 text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Leave Network">
+                                        <button onClick={() => onLeave(net.nwid)} disabled={isSubmitting} className="p-2 text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Leave Network">
                                             <TrashIcon className="h-5 w-5" />
                                         </button>
                                     </td>
@@ -241,6 +212,122 @@ export const ZeroTier: React.FC = () => {
                     </table>
                 </div>
             </div>
+        </div>
+    );
+};
+
+
+// --- Main Component ---
+export const ZeroTier: React.FC = () => {
+    const [status, setStatus] = useState<'loading' | 'ready' | 'not_installed' | 'service_down' | 'error'>('loading');
+    const [networks, setNetworks] = useState<ZeroTierNetwork[]>([]);
+    const [ztInfo, setZtInfo] = useState<ZeroTierInfo | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState<string>('');
+    const [isModalOpen, setIsModalOpen] = useState(false);
+
+    const fetchData = useCallback(async () => {
+        setStatus('loading');
+        try {
+            const { info, networks } = await getZeroTierStatus();
+            setZtInfo(info);
+            setNetworks(networks);
+            setStatus('ready');
+        } catch (err) {
+            const error = err as any;
+            if (error?.data?.code === 'ZEROTIER_NOT_INSTALLED') {
+                setStatus('not_installed');
+            } else if (error?.data?.code === 'ZEROTIER_SERVICE_DOWN') {
+                setStatus('service_down');
+            } else {
+                setStatus('error');
+                setErrorMessage(error.message || 'An unknown error occurred.');
+            }
+            console.error("Failed to fetch ZeroTier status:", err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleJoin = async (networkId: string) => {
+        setIsSubmitting(true);
+        try {
+            await joinZeroTierNetwork(networkId);
+            setIsModalOpen(false);
+            setTimeout(fetchData, 1000); // Give a moment for the service to update
+        } catch (err) {
+            alert(`Error joining network: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleLeave = async (nwid: string) => {
+        if (!window.confirm(`Are you sure you want to leave network ${nwid}?`)) return;
+        setIsSubmitting(true);
+        try {
+            await leaveZeroTierNetwork(nwid);
+            await fetchData();
+        } catch (err) {
+            alert(`Error leaving network: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleToggle = async (nwid: string, setting: 'allowManaged' | 'allowGlobal' | 'allowDefault', value: boolean) => {
+        setNetworks(prev => prev.map(n => n.nwid === nwid ? { ...n, [setting]: value } : n));
+        try {
+            await setZeroTierNetworkSetting(nwid, setting, value);
+        } catch (err) {
+            alert(`Error updating setting: ${(err as Error).message}`);
+            fetchData(); // Revert on error
+        }
+    };
+
+    const renderContent = () => {
+        switch (status) {
+            case 'loading':
+                return (
+                    <div className="flex flex-col items-center justify-center h-64">
+                        <Loader />
+                        <p className="mt-4 text-orange-400">Fetching ZeroTier status from panel host...</p>
+                    </div>
+                );
+            case 'not_installed':
+                return <InstallationGuide onRetry={fetchData} />;
+            case 'service_down':
+                return <ServiceDownGuide onRetry={fetchData} />;
+            case 'error':
+                return <GenericError message={errorMessage} onRetry={fetchData} />;
+            case 'ready':
+                if (!ztInfo) return <GenericError message="Failed to parse ZeroTier info." onRetry={fetchData} />;
+                return (
+                    <ZeroTierManager
+                        info={ztInfo}
+                        networks={networks}
+                        onJoin={() => setIsModalOpen(true)}
+                        onLeave={handleLeave}
+                        onToggle={handleToggle}
+                        isSubmitting={isSubmitting}
+                    />
+                );
+            default:
+                return null;
+        }
+    };
+    
+    return (
+        <div>
+            <AddNetworkModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleJoin}
+                isLoading={isSubmitting}
+            />
+            {renderContent()}
         </div>
     );
 };
