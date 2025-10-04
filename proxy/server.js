@@ -194,12 +194,11 @@ app.get('/api/rollback', async (req, res) => {
             throw new Error('Backup file not found.');
         }
 
-        // Extract tarball over the project directory
-        await tar.x({
-            file: backupFilePath,
-            cwd: projectRoot,
-            strip: 0,
-        });
+        // FIX: Replaced the JavaScript-based tar extraction with a more reliable call
+        // to the system's native `tar` command. This prevents the server from crashing
+        // when trying to overwrite its own running files.
+        await runCommand(`tar -xzf "${backupFilePath}" -C "${projectRoot}"`);
+        
         sendSse(res, { log: 'Files restored successfully.' });
         
         sendSse(res, { status: 'restarting' });
