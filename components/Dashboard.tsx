@@ -71,10 +71,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
         setIsLoading(true);
         setError(null);
         try {
-            const [sysInfoData, interfacesData] = await Promise.all([
-              getSystemInfo(selectedRouter),
-              getInterfaces(selectedRouter),
-            ]);
+            // FIX: Changed from Promise.all to sequential awaits. Some MikroTik routers
+            // do not handle concurrent REST API requests well and can return a 400 error.
+            // This sequential approach is more reliable.
+            const sysInfoData = await getSystemInfo(selectedRouter);
+            const interfacesData = await getInterfaces(selectedRouter);
     
             setSystemInfo(sysInfoData);
     
@@ -89,7 +90,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
             setInterfaces(interfacesWithHistory);
 
             if (interfacesData.length > 0) {
-                setSelectedInterfaceName(interfacesData[0].name);
+                // Default to the first interface that is not a bridge or dynamic
+                const defaultInterface = interfacesData.find(i => i.type !== 'bridge' && !i.name.startsWith('pppoe')) || interfacesData[0];
+                setSelectedInterfaceName(defaultInterface.name);
             }
     
           } catch (err) {
@@ -204,7 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                             onChange={(e) => setSelectedInterfaceName(e.target.value)}
                             className="block w-full max-w-xs bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
                         >
-                            {interfaces.map(iface => <option key={iface.name} value={iface.name}>{iface.name}</option>)}
+                            {interfaces.filter(iface => !iface.name.startsWith('pppoe')).map(iface => <option key={iface.name} value={iface.name}>{iface.name}</option>)}
                         </select>
                     </div>
 
