@@ -76,7 +76,9 @@ app.post('/api/test-connection', (req, res) => {
 app.post('/api/system-info', (req, res) => {
     handleApiRequest(req, res, async (apiClient) => {
         const resource = (await apiClient.get('/system/resource')).data;
-        const routerboard = (await apiClient.get('/system/routerboard')).data;
+        // FIX: Removed the call to /system/routerboard. This endpoint doesn't exist on all
+        // MikroTik devices (e.g., CHR) and can cause a 400 Bad Request error, breaking the dashboard.
+        // The data it provided was not being used by the frontend anyway.
         res.status(200).json({
             boardName: resource['board-name'],
             version: resource.version,
