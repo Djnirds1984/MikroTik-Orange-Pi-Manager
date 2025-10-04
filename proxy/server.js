@@ -222,14 +222,17 @@ app.get('/api/zt/status', async (req, res) => {
         const info = JSON.parse(infoJson);
         res.status(200).json({ info, networks });
     } catch (error) {
-        console.error('ZeroTier status check failed:', error.message);
-        if (error.message.includes('command not found')) {
+        const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+        console.error('ZeroTier status check failed:', errorMessage);
+
+        // Fix: Use a more general check for missing command errors.
+        if (errorMessage.includes('not found')) {
             return res.status(404).json({ 
                 code: 'ZEROTIER_NOT_INSTALLED',
                 message: 'zerotier-cli was not found. The ZeroTier One service is likely not installed on the host system.'
             });
         }
-        if (error.message.includes('Cannot connect')) {
+        if (errorMessage.includes('cannot connect')) {
             return res.status(503).json({
                 code: 'ZEROTIER_SERVICE_DOWN',
                 message: 'Could not connect to the ZeroTier One service. It may be stopped or malfunctioning.'
@@ -238,7 +241,7 @@ app.get('/api/zt/status', async (req, res) => {
         res.status(500).json({ 
             code: 'UNKNOWN_ERROR',
             message: 'Failed to get ZeroTier status.', 
-            error: error.message 
+            error: errorMessage 
         });
     }
 });
