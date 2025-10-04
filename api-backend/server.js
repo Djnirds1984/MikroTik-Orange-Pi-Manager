@@ -115,16 +115,19 @@ app.post('/api/hotspot-clients', (req, res) => {
 app.post('/api/ppp/profiles', (req, res) => {
     handleApiRequest(req, res, async (apiClient) => {
         const response = await apiClient.get('/ppp/profile');
-        // FIX: Replaced the generic `kebabToCamel` function with explicit, manual mapping.
-        // This is safer and directly provides the frontend with the exact data structure it expects,
-        // fixing the bug where profile data was not displayed correctly.
-        const data = response.data.map(p => ({
-            id: p['.id'],
-            name: p.name,
-            localAddress: p['local-address'],
-            remoteAddress: p['remote-address'],
-            rateLimit: p['rate-limit']
-        }));
+        // FIX: Re-implemented the data transformation using destructuring with aliasing.
+        // This is a more robust and explicit way to map the kebab-case properties from the router
+        // to the camelCase properties the frontend expects, permanently fixing the display bug.
+        const data = response.data.map(p => {
+            const {
+                '.id': id,
+                name,
+                'local-address': localAddress,
+                'remote-address': remoteAddress,
+                'rate-limit': rateLimit
+            } = p;
+            return { id, name, localAddress, remoteAddress, rateLimit };
+        });
         res.status(200).json(data);
     });
 });
