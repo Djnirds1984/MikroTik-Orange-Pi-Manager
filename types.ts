@@ -22,7 +22,7 @@ export interface SystemInfo {
 }
 
 export interface Interface {
-  name: string;
+  name:string;
   type: string;
   rxRate: number; // in bits per second
   txRate: number; // in bits per second
@@ -122,6 +122,7 @@ export interface ZeroTierNetwork {
     dev?: string;
     broadcastEnabled: boolean;
     allowManaged: boolean;
+
     allowGlobal: boolean;
     allowDefault: boolean;
     allowDNS: boolean;
@@ -133,4 +134,10 @@ export interface ZeroTierNetwork {
 export interface ZeroTierStatusResponse {
     info: ZeroTierInfo;
     networks: ZeroTierNetwork[];
+}
+
+// Type for the AI Fixer feature
+export interface AIFixResponse {
+    explanation: string;
+    fixedCode: string;
 }

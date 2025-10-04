@@ -13,6 +13,7 @@ import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
 import type { SystemInfo, InterfaceWithHistory, RouterConfigWithId } from '../types.ts';
 import { RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
+import { AIFixer } from './AIFixer.tsx';
 
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
@@ -59,6 +60,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [selectedInterfaceName, setSelectedInterfaceName] = useState<string | null>(null);
+    const [showAIFixer, setShowAIFixer] = useState(false);
 
     const initialFetch = useCallback(async () => {
         if (!selectedRouter) {
@@ -66,10 +68,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
             setSystemInfo(null);
             setInterfaces([]);
             setSelectedInterfaceName(null);
+            setShowAIFixer(false);
             return;
         }
         setIsLoading(true);
         setError(null);
+        setShowAIFixer(false);
         try {
             // FIX: Changed from Promise.all to sequential awaits. Some MikroTik routers
             // do not handle concurrent REST API requests well and can return a 400 error.
@@ -166,12 +170,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
 
   if (error || !systemInfo) {
      return (
-        <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
-            <p className="text-xl font-semibold text-red-400">Failed to load router data.</p>
-            <p className="mt-2 text-slate-400 text-sm">{error}</p>
-            <button onClick={initialFetch} className="mt-6 px-4 py-2 bg-red-600/50 hover:bg-red-500/50 rounded-lg font-semibold">
-                Try Again
-            </button>
+        <div className="space-y-6">
+            <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
+                <p className="text-xl font-semibold text-red-400">Failed to load router data.</p>
+                <p className="mt-2 text-slate-400 text-sm">{error}</p>
+                <div className="mt-6 flex items-center space-x-4">
+                     <button onClick={initialFetch} className="px-4 py-2 bg-red-800/50 hover:bg-red-700/50 rounded-lg font-semibold">
+                        Try Again
+                    </button>
+                    <button onClick={() => setShowAIFixer(s => !s)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg font-semibold flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a3.375 3.375 0 00-2.655-2.654L11.25 18l1.938-.648a3.375 3.375 0 002.655-2.654L16.75 13.5l.648 1.938a3.375 3.375 0 002.655 2.654L21.75 18l-1.938.648a3.375 3.375 0 00-2.655 2.654z" /></svg>
+                        Try AI Fix
+                    </button>
+                </div>
+            </div>
+            {showAIFixer && <AIFixer errorMessage={error} routerName={selectedRouter.name} />}
         </div>
      );
   }

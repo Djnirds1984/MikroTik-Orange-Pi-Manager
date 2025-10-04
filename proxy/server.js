@@ -96,10 +96,10 @@ app.get('/api/update-status', async (req, res) => {
     }
 });
 
-const restartApp = (res) => {
-    sendSse(res, { log: '\n>>> Restarting application with pm2...' });
+const restartApp = (res, serviceName = 'mikrotik-manager mikrotik-api-backend') => {
+    sendSse(res, { log: `\n>>> Restarting application with pm2: ${serviceName}...` });
     // Restart both servers by their names for reliability
-    exec('pm2 restart mikrotik-manager mikrotik-api-backend', (err, stdout, stderr) => {
+    exec(`pm2 restart ${serviceName}`, (err, stdout, stderr) => {
         if (err) {
             console.error('PM2 restart failed:', stderr);
             sendSse(res, { status: 'error', message: `Failed to restart server: ${stderr}` });
@@ -117,7 +117,7 @@ app.get('/api/update-app', async (req, res) => {
     res.setHeader('Connection', 'keep-alive');
 
     const backupDir = path.join(projectRoot, 'backups');
-    const backupFileName = `backup-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
+    const backupFileName = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
     const backupFilePath = path.join(backupDir, backupFileName);
 
     try {
@@ -326,6 +326,57 @@ app.post('/api/zt/set', express.json(), async (req, res) => {
     } catch (error) {
         console.error(`ZeroTier set failed for ${networkId}:`, error);
         res.status(500).json({ message: `Failed to set ${setting} for network ${networkId}.`, error: error.message });
+    }
+});
+
+// --- AI Fixer API Endpoints ---
+const ALLOWED_FILE = 'api-backend/server.js';
+const TARGET_FILE_PATH = path.join(projectRoot, ALLOWED_FILE);
+
+app.get('/api/fixer/file-content', async (req, res) => {
+    try {
+        const content = await fs.readFile(TARGET_FILE_PATH, 'utf-8');
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(content);
+    } catch (error) {
+        console.error('AI Fixer failed to read file:', error);
+        res.status(500).json({ message: `Could not read the backend file: ${error.message}` });
+    }
+});
+
+app.post('/api/fixer/apply-fix', express.text({ type: 'text/plain' }), async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const newCode = req.body;
+    if (!newCode || typeof newCode !== 'string') {
+        sendSse(res, { status: 'error', message: 'No code provided to apply.' });
+        return res.end();
+    }
+
+    const backupDir = path.join(projectRoot, 'backups');
+    const backupFileName = `backup-aifix-${new Date().toISOString().replace(/:/g, '-')}.js.bak`;
+    const backupFilePath = path.join(backupDir, backupFileName);
+
+    try {
+        sendSse(res, { log: `>>> Backing up current backend server file to ${backupFileName}...` });
+        await fs.ensureDir(backupDir);
+        await fs.copy(TARGET_FILE_PATH, backupFilePath);
+        sendSse(res, { log: 'Backup complete.' });
+
+        sendSse(res, { log: '\n>>> Applying new code...' });
+        await fs.writeFile(TARGET_FILE_PATH, newCode, 'utf-8');
+        sendSse(res, { log: 'File updated successfully.' });
+
+        sendSse(res, { status: 'restarting' });
+        restartApp(res, 'mikrotik-api-backend'); // Only restart the backend
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('AI Fixer failed to apply fix:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
+        res.end();
     }
 });
 
