@@ -137,8 +137,8 @@ app.post('/api/interfaces', (req, res, next) => {
 // --- Hotspot Endpoints ---
 app.post('/api/hotspot/active', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        // Fix: Changed from .get to .post as some RouterOS versions expect a POST to list resources.
-        const response = await apiClient.post('/ip/hotspot/active', {});
+        // Fix: Use GET to list resources as per standard REST API practices for MikroTik.
+        const response = await apiClient.get('/ip/hotspot/active');
         const data = response.data.map(u => ({
             id: u['.id'],
             user: u.user,
@@ -155,8 +155,8 @@ app.post('/api/hotspot/active', (req, res, next) => {
 
 app.post('/api/hotspot/hosts', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        // Fix: Changed from .get to .post for consistency and compatibility.
-        const response = await apiClient.post('/ip/hotspot/host', {});
+        // Fix: Use GET to list resources as per standard REST API practices for MikroTik.
+        const response = await apiClient.get('/ip/hotspot/host');
         const data = response.data.map(h => ({
             id: h['.id'],
             macAddress: h['mac-address'],
