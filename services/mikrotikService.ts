@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotClient, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection } from '../types.ts';
 
 // The new, dedicated API backend runs on port 3002
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -62,8 +62,16 @@ export const getInterfaces = (router: RouterConfigWithId): Promise<Interface[]> 
     return fetchData('/api/interfaces', router);
 };
 
-export const getHotspotClients = (router: RouterConfigWithId): Promise<HotspotClient[]> => {
-    return fetchData('/api/hotspot-clients', router);
+export const getHotspotActiveUsers = (router: RouterConfigWithId): Promise<HotspotActiveUser[]> => {
+    return fetchData('/api/hotspot/active', router);
+};
+
+export const getHotspotHosts = (router: RouterConfigWithId): Promise<HotspotHost[]> => {
+    return fetchData('/api/hotspot/hosts', router);
+};
+
+export const removeHotspotActiveUser = (router: RouterConfigWithId, userId: string): Promise<any> => {
+    return fetchData('/api/hotspot/active/remove', router, { userId });
 };
 
 export const getPppProfiles = (router: RouterConfigWithId): Promise<PppProfile[]> => {

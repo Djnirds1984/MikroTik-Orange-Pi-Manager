@@ -11,6 +11,7 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Users } from './components/Users.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
+import { Hotspot } from './components/Hotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import type { View } from './types.ts';
@@ -58,6 +59,8 @@ const App: React.FC = () => {
           return <Users selectedRouter={selectedRouter} />;
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
+      case 'hotspot':
+          return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
       case 'updater':
@@ -74,6 +77,7 @@ const App: React.FC = () => {
     pppoe: 'PPPoE Profiles',
     users: 'PPPoE Users',
     billing: 'Billing Plans',
+    hotspot: 'Hotspot Management',
     zerotier: 'ZeroTier Management',
     updater: 'Panel Updater',
   };

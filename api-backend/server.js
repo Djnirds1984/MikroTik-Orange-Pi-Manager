@@ -134,12 +134,51 @@ app.post('/api/interfaces', (req, res, next) => {
     });
 });
 
-
-app.post('/api/hotspot-clients', (req, res, next) => {
+// --- Hotspot Endpoints ---
+app.post('/api/hotspot/active', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        res.status(200).json([]);
+        const response = await apiClient.get('/ip/hotspot/active');
+        const data = response.data.map(u => ({
+            id: u['.id'],
+            user: u.user,
+            address: u.address,
+            macAddress: u['mac-address'],
+            uptime: u.uptime,
+            bytesIn: parseInt(u['bytes-in'], 10) || 0,
+            bytesOut: parseInt(u['bytes-out'], 10) || 0,
+            comment: u.comment,
+        }));
+        res.status(200).json(data);
     });
 });
+
+app.post('/api/hotspot/hosts', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/hotspot/host');
+        const data = response.data.map(h => ({
+            id: h['.id'],
+            macAddress: h['mac-address'],
+            address: h.address,
+            toAddress: h['to-address'],
+            authorized: h.authorized === 'true',
+            bypassed: h.bypassed === 'true',
+            comment: h.comment,
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/hotspot/active/remove', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { userId } = req.body;
+        if (!userId) {
+            return res.status(400).json({ message: 'User ID is required.' });
+        }
+        await apiClient.delete(`/ip/hotspot/active/${userId}`);
+        res.status(204).send();
+    });
+});
+
 
 // --- PPPoE Profiles ---
 app.post('/api/ppp/profiles', (req, res, next) => {

@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot';
 
 export interface RouterConfig {
   name: string;
@@ -37,10 +37,25 @@ export interface InterfaceWithHistory extends Interface {
   trafficHistory: TrafficHistoryPoint[];
 }
 
-export interface HotspotClient {
-  macAddress: string;
-  uptime: string;
-  signal: string;
+export interface HotspotActiveUser {
+    id: string;
+    user: string;
+    address: string;
+    macAddress: string;
+    uptime: string;
+    bytesIn: number;
+    bytesOut: number;
+    comment?: string;
+}
+
+export interface HotspotHost {
+    id: string;
+    macAddress: string;
+    address: string;
+    toAddress: string;
+    authorized: boolean;
+    bypassed: boolean;
+    comment?: string;
 }
 
 export interface PppProfile {
