@@ -92,16 +92,47 @@ app.post('/api/system-info', (req, res) => {
 
 app.post('/api/interfaces', (req, res) => {
     handleApiRequest(req, res, async (apiClient) => {
-        const response = await apiClient.post('/interface/monitor', { "once": "", "interface": "all" });
-        const interfaces = response.data.map(iface => ({
-            name: iface.name,
-            type: iface.type,
-            rxRate: parseInt(iface['rx-bits-per-second'], 10),
-            txRate: parseInt(iface['tx-bits-per-second'], 10),
-        }));
+        // Step 1: Get all interfaces and their static data (name, type)
+        const interfacesResponse = await apiClient.get('/interface');
+        const allInterfaces = interfacesResponse.data;
+
+        if (!allInterfaces || allInterfaces.length === 0) {
+            return res.status(200).json([]);
+        }
+
+        // Step 2: Get a list of active interface names to monitor
+        const activeInterfaceNames = allInterfaces
+            .filter(iface => iface.disabled === 'false')
+            .map(iface => iface.name);
+
+        let monitoredDataMap = new Map();
+
+        // Only try to monitor if there are active interfaces
+        if (activeInterfaceNames.length > 0) {
+            // Step 3: Monitor active interfaces to get live traffic data
+            const monitorResponse = await apiClient.post('/interface/monitor', {
+                "once": "",
+                "interface": activeInterfaceNames.join(',')
+            });
+            monitoredDataMap = new Map(monitorResponse.data.map(m => [m.name, m]));
+        }
+
+        // Step 4: Combine static data with live traffic data
+        const interfaces = allInterfaces.map(iface => {
+            const monitoredData = monitoredDataMap.get(iface.name);
+            return {
+                name: iface.name,
+                type: iface.type,
+                // Use monitored data if available, otherwise default to 0
+                rxRate: monitoredData ? parseInt(monitoredData['rx-bits-per-second'], 10) : 0,
+                txRate: monitoredData ? parseInt(monitoredData['tx-bits-per-second'], 10) : 0,
+            };
+        });
+
         res.status(200).json(interfaces);
     });
 });
+
 
 app.post('/api/hotspot-clients', (req, res) => {
     handleApiRequest(req, res, async (apiClient) => {
