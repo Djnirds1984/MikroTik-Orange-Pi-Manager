@@ -44,7 +44,7 @@ const createApiClient = (routerConfig) => {
 };
 
 // Generic handler for API requests to reduce boilerplate
-const handleApiRequest = async (req, res, callback) => {
+const handleApiRequest = async (req, res, next, callback) => {
     try {
         const { routerConfig } = req.body;
         if (!routerConfig) {
@@ -56,14 +56,18 @@ const handleApiRequest = async (req, res, callback) => {
         console.error('API Request Error:', error.response ? error.response.data : error.message);
         const status = error.response?.status || 500;
         const message = error.response?.data?.message || error.response?.data?.detail || error.message || "An unexpected error occurred.";
-        res.status(status).json({ message: `MikroTik REST API Error: ${message}` });
+        
+        // Pass the error to the global error handler
+        const err = new Error(`MikroTik REST API Error: ${message}`);
+        err.status = status;
+        next(err);
     }
 };
 
 // --- API Endpoints ---
 
-app.post('/api/test-connection', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/test-connection', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/system/resource');
         if (response.data) {
             res.status(200).json({ success: true, message: `Connection successful! Board: ${response.data['board-name']}` });
@@ -73,12 +77,9 @@ app.post('/api/test-connection', (req, res) => {
     });
 });
 
-app.post('/api/system-info', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/system-info', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const resource = (await apiClient.get('/system/resource')).data;
-        // FIX: Removed the call to /system/routerboard. This endpoint doesn't exist on all
-        // MikroTik devices (e.g., CHR) and can cause a 400 Bad Request error, breaking the dashboard.
-        // The data it provided was not being used by the frontend anyway.
         res.status(200).json({
             boardName: resource['board-name'],
             version: resource.version,
@@ -90,9 +91,8 @@ app.post('/api/system-info', (req, res) => {
     });
 });
 
-app.post('/api/interfaces', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
-        // Step 1: Get all interfaces and their static data (name, type)
+app.post('/api/interfaces', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const interfacesResponse = await apiClient.get('/interface');
         const allInterfaces = interfacesResponse.data;
 
@@ -100,14 +100,12 @@ app.post('/api/interfaces', (req, res) => {
             return res.status(200).json([]);
         }
 
-        // Step 2: Get a list of active interface names to monitor
         const activeInterfaceNames = allInterfaces
             .filter(iface => iface.disabled === 'false' && iface.name)
             .map(iface => iface.name);
 
         let monitoredDataMap = new Map();
 
-        // Step 3: Try to monitor active interfaces to get live traffic data
         if (activeInterfaceNames.length > 0) {
             try {
                 const monitorResponse = await apiClient.post('/interface/monitor', {
@@ -118,13 +116,10 @@ app.post('/api/interfaces', (req, res) => {
                     monitoredDataMap = new Map(monitorResponse.data.map(m => [m.name, m]));
                 }
             } catch (monitorError) {
-                // If monitoring fails (e.g., 400 error on some devices), log it but don't crash.
-                // The dashboard will load, but traffic data will be zero.
                 console.error(`Warning: '/interface/monitor' failed. Traffic data will be incomplete. Error: ${monitorError.message}`);
             }
         }
 
-        // Step 4: Combine static data with live traffic data (or defaults)
         const interfaces = allInterfaces.map(iface => {
             const monitoredData = monitoredDataMap.get(iface.name);
             return {
@@ -140,21 +135,16 @@ app.post('/api/interfaces', (req, res) => {
 });
 
 
-app.post('/api/hotspot-clients', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
-        // This is a placeholder as REST API doesn't have a direct equivalent for active hotspot signal strength easily.
-        // We will return an empty array to prevent dashboard errors. A more complex script might be needed on the router side.
+app.post('/api/hotspot-clients', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         res.status(200).json([]);
     });
 });
 
 // --- PPPoE Profiles ---
-app.post('/api/ppp/profiles', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/profiles', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/profile');
-        // FIX: Re-implemented the data transformation using destructuring with aliasing.
-        // This is a more robust and explicit way to map the kebab-case properties from the router
-        // to the camelCase properties the frontend expects, permanently fixing the display bug.
         const data = response.data.map(p => {
             const {
                 '.id': id,
@@ -169,26 +159,26 @@ app.post('/api/ppp/profiles', (req, res) => {
     });
 });
 
-app.post('/api/ppp/profiles/add', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/profiles/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { profileData } = req.body;
         const response = await apiClient.put('/ppp/profile', camelToKebab(profileData));
         res.status(201).json(response.data);
     });
 });
 
-app.post('/api/ppp/profiles/update', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/profiles/update', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { profileData } = req.body;
         const profileId = profileData.id;
-        delete profileData.id; // MikroTik API uses .id in the URL, not the body for updates
+        delete profileData.id;
         const response = await apiClient.patch(`/ppp/profile/${profileId}`, camelToKebab(profileData));
         res.status(200).json(response.data);
     });
 });
 
-app.post('/api/ppp/profiles/delete', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/profiles/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { profileId } = req.body;
         await apiClient.delete(`/ppp/profile/${profileId}`);
         res.status(204).send();
@@ -196,38 +186,38 @@ app.post('/api/ppp/profiles/delete', (req, res) => {
 });
 
 // --- IP Pools ---
-app.post('/api/ip/pools', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ip/pools', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ip/pool');
         res.status(200).json(response.data.map(p => ({ ...p, id: p['.id'] })));
     });
 });
 
 // --- PPPoE Secrets ---
-app.post('/api/ppp/secrets', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/secrets', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/secret');
         res.status(200).json(response.data.map(s => ({ ...s, id: s['.id'] })));
     });
 });
 
-app.post('/api/ppp/active', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/active', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/active');
         res.status(200).json(response.data.map(a => ({ ...a, id: a['.id'] })));
     });
 });
 
-app.post('/api/ppp/secrets/add', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/secrets/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { secretData } = req.body;
         const response = await apiClient.put('/ppp/secret', camelToKebab(secretData));
         res.status(201).json(response.data);
     });
 });
 
-app.post('/api/ppp/secrets/update', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/secrets/update', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { secretData } = req.body;
         const secretId = secretData.id;
         delete secretData.id;
@@ -236,8 +226,8 @@ app.post('/api/ppp/secrets/update', (req, res) => {
     });
 });
 
-app.post('/api/ppp/secrets/delete', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/secrets/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { secretId } = req.body;
         await apiClient.delete(`/ppp/secret/${secretId}`);
         res.status(204).send();
@@ -254,8 +244,8 @@ const formatDateForMikroTik = (date) => {
     return `${month}/${day}/${year}`;
 };
 
-app.post('/api/ppp/process-payment', (req, res) => {
-    handleApiRequest(req, res, async (apiClient) => {
+app.post('/api/ppp/process-payment', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
         const { secret, plan, nonPaymentProfile, discountDays, paymentDate } = req.body;
 
         const currentDueDate = secret.comment ? JSON.parse(secret.comment).dueDate : null;
@@ -268,13 +258,11 @@ app.post('/api/ppp/process-payment', (req, res) => {
             dueDate: newDueDate.toISOString().split('T')[0],
         });
 
-        // 1. Update the user's secret with new due date and ensure they are on the correct profile
         await apiClient.patch(`/ppp/secret/${secret['.id']}`, {
             comment: newComment,
             profile: plan.pppoeProfile,
         });
 
-        // 2. Create/Update the script that will disable the user
         const scriptName = `expire-${secret.name}`;
         const scriptSource = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
         const existingScripts = await apiClient.get(`/system/script?name=${scriptName}`);
@@ -284,7 +272,6 @@ app.post('/api/ppp/process-payment', (req, res) => {
             await apiClient.put('/system/script', { name: scriptName, source: scriptSource });
         }
 
-        // 3. Create/Update the scheduler to run the script
         const schedulerName = `expire-sched-${secret.name}`;
         const formattedStartDate = formatDateForMikroTik(newDueDate);
         const existingSchedulers = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
@@ -305,6 +292,19 @@ app.post('/api/ppp/process-payment', (req, res) => {
 
         res.status(200).json({ success: true, message: 'Payment processed successfully.' });
     });
+});
+
+// --- Global Error Handling Middleware (must be the last app.use call) ---
+// This acts as a safety net to catch any unhandled errors from the API routes
+// and prevents the entire server process from crashing.
+app.use((err, req, res, next) => {
+    console.error('Unhandled Exception:', err.stack || err.message);
+    if (res.headersSent) {
+        return next(err);
+    }
+    const status = err.status || 500;
+    const message = err.message || 'An unexpected internal server error occurred.';
+    res.status(status).json({ message });
 });
 
 

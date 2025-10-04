@@ -16,13 +16,20 @@ const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: R
   const contentType = response.headers.get("content-type");
   if (!response.ok) {
     let errorMsg = `Request failed with status ${response.status}`;
+    let errorDetails: any = { path, status: response.status };
+
     if (contentType && contentType.indexOf("application/json") !== -1) {
         const errorData = await response.json();
         errorMsg = errorData.message || errorMsg;
+        errorDetails.rawError = errorData;
     } else {
-        errorMsg = `Could not connect to the API backend. Is it running? (Status: ${response.status})`;
+        const textError = await response.text();
+        errorMsg = textError || `Could not connect to the API backend. Is it running? (Status: ${response.status})`;
+        errorDetails.rawError = textError;
     }
-    throw new Error(errorMsg);
+    const error = new Error(errorMsg);
+    (error as any).details = errorDetails;
+    throw error;
   }
 
   if (contentType && contentType.indexOf("application/json") !== -1) {

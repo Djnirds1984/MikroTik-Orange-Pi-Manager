@@ -75,9 +75,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
         setError(null);
         setShowAIFixer(false);
         try {
-            // FIX: Changed from Promise.all to sequential awaits. Some MikroTik routers
-            // do not handle concurrent REST API requests well and can return a 400 error.
-            // This sequential approach is more reliable.
             const sysInfoData = await getSystemInfo(selectedRouter);
             const interfacesData = await getInterfaces(selectedRouter);
     
@@ -94,14 +91,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
             setInterfaces(interfacesWithHistory);
 
             if (interfacesData.length > 0) {
-                // Default to the first interface that is not a bridge or dynamic
                 const defaultInterface = interfacesData.find(i => i.type !== 'bridge' && !i.name.startsWith('pppoe')) || interfacesData[0];
                 setSelectedInterfaceName(defaultInterface.name);
             }
     
-          } catch (err) {
+          } catch (err: any) {
             console.error("Failed to fetch dashboard data:", err);
-            setError(`Could not connect to router "${selectedRouter.name}". Check its configuration and ensure the backend proxy is running.`);
+            const path = err.details?.path || 'unknown endpoint';
+            const baseMessage = `Failed to load dashboard data for router "${selectedRouter.name}".`;
+            const specificMessage = `The error occurred when fetching from ${path}. Message: ${err.message}`;
+            setError(`${baseMessage} ${specificMessage}`);
           } finally {
             setIsLoading(false);
           }

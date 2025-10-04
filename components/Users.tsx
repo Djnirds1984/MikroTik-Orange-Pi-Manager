@@ -4,7 +4,7 @@ import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiv
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, EditIcon, TrashIcon } from '../constants.tsx';
+import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon } from '../constants.tsx';
 
 // --- Helper Functions ---
 const parseComment = (comment: string | undefined): { dueDate?: string; plan?: string } => {
@@ -16,9 +16,6 @@ const parseComment = (comment: string | undefined): { dueDate?: string; plan?: s
             plan: data.plan,
         };
     } catch {
-        // If comment is not valid JSON, it might be a simple string.
-        // For backward compatibility or manual entries, you could return it as a plan.
-        // For this app, we'll assume JSON or nothing.
         return {};
     }
 };
@@ -105,8 +102,6 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
         if (initialData) {
             dataToSave = { ...initialData, ...dataToSave };
             if (!secret.password) {
-                // Fix: The PppSecret type now includes the optional `password` property,
-                // so we can safely delete it without a @ts-ignore comment.
                 delete (dataToSave as PppSecret).password;
             }
         }
@@ -183,7 +178,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
     if (!isOpen || !user) return null;
 
     const planPrice = currentUserPlan?.price || 0;
-    const pricePerDay = planPrice / 30; // Assuming all plans are monthly for discount calculation
+    const pricePerDay = planPrice / 30;
     const discountAmount = pricePerDay * discountDays;
     const finalAmount = planPrice - discountAmount;
 
@@ -264,9 +259,8 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [isPolling, setIsPolling] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
     
     const [isFormModalOpen, setIsFormModalOpen] = useState(false);
     const [editingSecret, setEditingSecret] = useState<PppSecret | null>(null);
@@ -283,49 +277,47 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
             return;
         }
         setIsLoading(true);
-        setError(null);
+        setErrors({});
 
-        try {
-            const [secretsData, activeData, profilesData] = await Promise.all([
-                getPppSecrets(selectedRouter),
-                getPppActive(selectedRouter),
-                getPppProfiles(selectedRouter),
-            ]);
-            setSecrets(secretsData);
-            setActive(activeData);
-            setProfiles(profilesData);
-        } catch (err) {
-            console.error("Failed to fetch PPPoE user data:", err);
-            setError(`Could not fetch PPPoE data. Ensure the PPP package is enabled on "${selectedRouter.name}".`);
-        } finally {
-            setIsLoading(false);
+        const [secretsResult, activeResult, profilesResult] = await Promise.allSettled([
+            getPppSecrets(selectedRouter),
+            getPppActive(selectedRouter),
+            getPppProfiles(selectedRouter),
+        ]);
+
+        const newErrors: Record<string, string> = {};
+
+        if (secretsResult.status === 'fulfilled') {
+            setSecrets(secretsResult.value);
+        } else {
+            console.error("Failed to fetch PPPoE secrets:", secretsResult.reason);
+            newErrors.secrets = `Could not fetch PPPoE users (secrets).`;
         }
+        
+        if (activeResult.status === 'fulfilled') {
+            setActive(activeResult.value);
+        } else {
+            console.error("Failed to fetch active connections:", activeResult.reason);
+            newErrors.active = `Could not fetch online user status.`;
+        }
+        
+        if (profilesResult.status === 'fulfilled') {
+            setProfiles(profilesResult.value);
+        } else {
+            console.error("Failed to fetch PPPoE profiles:", profilesResult.reason);
+            newErrors.profiles = `Could not fetch PPPoE profiles for payment modal.`;
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+        }
+
+        setIsLoading(false);
     }, [selectedRouter]);
 
     useEffect(() => {
-        if (!isPolling) { // Prevent initial double-load
-           fetchData();
-        }
+        fetchData();
     }, [fetchData]);
-
-    // Background polling for active users
-    useEffect(() => {
-        if (!selectedRouter || isLoading) return;
-
-        const pollInterval = setInterval(async () => {
-            setIsPolling(true);
-            try {
-                const activeData = await getPppActive(selectedRouter);
-                setActive(activeData);
-            } catch (err) {
-                console.error("Failed to poll active users:", err);
-            } finally {
-                setIsPolling(false);
-            }
-        }, 5000); // Poll every 5 seconds
-
-        return () => clearInterval(pollInterval);
-    }, [selectedRouter, isLoading]);
 
     const handleAdd = () => {
         if (plans.length === 0) {
@@ -405,7 +397,6 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         }
     };
 
-
     if (!selectedRouter) {
         return (
             <div className="flex flex-col items-center justify-center h-96 text-center bg-slate-800 rounded-lg border border-slate-700">
@@ -425,11 +416,11 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         );
     }
     
-    if (error) {
+    if (errors.secrets) {
          return (
             <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
                 <p className="text-xl font-semibold text-red-400">Failed to load user data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{error}</p>
+                <p className="mt-2 text-slate-400 text-sm">{errors.secrets}</p>
             </div>
          );
     }
@@ -465,6 +456,18 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                     Add New User
                 </button>
             </div>
+            
+            {Object.keys(errors).length > 0 && (
+                 <div className="bg-yellow-900/30 border border-yellow-700/50 text-yellow-300 p-3 rounded-lg mb-4 text-sm flex items-center gap-3">
+                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold">Data Warning:</p>
+                        <ul className="list-disc pl-5">
+                            {Object.values(errors).map((err, i) => <li key={i}>{err}</li>)}
+                        </ul>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
