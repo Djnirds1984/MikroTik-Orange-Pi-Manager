@@ -15,10 +15,12 @@ import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
 import { Network } from './components/Network.tsx';
 import { Inventory } from './components/Inventory.tsx';
+import { Company } from './components/Company.tsx';
 import { Loader } from './components/Loader.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
+import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import type { View } from './types.ts';
 
 const App: React.FC = () => {
@@ -27,10 +29,11 @@ const App: React.FC = () => {
   const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
   const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
   const { items, addItem, updateItem, deleteItem, isLoading: isLoadingInventory } = useInventoryData();
+  const { settings: companySettings, updateSettings: updateCompanySettings, isLoading: isLoadingCompany } = useCompanySettings();
 
   const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
 
-  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory;
+  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany;
 
   useEffect(() => {
     // This effect runs once after the initial data has loaded
@@ -80,13 +83,15 @@ const App: React.FC = () => {
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
       case 'sales':
-          return <SalesReport salesData={sales} deleteSale={deleteSale} clearSales={clearSales} />;
+          return <SalesReport salesData={sales} deleteSale={deleteSale} clearSales={clearSales} companySettings={companySettings} />;
       case 'inventory':
           return <Inventory items={items} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
+      case 'company':
+          return <Company settings={companySettings} onSave={updateCompanySettings} />;
       case 'system':
           return <SystemSettings selectedRouter={selectedRouter} />;
       case 'updater':
@@ -108,13 +113,14 @@ const App: React.FC = () => {
     inventory: 'Stock & Inventory',
     hotspot: 'Hotspot Management',
     zerotier: 'ZeroTier Management',
+    company: 'Company Settings',
     system: 'System Settings',
     updater: 'Panel Updater',
   };
 
   return (
     <div className="flex bg-slate-950 text-slate-100 min-h-screen">
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} />
+      <Sidebar currentView={currentView} setCurrentView={setCurrentView} companySettings={companySettings} />
       <main className="flex-1 flex flex-col">
         <TopBar
           title={titles[currentView]}

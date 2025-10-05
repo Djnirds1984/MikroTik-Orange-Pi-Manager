@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network' | 'inventory';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network' | 'inventory' | 'company';
 
 export interface RouterConfig {
   name: string;
@@ -215,4 +215,13 @@ export interface InventoryItem {
     price?: number;
     serialNumber?: string;
     dateAdded: string;
+}
+
+// Type for Company Settings
+export interface CompanySettings {
+    companyName?: string;
+    address?: string;
+    contactNumber?: string;
+    email?: string;
+    logoBase64?: string;
 }

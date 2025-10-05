@@ -63,6 +63,11 @@ async function initializeDatabase() {
         serialNumber TEXT,
         dateAdded TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS company_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
     console.log('Database tables are ready.');
   } catch (error) {
@@ -75,7 +80,7 @@ initializeDatabase();
 
 
 // Middleware
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 
 
 // --- Middleware for Live Transpilation ---
@@ -199,6 +204,28 @@ dbApi.delete('/inventory/:id', async (req, res) => {
     await db.run('DELETE FROM inventory_items WHERE id = ?', req.params.id);
     res.status(204).send();
 });
+
+// Company Settings
+dbApi.get('/company-settings', async (req, res) => {
+    const settingsRows = await db.all('SELECT * FROM company_settings');
+    const settings = settingsRows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+    }, {});
+    res.json(settings);
+});
+dbApi.post('/company-settings', async (req, res) => {
+    const settings = req.body;
+    const stmt = await db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (?, ?)');
+    for (const key in settings) {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) {
+            await stmt.run(key, settings[key]);
+        }
+    }
+    await stmt.finalize();
+    res.status(200).json({ message: 'Company settings saved.' });
+});
+
 
 app.use('/api/db', dbApi);
 

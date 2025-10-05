@@ -1,10 +1,11 @@
 import React from 'react';
-import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon } from '../constants.tsx';
-import type { View } from '../types.ts';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon } from '../constants.tsx';
+import type { View, CompanySettings } from '../types.ts';
 
 interface SidebarProps {
   currentView: View;
   setCurrentView: (view: View) => void;
+  companySettings: CompanySettings;
 }
 
 const NavItem: React.FC<{
@@ -30,7 +31,7 @@ const NavItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings }) => {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: <EthernetIcon className="w-6 h-6" /> },
     { id: 'scripting', label: 'AI Scripting', icon: <EditIcon className="w-6 h-6" /> },
@@ -43,15 +44,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView })
     { id: 'inventory', label: 'Stock & Inventory', icon: <ArchiveBoxIcon className="w-6 h-6" /> },
     { id: 'hotspot', label: 'Hotspot', icon: <WifiIcon className="w-6 h-6" /> },
     { id: 'zerotier', label: 'ZeroTier', icon: <ZeroTierIcon className="w-6 h-6" /> },
+    { id: 'company', label: 'Company', icon: <BuildingOffice2Icon className="w-6 h-6" /> },
     { id: 'system', label: 'System Settings', icon: <CogIcon className="w-6 h-6" /> },
     { id: 'updater', label: 'Updater', icon: <UpdateIcon className="w-6 h-6" /> },
   ] as const;
 
   return (
     <aside className="w-64 h-screen sticky top-0 bg-slate-900 border-r border-slate-800" aria-label="Sidebar">
-      <div className="flex items-center justify-center h-16 border-b border-slate-800">
-          <MikroTikLogoIcon className="w-8 h-8 text-orange-500" />
-          <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white">MikroTik UI</span>
+      <div className="flex items-center justify-center h-16 border-b border-slate-800 px-4">
+          {companySettings.logoBase64 ? (
+            <img src={companySettings.logoBase64} alt="Company Logo" className="h-10 w-auto object-contain" />
+          ) : (
+             <MikroTikLogoIcon className="w-8 h-8 text-orange-500" />
+          )}
+          <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white truncate">
+            {companySettings.companyName || 'MikroTik UI'}
+          </span>
       </div>
       <div className="h-full px-3 py-4 overflow-y-auto">
         <ul className="space-y-2">

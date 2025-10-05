@@ -1,11 +1,12 @@
 import React from 'react';
-import type { SaleRecord } from '../types.ts';
+import type { SaleRecord, CompanySettings } from '../types.ts';
 
 interface PrintableReceiptProps {
   sale: SaleRecord | null;
+  companySettings: CompanySettings;
 }
 
-export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ sale }) => {
+export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ sale, companySettings }) => {
   if (!sale) return null;
 
   const formatCurrency = (amount: number) => {
@@ -25,8 +26,18 @@ export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ sale }) => {
           }
         `}
       </style>
-      <h1 className="text-center text-lg font-bold mb-2">PAYMENT RECEIPT</h1>
-      <p className="text-center text-sm mb-4">MikroTik ISP Services</p>
+      
+      <header className="text-center mb-4">
+        {companySettings.logoBase64 && (
+            <img src={companySettings.logoBase64} alt="Company Logo" className="max-h-16 mx-auto mb-2 object-contain" />
+        )}
+        <h1 className="text-lg font-bold">{companySettings.companyName || 'MikroTik ISP Services'}</h1>
+        {companySettings.address && <p className="text-xs">{companySettings.address}</p>}
+        {companySettings.contactNumber && <p className="text-xs">Tel: {companySettings.contactNumber}</p>}
+        {companySettings.email && <p className="text-xs">Email: {companySettings.email}</p>}
+      </header>
+
+      <h2 className="text-center font-bold mb-2">PAYMENT RECEIPT</h2>
       
       <div className="border-t border-b border-dashed border-black py-2 my-2">
         <p><strong>Date:</strong> {new Date(sale.date).toLocaleString()}</p>

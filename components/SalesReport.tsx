@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import type { SaleRecord } from '../types.ts';
+import type { SaleRecord, CompanySettings } from '../types.ts';
 import { CurrencyDollarIcon, TrashIcon, PrinterIcon } from '../constants.tsx';
 import { PrintableReceipt } from './PrintableReceipt.tsx';
 
@@ -7,6 +7,7 @@ interface SalesReportProps {
     salesData: SaleRecord[];
     deleteSale: (saleId: string) => void;
     clearSales: () => void;
+    companySettings: CompanySettings;
 }
 
 const StatCard: React.FC<{ title: string, value: string | number, icon: React.ReactNode }> = ({ title, value, icon }) => (
@@ -19,7 +20,7 @@ const StatCard: React.FC<{ title: string, value: string | number, icon: React.Re
     </div>
 );
 
-export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale, clearSales }) => {
+export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale, clearSales, companySettings }) => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [receiptToPrint, setReceiptToPrint] = useState<SaleRecord | null>(null);
@@ -87,7 +88,7 @@ export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale,
     return (
         <>
             <div className={receiptToPrint ? 'printable-area' : 'hidden'}>
-                <PrintableReceipt sale={receiptToPrint} />
+                <PrintableReceipt sale={receiptToPrint} companySettings={companySettings} />
             </div>
             
             <div className={!receiptToPrint ? 'printable-area' : 'hidden'}>
