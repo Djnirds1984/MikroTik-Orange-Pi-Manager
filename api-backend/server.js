@@ -106,11 +106,11 @@ app.post('/api/interfaces', (req, res, next) => {
 
         let monitoredDataMap = new Map();
         
-        // FIX: The original implementation sent all interfaces in a single request, which can fail on some RouterOS versions.
-        // This new implementation sends one request per interface, making it much more reliable.
+        // FIX: Changed from the incorrect '/interface/monitor' to the correct '/interface/monitor-traffic' endpoint.
+        // This is the proper endpoint for fetching live traffic statistics and resolves the 400 errors.
         if (activeInterfaceNames.length > 0) {
             const monitorPromises = activeInterfaceNames.map(name =>
-                apiClient.post('/interface/monitor', {
+                apiClient.post('/interface/monitor-traffic', {
                     "once": "",
                     "interface": name
                 }).catch(err => {
