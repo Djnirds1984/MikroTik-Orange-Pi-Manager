@@ -34,7 +34,7 @@ export const EthernetIcon: React.FC<{ className?: string }> = ({ className }) =>
 
 export const WifiIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.136 11.886c3.87-3.87 10.154-3.87 14.024 0M19.5 18a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 A 0.75 0.75 0 0 0 4.5 21.25 z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.136 11.886c3.87-3.87 10.154-3.87 14.024 0M19.5 18a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5zm-2.25.75a.75.75 0 100-1.5.75.75 0 000 1.5z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z" />
     </svg>
 );

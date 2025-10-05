@@ -9,6 +9,11 @@ const port = 3002;
 app.use(cors());
 app.use(express.json());
 
+// Diagnostic endpoint to confirm the server is running
+app.get('/', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'MikroTik API Backend is running.' });
+});
+
 // Helper to convert camelCase to kebab-case for MikroTik API
 const camelToKebab = (obj) => {
     if (typeof obj !== 'object' || obj === null) {
