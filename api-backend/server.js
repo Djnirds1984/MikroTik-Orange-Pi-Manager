@@ -105,18 +105,31 @@ app.post('/api/interfaces', (req, res, next) => {
             .map(iface => iface.name);
 
         let monitoredDataMap = new Map();
-
+        
+        // FIX: The original implementation sent all interfaces in a single request, which can fail on some RouterOS versions.
+        // This new implementation sends one request per interface, making it much more reliable.
         if (activeInterfaceNames.length > 0) {
-            try {
-                const monitorResponse = await apiClient.post('/interface/monitor', {
+            const monitorPromises = activeInterfaceNames.map(name =>
+                apiClient.post('/interface/monitor', {
                     "once": "",
-                    "interface": activeInterfaceNames.join(',')
-                });
-                 if (monitorResponse.data && Array.isArray(monitorResponse.data)) {
-                    monitoredDataMap = new Map(monitorResponse.data.map(m => [m.name, m]));
-                }
-            } catch (monitorError) {
-                console.error(`Warning: '/interface/monitor' failed. Traffic data will be incomplete. Error: ${monitorError.message}`);
+                    "interface": name
+                }).catch(err => {
+                    // This is not a critical error, just log it. The interface will show 0bps.
+                    console.warn(`Could not monitor interface "${name}": ${err.message}`);
+                    return null; // Return null so Promise.all doesn't reject
+                })
+            );
+
+            const results = await Promise.all(monitorPromises);
+            
+            // Filter out any failed requests and flatten the array of results.
+            // Each successful result.data is an array containing a single monitor object.
+            const successfulMonitors = results
+                .filter(r => r && r.data && Array.isArray(r.data))
+                .flatMap(r => r.data);
+
+            if (successfulMonitors.length > 0) {
+                monitoredDataMap = new Map(successfulMonitors.map(m => [m.name, m]));
             }
         }
 
@@ -133,6 +146,7 @@ app.post('/api/interfaces', (req, res, next) => {
         res.status(200).json(interfaces);
     });
 });
+
 
 // --- Hotspot Endpoints ---
 app.post('/api/hotspot/active', (req, res, next) => {
