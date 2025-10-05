@@ -1,10 +1,9 @@
 import type { NtpSettings, PanelHostStatus } from '../types.ts';
 
-// The panel's own API is served by the proxy on port 3001
-const getApiBaseUrl = () => `http://${window.location.hostname}:3001`;
-
 const postData = async <T>(path: string, body: Record<string, any> = {}): Promise<T> => {
-  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+  // The panel's own API is served by the proxy on port 3001
+  const apiBaseUrl = `http://${window.location.hostname}:3001`;
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -17,7 +16,8 @@ const postData = async <T>(path: string, body: Record<string, any> = {}): Promis
 };
 
 const getData = async <T>(path: string): Promise<T> => {
-  const response = await fetch(`${getApiBaseUrl()}${path}`);
+  const apiBaseUrl = `http://${window.location.hostname}:3001`;
+  const response = await fetch(`${apiBaseUrl}${path}`);
   if (!response.ok) {
     const errorData = await response.json();
     throw new Error(errorData.message || 'Panel API request failed');

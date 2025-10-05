@@ -5,7 +5,7 @@ import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiv
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon, SearchIcon } from '../constants.tsx';
 
 // --- Helper Functions ---
 const parseComment = (comment: string | undefined): { dueDate?: string; plan?: string } => {
@@ -272,6 +272,7 @@ export const Users: React.FC<{
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [payingSecret, setPayingSecret] = useState<PppSecret | null>(null);
     const { plans } = useBillingPlans();
+    const [searchTerm, setSearchTerm] = useState('');
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -322,6 +323,19 @@ export const Users: React.FC<{
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const filteredSecrets = useMemo(() => {
+        if (!searchTerm.trim()) {
+            return secrets;
+        }
+        const lowerCaseTerm = searchTerm.toLowerCase();
+        return secrets.filter(secret =>
+            secret.name.toLowerCase().includes(lowerCaseTerm) ||
+            secret.profile.toLowerCase().includes(lowerCaseTerm) ||
+            (secret.comment && secret.comment.toLowerCase().includes(lowerCaseTerm)) ||
+            (secret['remote-address'] && secret['remote-address'].toLowerCase().includes(lowerCaseTerm))
+        );
+    }, [secrets, searchTerm]);
 
     const handleAdd = () => {
         if (plans.length === 0) {
@@ -467,14 +481,30 @@ export const Users: React.FC<{
                 isLoading={isSubmitting}
             />
 
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-slate-100">PPPoE Users</h2>
-                 <p className="text-sm text-slate-500">
-                    NOTE: The payment system uses the MikroTik scheduler to automatically change a user's profile upon their due date.
-                </p>
-                <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
-                    Add New User
-                </button>
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
+                <div>
+                    <h2 className="text-3xl font-bold text-slate-100">PPPoE Users</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                        NOTE: The payment system uses the MikroTik scheduler to automatically change a user's profile upon their due date.
+                    </p>
+                </div>
+                <div className="flex items-center gap-4 self-stretch md:self-center">
+                    <div className="relative">
+                        <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+                            <SearchIcon className="h-5 w-5 text-slate-400" />
+                        </span>
+                        <input
+                            type="text"
+                            placeholder="Search user, profile, IP..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full md:w-64 bg-slate-700 border border-slate-600 rounded-md py-2 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                        />
+                    </div>
+                    <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg flex-shrink-0">
+                        Add New User
+                    </button>
+                </div>
             </div>
             
             {Object.keys(errors).length > 0 && (
@@ -503,7 +533,7 @@ export const Users: React.FC<{
                             </tr>
                         </thead>
                         <tbody>
-                            {secrets.length > 0 ? secrets.map(secret => {
+                            {filteredSecrets.length > 0 ? filteredSecrets.map(secret => {
                                 const commentData = parseComment(secret.comment);
                                 const subscriptionStatus = getStatus(commentData.dueDate);
                                 const isActive = activeUserNames.has(secret.name);
@@ -534,7 +564,7 @@ export const Users: React.FC<{
                             }) : (
                                 <tr>
                                     <td colSpan={6} className="text-center py-8 text-slate-500">
-                                        No PPPoE users (secrets) found on this router.
+                                        {secrets.length > 0 ? 'No users found matching your search.' : 'No PPPoE users (secrets) found on this router.'}
                                     </td>
                                 </tr>
                             )}

@@ -77,6 +77,7 @@ export interface PppSecret {
     service: string;
     profile: string;
     comment?: string;
+    ['remote-address']?: string; // User's static IP if assigned directly in the secret.
 }
 
 export type PppSecretData = Omit<PppSecret, 'id'>;
