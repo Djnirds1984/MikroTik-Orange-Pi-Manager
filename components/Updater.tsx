@@ -245,7 +245,7 @@ export const Updater: React.FC = () => {
                     </button>
                     {statusInfo.status === 'available' && (
                         <button onClick={handleUpdate} disabled={isWorking} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold disabled:opacity-50">
-                            Update Now
+                            Install Update
                         </button>
                     )}
                 </div>
