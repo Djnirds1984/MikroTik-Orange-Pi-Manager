@@ -28,6 +28,7 @@ This two-process model provides a robust separation of concerns, ensuring the ap
 
 -   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
 -   **Backend:** Node.js, Express.js, Axios (for MikroTik REST API)
+-   **Database:** SQLite
 -   **AI:** Google Gemini API (`@google/genai`)
 
 ---
@@ -92,7 +93,14 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 -   An Orange Pi One (or similar SBC) with Armbian/Debian and SSH access.
 -   Node.js v20+, Git, and PM2 installed.
 
-### **Step 1: MikroTik Router Configuration**
+### **Step 1: System Prerequisites (IMPORTANT)**
+-   **Install Build Tools:** Before installing the application's dependencies, you must install the tools needed to compile native modules like `sqlite3`. This will prevent the `distutils` error.
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y build-essential python3 python3-distutils
+    ```
+
+### **Step 2: MikroTik Router Configuration**
 
 -   **Enable REST API:** You must enable the **REST API** on your router. In the terminal, run:
     ```routeros
@@ -107,7 +115,7 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
     /zerotier set enabled=yes
     ```
 
-### **Step 2: Prepare the Application**
+### **Step 3: Prepare the Application**
 
 1.  **Navigate to the Project Directory:**
     Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
@@ -122,7 +130,7 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
     npm install --prefix api-backend
     ```
 
-### **Step 3: Start and Manage the Application with PM2**
+### **Step 4: Start and Manage the Application with PM2**
 
 1.  **Stop and Delete Old Processes (CRITICAL STEP):**
     Before starting, always clear out any old or lingering processes to prevent conflicts.
@@ -158,5 +166,21 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
     pm2 logs
     ```
 
-### **Step 4: Access the Panel**
+### **Step 5: Access the Panel**
 Open your browser and navigate to `http://<your_orange_pi_ip>:3001`.
+
+---
+
+## Troubleshooting
+
+### `ModuleNotFoundError: No module named 'distutils'`
+
+If you see this error while running `npm install --prefix proxy`, it means your system is missing a required Python package needed to build the `sqlite3` database driver.
+
+**Fix:** Ensure you have followed **Step 1: System Prerequisites** in the deployment guide. Run the following command on your Orange Pi:
+
+```bash
+sudo apt-get update && sudo apt-get install -y build-essential python3 python3-distutils
+```
+
+After installing it, try running `npm install --prefix proxy` again.
