@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales';
 
 export interface RouterConfig {
   name: string;
@@ -168,4 +168,17 @@ export interface NtpSettings {
     enabled: boolean;
     primaryNtp: string;
     secondaryNtp: string;
+}
+
+// Type for Sales Report
+export interface SaleRecord {
+  id: string;
+  date: string; // ISO string format for the payment date
+  clientName: string;
+  planName: string;
+  planPrice: number;
+  currency: string;
+  discountAmount: number;
+  finalAmount: number;
+  routerName: string;
 }

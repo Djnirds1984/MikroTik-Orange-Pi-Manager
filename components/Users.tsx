@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiveConnection, BillingPlanWithId } from '../types.ts';
+import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiveConnection, BillingPlanWithId, SaleRecord } from '../types.ts';
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
@@ -254,7 +255,10 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
 
 
 // --- Main Component ---
-export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+export const Users: React.FC<{
+    selectedRouter: RouterConfigWithId | null;
+    addSale: (sale: Omit<SaleRecord, 'id'>) => void;
+}> = ({ selectedRouter, addSale }) => {
     const [secrets, setSecrets] = useState<PppSecret[]>([]);
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
@@ -387,6 +391,22 @@ export const Users: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         setIsSubmitting(true);
         try {
             await processPppPayment(selectedRouter, payingSecret, currentUserPlan, nonPaymentProfile, discountDays, paymentDate);
+
+            const pricePerDay = currentUserPlan.price / 30;
+            const discountAmount = pricePerDay * discountDays;
+            const finalAmount = currentUserPlan.price - discountAmount;
+            
+            addSale({
+                date: paymentDate,
+                clientName: payingSecret.name,
+                planName: currentUserPlan.name,
+                planPrice: currentUserPlan.price,
+                currency: currentUserPlan.currency,
+                discountAmount: discountAmount,
+                finalAmount: finalAmount,
+                routerName: selectedRouter.name,
+            });
+
             setIsPaymentModalOpen(false);
             setPayingSecret(null);
             await fetchData();

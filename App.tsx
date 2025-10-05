@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -14,7 +15,9 @@ import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
+import { SalesReport } from './components/SalesReport.tsx';
 import { useRouters } from './hooks/useRouters.ts';
+import { useSalesData } from './hooks/useSalesData.ts';
 import type { View } from './types.ts';
 
 const App: React.FC = () => {
@@ -29,6 +32,7 @@ const App: React.FC = () => {
     }
   });
   const { routers, addRouter, updateRouter, deleteRouter } = useRouters();
+  const { sales, addSale, deleteSale, clearSales } = useSalesData();
 
   useEffect(() => {
     // If there's no selected router but there are routers available, select the first one.
@@ -57,9 +61,11 @@ const App: React.FC = () => {
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
       case 'users':
-          return <Users selectedRouter={selectedRouter} />;
+          return <Users selectedRouter={selectedRouter} addSale={addSale} />;
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
+      case 'sales':
+          return <SalesReport salesData={sales} deleteSale={deleteSale} clearSales={clearSales} />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
@@ -80,6 +86,7 @@ const App: React.FC = () => {
     pppoe: 'PPPoE Profiles',
     users: 'PPPoE Users',
     billing: 'Billing Plans',
+    sales: 'Sales Report',
     hotspot: 'Hotspot Management',
     zerotier: 'ZeroTier Management',
     system: 'System Settings',
