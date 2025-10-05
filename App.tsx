@@ -13,6 +13,7 @@ import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
 import { Help } from './components/Help.tsx';
+import { SystemSettings } from './components/SystemSettings.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import type { View } from './types.ts';
 
@@ -63,6 +64,8 @@ const App: React.FC = () => {
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
+      case 'system':
+          return <SystemSettings selectedRouter={selectedRouter} />;
       case 'updater':
         return <Updater />;
       default:
@@ -79,6 +82,7 @@ const App: React.FC = () => {
     billing: 'Billing Plans',
     hotspot: 'Hotspot Management',
     zerotier: 'ZeroTier Management',
+    system: 'System Settings',
     updater: 'Panel Updater',
   };
 

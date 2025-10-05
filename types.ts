@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system';
 
 export interface RouterConfig {
   name: string;
@@ -161,4 +161,11 @@ export interface AIFixResponse {
 export interface ChatMessage {
     role: 'user' | 'model';
     content: string;
+}
+
+// Type for System Settings page
+export interface NtpSettings {
+    enabled: boolean;
+    primaryNtp: string;
+    secondaryNtp: string;
 }

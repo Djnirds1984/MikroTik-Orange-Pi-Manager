@@ -349,6 +349,48 @@ app.post('/api/ppp/process-payment', (req, res, next) => {
     });
 });
 
+// --- System Management ---
+app.post('/api/system/reboot', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        // The reboot command is a POST request with an empty body
+        await apiClient.post('/system/reboot', {});
+        res.status(200).json({ message: 'Reboot command sent to router.' });
+    });
+});
+
+app.post('/api/system/ntp/client', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/system/ntp/client');
+        const settings = response.data?.[0] || {}; // Usually just one config
+        res.status(200).json({
+            enabled: settings.enabled === 'true',
+            primaryNtp: settings['primary-ntp'] || '',
+            secondaryNtp: settings['secondary-ntp'] || '',
+        });
+    });
+});
+
+app.post('/api/system/ntp/client/set', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { settings } = req.body;
+        const payload = {
+            enabled: settings.enabled ? 'true' : 'false',
+            'primary-ntp': settings.primaryNtp,
+            'secondary-ntp': settings.secondaryNtp
+        };
+        const items = await apiClient.get('/system/ntp/client');
+        if (items.data.length === 0) {
+             // If no client config exists, we can't patch it. We need to create one.
+             // However, the standard is that one always exists but might be disabled.
+             // We'll proceed with patching the first one found.
+             return res.status(404).json({ message: 'NTP client settings not found on router.'});
+        }
+        const configId = items.data[0]['.id'];
+        await apiClient.patch(`/system/ntp/client/${configId}`, payload);
+        res.status(200).json({ message: 'NTP settings updated successfully.' });
+    });
+});
+
 // --- Global Error Handling Middleware (must be the last app.use call) ---
 // This acts as a safety net to catch any unhandled errors from the API routes
 // and prevents the entire server process from crashing.

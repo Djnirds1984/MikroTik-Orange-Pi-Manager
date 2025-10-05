@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection, NtpSettings } from '../types.ts';
 
 // The new, dedicated API backend runs on port 3002
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -117,4 +117,17 @@ export const deletePppSecret = (router: RouterConfigWithId, secretId: string): P
 
 export const processPppPayment = (router: RouterConfigWithId, secret: PppSecret, plan: BillingPlan, nonPaymentProfile: string, discountDays: number, paymentDate: string): Promise<any> => {
     return fetchData('/api/ppp/process-payment', router, { secret, plan, nonPaymentProfile, discountDays, paymentDate });
+};
+
+// --- System Management Services ---
+export const rebootRouter = (router: RouterConfigWithId): Promise<{ message: string }> => {
+    return fetchData('/api/system/reboot', router);
+};
+
+export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> => {
+    return fetchData('/api/system/ntp/client', router);
+};
+
+export const setRouterNtp = (router: RouterConfigWithId, settings: Omit<NtpSettings, 'enabled'> & {enabled: boolean}): Promise<{ message: string }> => {
+    return fetchData('/api/system/ntp/client/set', router, { settings });
 };

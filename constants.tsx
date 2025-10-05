@@ -129,3 +129,22 @@ export const ChipIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 3v1.5M4.5 8.25H3m18 0h-1.5M4.5 12H3m18 0h-1.5m-15 3.75H3m18 0h-1.5M8.25 21v-1.5M15.75 3v1.5m0 16.5v-1.5m-3.75 0v1.5m0-16.5v1.5m-3.75 0v1.5m0 16.5v-1.5m3.75-12h-3.75a1.125 1.125 0 00-1.125 1.125v3.75a1.125 1.125 0 001.125 1.125h3.75a1.125 1.125 0 001.125-1.125v-3.75a1.125 1.125 0 00-1.125-1.125z" />
     </svg>
 );
+
+export const CogIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-1.007 1.11-1.226.55-.22 1.156-.22 1.706 0 .55.22 1.02.684 1.11 1.226l.094.542c.063.372.166.72.296 1.046.13.327.3.626.502.898.203.272.443.51.71.71.267.2.57.373.898.502.326.13.674.233 1.046.296l.542.094c.542.09.95.56 1.17 1.11.22.55.22 1.156 0 1.706-.22.55-.684 1.02-1.226 1.11l-.542.094c-.372.063-.72.166-1.046.296-.327.13-.626.3-.898.502-.272.203-.51.443-.71.71-.2.267-.373.57-.502.898-.13.326-.233.674-.296 1.046l-.094-.542c-.09-.542-.56-.95-1.11-1.17-.55-.22-1.156-.22-1.706 0-.55-.22-1.02-.684-1.11-1.226l-.094-.542c-.063-.372-.166-.72-.296-1.046-.13-.327-.3-.626-.502-.898-.203-.272-.443-.51-.71-.71-.267-.2-.57-.373-.898-.502-.326-.13-.674-.233-1.046-.296l-.542-.094c-.542-.09-.95-.56-1.17-1.11-.22-.55-.22-1.156 0-1.706.22-.55.684-1.02 1.226-1.11l.542-.094c.372-.063.72-.166 1.046-.296.327-.13.626-.3.898-.502.272-.203.51-.443.71-.71.2-.267.373-.57.502-.898.13-.326.233-.674.296-1.046l.094-.542z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+export const PowerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
+    </svg>
+);
+
+export const ServerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 17.25v-.228a4.5 4.5 0 00-.12-1.03l-2.268-9.64a3.375 3.375 0 00-3.285-2.602H7.923a3.375 3.375 0 00-3.285 2.602l-2.268 9.64a4.5 4.5 0 00-.12 1.03v.228m19.5 0a3 3 0 01-3 3H5.25a3 3 0 01-3-3m19.5 0a3 3 0 00-3-3H5.25a3 3 0 00-3 3m16.5 0h.008v.008h-.008v-.008zm-3 0h.008v.008h-.008v-.008z" />
+    </svg>
+);

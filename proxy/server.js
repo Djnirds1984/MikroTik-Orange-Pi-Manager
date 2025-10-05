@@ -429,6 +429,56 @@ ${backendCode}
     res.send(report);
 });
 
+// --- Panel Host Management API Endpoints ---
+app.post('/api/panel/reboot', (req, res) => {
+    console.log('Received request to reboot panel server.');
+    runCommand('sudo reboot')
+        .then(() => {
+            res.status(200).json({ message: 'Reboot command issued. The server will go down shortly.' });
+        })
+        .catch(err => {
+            console.error('Failed to issue reboot command:', err);
+            res.status(500).json({ message: `Failed to reboot: ${err.message}. Ensure passwordless sudo is configured.` });
+        });
+});
+
+app.get('/api/panel/ntp', async (req, res) => {
+    try {
+        const statusOutput = await runCommand('timedatectl status');
+        const ntpServiceActive = statusOutput.includes('NTP service: active');
+        const ntpConf = await runCommand(`cat /etc/systemd/timesyncd.conf | grep NTP= | cut -d'=' -f2`);
+        const [primaryNtp = '', secondaryNtp = ''] = ntpConf.split(' ');
+        
+        res.status(200).json({
+            enabled: ntpServiceActive,
+            primaryNtp,
+            secondaryNtp
+        });
+    } catch (error) {
+        console.error('Failed to get panel NTP status:', error);
+        res.status(500).json({ message: `Could not get NTP status: ${error.message}` });
+    }
+});
+
+app.post('/api/panel/ntp', express.json(), async (req, res) => {
+    const { settings } = req.body;
+    if (!settings || typeof settings.primaryNtp !== 'string') {
+        return res.status(400).json({ message: 'Invalid NTP settings provided.' });
+    }
+    
+    try {
+        const ntpConfigContent = `[Time]\nNTP=${settings.primaryNtp}${settings.secondaryNtp ? ' ' + settings.secondaryNtp : ''}\n`;
+        const configPath = '/etc/systemd/timesyncd.conf.d/99-panel-override.conf';
+
+        await runCommand(`echo '${ntpConfigContent}' | sudo tee ${configPath}`);
+        await runCommand('sudo systemctl restart systemd-timesyncd');
+        
+        res.status(200).json({ message: 'NTP settings applied. The service has been restarted.' });
+    } catch (error) {
+        console.error('Failed to set panel NTP settings:', error);
+        res.status(500).json({ message: `Failed to apply NTP settings: ${error.message}. Ensure passwordless sudo is configured.` });
+    }
+});
 
 
 app.get('*', (req, res) => {
