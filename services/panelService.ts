@@ -36,3 +36,11 @@ export const getPanelNtp = (): Promise<NtpSettings> => {
 export const setPanelNtp = (settings: NtpSettings): Promise<{ message: string }> => {
     return postData('/api/panel/ntp', { settings });
 };
+
+export const getGeminiKey = (): Promise<{ apiKey: string }> => {
+    return getData('/api/panel/gemini-key');
+};
+
+export const setGeminiKey = (apiKey: string): Promise<{ message: string }> => {
+    return postData('/api/panel/gemini-key', { apiKey });
+};

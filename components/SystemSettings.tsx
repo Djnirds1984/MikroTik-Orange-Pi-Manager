@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RouterConfigWithId, NtpSettings } from '../types.ts';
-// Fix: Rename imported functions to avoid collision with useState setters.
 import { getRouterNtp, rebootRouter, setRouterNtp as setRouterNtpService } from '../services/mikrotikService.ts';
-import { getPanelNtp, rebootPanel, setPanelNtp as setPanelNtpService } from '../services/panelService.ts';
+import { getPanelNtp, rebootPanel, setPanelNtp as setPanelNtpService, getGeminiKey, setGeminiKey } from '../services/panelService.ts';
+import { initializeAiClient } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, ServerIcon, PowerIcon, ExclamationTriangleIcon, CogIcon, CircleStackIcon, ArrowPathIcon } from '../constants.tsx';
+import { RouterIcon, ServerIcon, PowerIcon, ExclamationTriangleIcon, CogIcon, CircleStackIcon, ArrowPathIcon, KeyIcon, EyeIcon, EyeSlashIcon } from '../constants.tsx';
 
 const SettingsCard: React.FC<{ title: string; children: React.ReactNode; icon: React.ReactNode }> = ({ title, children, icon }) => (
   <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
@@ -55,10 +55,13 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
     const [panelNtp, setPanelNtp] = useState<NtpSettings | null>(null);
     const [routerNtp, setRouterNtp] = useState<NtpSettings | null>(null);
     const [formNtp, setFormNtp] = useState({ primaryNtp: '', secondaryNtp: '' });
+    const [apiKey, setApiKey] = useState('');
+    const [isKeyVisible, setIsKeyVisible] = useState(false);
+    const [keyStatus, setKeyStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
 
-    const [isLoading, setIsLoading] = useState({ panel: true, router: true });
-    const [isSubmitting, setIsSubmitting] = useState<'panel' | 'router' | 'both' | null>(null);
-    const [errors, setErrors] = useState<{ panel: string | null, router: string | null }>({ panel: null, router: null });
+    const [isLoading, setIsLoading] = useState({ panel: true, router: true, key: true });
+    const [isSubmitting, setIsSubmitting] = useState<'panel' | 'router' | 'both' | 'key' | null>(null);
+    const [errors, setErrors] = useState<{ panel: string | null, router: string | null, key: string | null }>({ panel: null, router: null, key: null });
     
     const [activeOperation, setActiveOperation] = useState<'install' | 'restart' | null>(null);
     const [maintenanceLogs, setMaintenanceLogs] = useState<string[]>([]);
@@ -66,10 +69,14 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
 
 
     const fetchData = useCallback(async () => {
-        setIsLoading({ panel: true, router: true });
-        setErrors({ panel: null, router: null });
+        setIsLoading(prev => ({ ...prev, panel: true, router: true, key: true }));
+        setErrors({ panel: null, router: null, key: null });
 
-        // Fetch Panel NTP
+        getGeminiKey()
+            .then(data => setApiKey(data.apiKey))
+            .catch(err => setErrors(prev => ({ ...prev, key: err.message })))
+            .finally(() => setIsLoading(prev => ({...prev, key: false})));
+
         getPanelNtp()
             .then(data => {
                 setPanelNtp(data);
@@ -78,7 +85,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
             .catch(err => setErrors(prev => ({ ...prev, panel: err.message })))
             .finally(() => setIsLoading(prev => ({ ...prev, panel: false })));
 
-        // Fetch Router NTP
         if (selectedRouter) {
             getRouterNtp(selectedRouter)
                 .then(data => setRouterNtp(data))
@@ -115,20 +121,18 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         setIsSubmitting(target);
         const settingsToApply = {
             ...formNtp,
-            enabled: true, // Always enable when setting
+            enabled: true,
         };
         
         try {
             if (target === 'panel' || target === 'both') {
-                // Fix: Call the renamed service function instead of the state setter.
                 await setPanelNtpService(settingsToApply);
             }
             if ((target === 'router' || target === 'both') && selectedRouter) {
-                // Fix: Call the renamed service function with correct arguments.
                 await setRouterNtpService(selectedRouter, settingsToApply);
             }
             alert('NTP settings applied successfully!');
-            await fetchData(); // Refresh data
+            await fetchData();
         } catch (err) {
             alert(`Failed to apply NTP settings: ${(err as Error).message}`);
         } finally {
@@ -136,6 +140,20 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         }
     };
     
+    const handleSaveKey = async () => {
+        setIsSubmitting('key');
+        setKeyStatus(null);
+        try {
+            const res = await setGeminiKey(apiKey);
+            initializeAiClient(apiKey);
+            setKeyStatus({ type: 'success', message: res.message });
+        } catch (err) {
+            setKeyStatus({ type: 'error', message: (err as Error).message });
+        } finally {
+            setIsSubmitting(null);
+        }
+    }
+
     const handleMaintenanceAction = (action: 'install' | 'restart') => {
         setActiveOperation(action);
         setMaintenanceLogs([]);
@@ -161,7 +179,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         };
 
         eventSource.onerror = () => {
-            // This is expected for restart, as the server goes down.
             if (action === 'restart') {
                  setMaintenanceLogs(prev => [...prev, "\n>>> Server restart initiated. Connection closed as expected. Please wait a moment and refresh the page."]);
                  setOperationStatus('success');
@@ -173,17 +190,52 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         };
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormNtp(prev => ({ ...prev, [name]: value }));
-    };
-
     const isWorking = !!activeOperation || !!isSubmitting;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
+            <SettingsCard title="AI Configuration" icon={<KeyIcon className="w-6 h-6 text-orange-400" />}>
+                 <p className="text-sm text-slate-400 mb-4">
+                    Manage the Google Gemini API key used for all AI features like script generation and troubleshooting. You can get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">Google AI Studio</a>.
+                </p>
+                <div className="space-y-2">
+                    <label htmlFor="apiKey" className="block text-sm font-medium text-slate-300">Gemini API Key</label>
+                    <div className="relative">
+                        <input
+                            id="apiKey"
+                            type={isKeyVisible ? 'text' : 'password'}
+                            value={apiKey}
+                            onChange={(e) => {
+                                setApiKey(e.target.value);
+                                setKeyStatus(null);
+                            }}
+                            disabled={isLoading.key || isWorking}
+                            placeholder={isLoading.key ? 'Loading key...' : 'Enter your API key'}
+                            className="block w-full bg-slate-700 border border-slate-600 rounded-md py-2 pl-3 pr-10 text-white font-mono"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setIsKeyVisible(!isKeyVisible)}
+                            className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-200"
+                            aria-label={isKeyVisible ? 'Hide API key' : 'Show API key'}
+                        >
+                            {isKeyVisible ? <EyeSlashIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+                        </button>
+                    </div>
+                </div>
+                 {keyStatus && (
+                    <div className={`mt-3 text-sm p-2 rounded-md ${keyStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                        {keyStatus.message}
+                    </div>
+                )}
+                <div className="flex justify-end mt-4">
+                    <button onClick={handleSaveKey} disabled={isWorking || isLoading.key} className="px-4 py-2 text-sm font-semibold bg-orange-600 hover:bg-orange-500 rounded-lg disabled:opacity-50">
+                        {isSubmitting === 'key' ? 'Saving...' : 'Save Key'}
+                    </button>
+                </div>
+            </SettingsCard>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Panel Management */}
                 <SettingsCard title="Panel Host" icon={<ServerIcon className="w-6 h-6 text-orange-400" />}>
                     <p className="text-sm text-slate-400 mb-4">Manage the Orange Pi or server running this web panel.</p>
                     <button onClick={handleRebootPanel} disabled={isWorking} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-800 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
@@ -192,8 +244,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                     </button>
                      <p className="text-xs text-slate-500 mt-2 text-center">Requires passwordless `sudo` permissions.</p>
                 </SettingsCard>
-
-                {/* Router Management */}
                 <SettingsCard title="MikroTik Router" icon={<RouterIcon className="w-6 h-6 text-orange-400" />}>
                     <p className="text-sm text-slate-400 mb-4">Manage the currently selected MikroTik router.</p>
                     <button onClick={handleRebootRouter} disabled={!selectedRouter || isWorking} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-800 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:bg-slate-700 disabled:cursor-not-allowed">
@@ -204,7 +254,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                 </SettingsCard>
             </div>
 
-            {/* NTP Synchronization */}
             <SettingsCard title="NTP Time Synchronization" icon={<span className="text-2xl">🕒</span>}>
                  <div className="p-4 bg-slate-900/50 border border-slate-700 rounded-lg text-sm text-slate-400 flex items-start gap-3 mb-6">
                      <ExclamationTriangleIcon className="w-8 h-8 text-yellow-400 flex-shrink-0" />
@@ -213,21 +262,19 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                         <p>Keeping time synchronized between your router and the panel is crucial for scheduled tasks, like PPPoE user expiration scripts, to function correctly.</p>
                     </div>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <NtpInfo title="Panel Host NTP Status" settings={panelNtp} error={errors.panel} />
                     <NtpInfo title="Router NTP Status" settings={routerNtp} error={errors.router} />
                 </div>
-
                 <div className="space-y-4 pt-6 border-t border-slate-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="primaryNtp" className="block text-sm font-medium text-slate-300">Primary NTP Server</label>
-                            <input type="text" name="primaryNtp" id="primaryNtp" value={formNtp.primaryNtp} onChange={handleInputChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., time.google.com" />
+                            <input type="text" name="primaryNtp" id="primaryNtp" value={formNtp.primaryNtp} onChange={(e) => setFormNtp(p => ({...p, primaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., time.google.com" />
                         </div>
                         <div>
                             <label htmlFor="secondaryNtp" className="block text-sm font-medium text-slate-300">Secondary NTP Server</label>
-                            <input type="text" name="secondaryNtp" id="secondaryNtp" value={formNtp.secondaryNtp} onChange={handleInputChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., pool.ntp.org" />
+                            <input type="text" name="secondaryNtp" id="secondaryNtp" value={formNtp.secondaryNtp} onChange={(e) => setFormNtp(p => ({...p, secondaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., pool.ntp.org" />
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-3 pt-4">
@@ -242,10 +289,8 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                         </button>
                     </div>
                 </div>
-
             </SettingsCard>
 
-            {/* Panel Maintenance */}
             <SettingsCard title="Panel Maintenance" icon={<CogIcon className="w-6 h-6 text-orange-400" />}>
                 <p className="text-sm text-slate-400 mb-6">
                     Use these actions for troubleshooting or after manually updating files via Git. These actions require `npm` and `pm2` to be installed globally on the panel server.

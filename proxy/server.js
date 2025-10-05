@@ -430,6 +430,8 @@ ${backendCode}
 });
 
 // --- Panel Host Management API Endpoints ---
+const ENV_FILE_PATH = path.join(__dirname, '..', 'env.js');
+
 app.post('/api/panel/reboot', (req, res) => {
     console.log('Received request to reboot panel server.');
     runCommand('sudo reboot')
@@ -557,6 +559,42 @@ app.get('/api/panel/restart-services', (req, res) => {
     // Unref the child process so the parent (this script) can exit independently if needed.
     child.unref();
 });
+
+// --- Gemini API Key Management ---
+app.get('/api/panel/gemini-key', async (req, res) => {
+    try {
+        const content = await fs.readFile(ENV_FILE_PATH, 'utf-8');
+        const match = content.match(/API_KEY\s*:\s*['"](.*?)['"]/);
+        const apiKey = match ? match[1] : '';
+        res.status(200).json({ apiKey });
+    } catch (error) {
+        console.error('Failed to read env.js for API key:', error);
+        res.status(500).json({ message: `Could not read env.js: ${error.message}` });
+    }
+});
+
+app.post('/api/panel/gemini-key', express.json(), async (req, res) => {
+    const { apiKey } = req.body;
+    if (typeof apiKey !== 'string') {
+        return res.status(400).json({ message: 'Invalid API key provided.' });
+    }
+
+    try {
+        let content = await fs.readFile(ENV_FILE_PATH, 'utf-8');
+        const updatedContent = content.replace(/(API_KEY\s*:\s*['"]).*?(['"])/, `$1${apiKey}$2`);
+        
+        if (content === updatedContent) {
+            throw new Error('Could not find the API_KEY field in env.js to update.');
+        }
+
+        await fs.writeFile(ENV_FILE_PATH, updatedContent, 'utf-8');
+        res.status(200).json({ message: 'API key saved successfully. It is now active for all AI features.' });
+    } catch (error) {
+        console.error('Failed to write env.js for API key:', error);
+        res.status(500).json({ message: `Could not save API key: ${error.message}` });
+    }
+});
+
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));

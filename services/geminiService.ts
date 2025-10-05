@@ -1,9 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIFixResponse, ChatMessage } from '../types.ts';
 
-// Fix: Initialize the GoogleGenAI client directly with the API key from the environment variable as per guidelines.
-// It is assumed that process.env.API_KEY is properly configured in the execution environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+let ai: GoogleGenAI | null = null;
+
+export const initializeAiClient = (apiKey?: string) => {
+    if (apiKey && apiKey !== "YOUR_GEMINI_API_KEY_HERE") {
+        try {
+            // FIX: Cast window to 'any' to access the 'process' property injected by env.js.
+            if ((window as any).process?.env) {
+                (window as any).process.env.API_KEY = apiKey;
+            }
+            ai = new GoogleGenAI({ apiKey });
+        } catch (e) {
+            console.error("Failed to initialize GoogleGenAI client:", e);
+            ai = null;
+        }
+    } else {
+        ai = null;
+    }
+};
+
+// Initial call on page load using the key from env.js
+initializeAiClient(process.env.API_KEY);
+
 
 const SCRIPT_SYSTEM_INSTRUCTION = `You are an expert MikroTik network engineer specializing in RouterOS.
 Your sole purpose is to generate RouterOS terminal command scripts based on user requests.
@@ -50,12 +69,18 @@ RULES:
 5. Keep the summary concise and actionable.
 6. Your output will be ONLY the analysis text. The user will prepend it to the raw data file.`;
 
+const checkAiInitialized = () => {
+    if (!ai) {
+        throw new Error("Gemini API client not initialized. Please set your API key in System Settings.");
+    }
+    return ai;
+};
+
 
 export const generateMikroTikScript = async (userPrompt: string): Promise<string> => {
-  // Fix: Removed conditional client initialization. The client is now always initialized.
-  // The try-catch block will handle any issues with the API key or network at runtime.
   try {
-    const response = await ai.models.generateContent({
+    const aiClient = checkAiInitialized();
+    const response = await aiClient.models.generateContent({
       model: "gemini-2.5-flash",
       contents: userPrompt,
       config: {
@@ -66,28 +91,27 @@ export const generateMikroTikScript = async (userPrompt: string): Promise<string
       },
     });
 
-    // Fix: Directly access the 'text' property on the response as per guidelines.
     const script = response.text.trim();
-    
-    // Clean up potential markdown code block formatting
     return script.replace(/^```(routeros|bash|sh)?\s*|```$/g, '').trim();
   } catch (error) {
     console.error("Error generating script from Gemini API:", error);
-    // Fix: Improved error handling to return a user-friendly message within the script block.
-    // This avoids throwing an unhandled exception in the UI.
-    if (error instanceof Error && error.message.includes('API key not valid')) {
-        return `# Error: Invalid Gemini API Key. Please ensure it is configured correctly in your environment.`;
+    if (error instanceof Error) {
+        if (error.message.includes('API key not valid')) {
+            return `# Error: Invalid Gemini API Key. Please check the key in System Settings.`;
+        }
+        return `# Error: ${error.message}`;
     }
-    return `# Error: Failed to communicate with the AI service. Check your internet connection and API key.`;
+    return `# Error: Failed to communicate with the AI service.`;
   }
 };
 
 
 export const fixBackendCode = async (backendCode: string, errorMessage: string, routerName: string): Promise<AIFixResponse> => {
     try {
+        const aiClient = checkAiInitialized();
         const userPrompt = `The user is seeing the error "${errorMessage}" when connected to a router named "${routerName}". Please analyze and fix the following backend code:\n\n\`\`\`javascript\n${backendCode}\n\`\`\``;
 
-        const response = await ai.models.generateContent({
+        const response = await aiClient.models.generateContent({
             model: "gemini-2.5-flash",
             contents: userPrompt,
             config: {
@@ -114,16 +138,18 @@ export const fixBackendCode = async (backendCode: string, errorMessage: string, 
         return JSON.parse(jsonString) as AIFixResponse;
     } catch (error) {
         console.error("Error generating code fix from Gemini API:", error);
-        // Fix: Added specific error handling for invalid API keys to guide the user.
-        if (error instanceof Error && error.message.includes('API key not valid')) {
-            throw new Error("Invalid Gemini API Key. Please get a key from Google AI Studio and add it to the env.js file.");
+        if (error instanceof Error) {
+            if (error.message.includes('API key not valid')) {
+                throw new Error("Invalid Gemini API Key. Please check it in System Settings.");
+            }
         }
-        throw new Error("Failed to communicate with the AI service. Check your internet connection and API key.");
+        throw error;
     }
 };
 
 export const getAiHelp = async (context: string, history: ChatMessage[], question: string): Promise<string> => {
     try {
+        const aiClient = checkAiInitialized();
         const contents = [
             ...history.map(msg => ({
                 role: msg.role === 'model' ? 'model' : 'user',
@@ -132,7 +158,7 @@ export const getAiHelp = async (context: string, history: ChatMessage[], questio
             { role: 'user', parts: [{ text: `CONTEXT: ${context}\n\nQUESTION: ${question}` }] }
         ];
 
-        const response = await ai.models.generateContent({
+        const response = await aiClient.models.generateContent({
             model: "gemini-2.5-flash",
             // @ts-ignore
             contents: contents,
@@ -144,17 +170,20 @@ export const getAiHelp = async (context: string, history: ChatMessage[], questio
         return response.text.trim();
     } catch (error) {
         console.error("Error getting help from Gemini API:", error);
-        if (error instanceof Error && error.message.includes('API key not valid')) {
-            throw new Error("Invalid Gemini API Key. Please get a key from Google AI Studio and add it to the env.js file.");
+         if (error instanceof Error) {
+            if (error.message.includes('API key not valid')) {
+                throw new Error("Invalid Gemini API Key. Please check it in System Settings.");
+            }
         }
-        throw new Error("Failed to communicate with the AI service. Check your internet connection and API key.");
+        throw error;
     }
 };
 
 export const analyzeSystemState = async (context: { view: string; routerName: string; backendCode: string; ztStatus: string; }): Promise<string> => {
     try {
+        const aiClient = checkAiInitialized();
         const prompt = `Here is the current system state:\n- Current Page: ${context.view}\n- Router: ${context.routerName}\n- ZeroTier Status: ${context.ztStatus}\n\nAnalyze this information along with the backend code and provide a diagnostic summary.\n\n\`\`\`javascript\n${context.backendCode}\n\`\`\``;
-        const response = await ai.models.generateContent({
+        const response = await aiClient.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
             config: {
@@ -164,8 +193,11 @@ export const analyzeSystemState = async (context: { view: string; routerName: st
         return response.text.trim();
     } catch (error) {
         console.error("Error analyzing system state:", error);
-        if (error instanceof Error && error.message.includes('API key not valid')) {
-            return "DIAGNOSIS FAILED: Invalid Gemini API Key.";
+        if (error instanceof Error) {
+             if (error.message.includes('API key not valid')) {
+                return `DIAGNOSIS FAILED: Invalid Gemini API Key.`;
+            }
+            return `DIAGNOSIS FAILED: ${error.message}`;
         }
         return "DIAGNOSIS FAILED: Could not communicate with the AI service.";
     }
