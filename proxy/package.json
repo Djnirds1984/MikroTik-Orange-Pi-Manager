@@ -4,18 +4,17 @@
   "description": "Frontend server for the MikroTik Orange Pi Manager",
   "main": "server.js",
   "scripts": {
-    "preinstall": "node -e \"try { require('child_process').execSync('python3 -c \\\"import distutils\\\"', { stdio: 'ignore' }) } catch (e) { console.error('\\n\\n====================================================================\\nERROR: System dependency \\'python3-distutils\\' is missing.\\nThis is required to build the sqlite3 database package.\\nPlease run the following command to install it:\\n\\n  sudo apt-get update && sudo apt-get install -y python3-distutils build-essential\\n\\n===================================================================='); process.exit(1) }\"",
     "start": "node server.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@vscode/sqlite3": "^5.1.1",
     "archiver": "^7.0.1",
     "esbuild": "^0.23.0",
     "express": "^4.19.2",
     "fs-extra": "^11.2.0",
     "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7",
     "tar": "^7.1.0"
   }
 }

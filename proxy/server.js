@@ -5,7 +5,7 @@ const fs = require('fs-extra');
 const { exec, spawn } = require('child_process'); // Import spawn
 const archiver = require('archiver');
 const tar = require('tar');
-const sqlite3 = require('sqlite3');
+const sqlite3 = require('@vscode/sqlite3');
 const { open } = require('sqlite');
 
 const app = express();
