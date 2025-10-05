@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { RouterConfig, RouterConfigWithId } from '../types.ts';
 import { testRouterConnection } from '../services/mikrotikService.ts';
@@ -103,18 +102,18 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
                     </div>
                 )}
 
-                <div className="flex items-center justify-end space-x-4 pt-4">
-                     <button
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:items-center gap-3 pt-4">
+                     <button type="submit" className="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-orange-500">
+                        Save Router
+                    </button>
+                    <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none">Cancel</button>
+                    <button
                         type="button"
                         onClick={handleTestConnection}
                         disabled={isTesting || !router.host || !router.user}
-                        className="px-4 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full sm:w-auto px-4 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isTesting ? 'Testing...' : 'Test Connection'}
-                    </button>
-                    <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none">Cancel</button>
-                    <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-orange-600 hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-orange-500">
-                        Save Router
                     </button>
                 </div>
             </form>
@@ -166,12 +165,12 @@ export const Routers: React.FC<RoutersProps> = ({ routers, onAddRouter, onUpdate
 
     return (
         <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex flex-col gap-4 md:flex-row justify-between md:items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-100">Manage Routers</h2>
                 {!isAdding && !editingRouter && (
                      <button
                         onClick={handleAddNew}
-                        className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg transition-colors"
+                        className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg transition-colors self-start md:self-auto"
                     >
                         Add New Router
                     </button>

@@ -7,6 +7,8 @@ interface SidebarProps {
   currentView: View;
   setCurrentView: (view: View) => void;
   companySettings: CompanySettings;
+  isOpen: boolean;
+  setIsOpen: (isOpen: boolean) => void;
 }
 
 const NavItem: React.FC<{
@@ -32,7 +34,14 @@ const NavItem: React.FC<{
   );
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings }) => {
+const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+);
+
+
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
   const { t } = useLocalization();
   
   const navItems = [
@@ -53,18 +62,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
   ] as const;
 
   return (
-    <aside className="w-64 h-screen sticky top-0 bg-slate-900 border-r border-slate-800" aria-label="Sidebar">
-      <div className="flex items-center justify-center h-16 border-b border-slate-800 px-4">
-          {companySettings.logoBase64 ? (
-            <img src={companySettings.logoBase64} alt="Company Logo" className="h-10 w-auto object-contain" />
-          ) : (
-             <MikroTikLogoIcon className="w-8 h-8 text-orange-500" />
-          )}
-          <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white truncate">
-            {companySettings.companyName || 'MikroTik UI'}
-          </span>
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-64 h-screen bg-slate-900 border-r border-slate-800 transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0 ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+      aria-label="Sidebar"
+    >
+      <div className="flex items-center justify-between h-16 border-b border-slate-800 px-4">
+          <div className="flex items-center min-w-0">
+              {companySettings.logoBase64 ? (
+                <img src={companySettings.logoBase64} alt="Company Logo" className="h-10 w-auto object-contain flex-shrink-0" />
+              ) : (
+                 <MikroTikLogoIcon className="w-8 h-8 text-orange-500 flex-shrink-0" />
+              )}
+              <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white truncate">
+                {companySettings.companyName || 'MikroTik UI'}
+              </span>
+          </div>
+          <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-400 hover:text-white p-1" aria-label="Close sidebar">
+              <CloseIcon className="w-6 h-6" />
+          </button>
       </div>
-      <div className="h-full px-3 py-4 overflow-y-auto">
+      <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto">
         <ul className="space-y-2">
           {navItems.map((item) => (
             <NavItem

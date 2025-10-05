@@ -7,10 +7,10 @@ import { QuestionMarkCircleIcon } from '../constants.tsx';
 const HelpButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     <button
         onClick={onClick}
-        className="fixed bottom-6 right-6 bg-orange-600 hover:bg-orange-500 text-white rounded-full p-4 shadow-lg z-40 transition-transform hover:scale-110"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-orange-600 hover:bg-orange-500 text-white rounded-full p-3 sm:p-4 shadow-lg z-40 transition-transform hover:scale-110"
         aria-label="Open AI Help"
     >
-        <QuestionMarkCircleIcon className="w-8 h-8" />
+        <QuestionMarkCircleIcon className="w-6 h-6 sm:w-8 sm:h-8" />
     </button>
 );
 

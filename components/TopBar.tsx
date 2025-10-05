@@ -9,7 +9,14 @@ interface TopBarProps {
   selectedRouter: RouterConfigWithId | null;
   onSelectRouter: (id: string | null) => void;
   setCurrentView: (view: View) => void;
+  onToggleSidebar: () => void;
 }
+
+const MenuIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+    </svg>
+);
 
 const RouterSelector: React.FC<{
   routers: RouterConfigWithId[];
@@ -49,8 +56,8 @@ const RouterSelector: React.FC<{
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md transition-colors"
             >
-                <span className="text-slate-300">{t('topbar.router')}:</span>
-                <span className="font-semibold text-white">{selectedRouter?.name || t('topbar.select')}</span>
+                <span className="text-slate-300 hidden sm:inline">{t('topbar.router')}:</span>
+                <span className="font-semibold text-white max-w-[120px] sm:max-w-xs truncate">{selectedRouter?.name || t('topbar.select')}</span>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
             {isOpen && (
@@ -76,11 +83,16 @@ const RouterSelector: React.FC<{
     );
 }
 
-export const TopBar: React.FC<TopBarProps> = ({ title, routers, selectedRouter, onSelectRouter, setCurrentView }) => {
+export const TopBar: React.FC<TopBarProps> = ({ title, routers, selectedRouter, onSelectRouter, setCurrentView, onToggleSidebar }) => {
   return (
     <header className="bg-slate-900/70 backdrop-blur-sm sticky top-0 z-20 border-b border-slate-700">
-      <div className="flex items-center justify-between h-16 px-8">
-        <h1 className="text-xl font-bold text-slate-100">{title}</h1>
+      <div className="flex items-center justify-between h-16 px-4 sm:px-8">
+        <div className="flex items-center gap-4">
+            <button onClick={onToggleSidebar} className="lg:hidden text-slate-400 hover:text-white" aria-label="Open sidebar">
+                <MenuIcon className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg sm:text-xl font-bold text-slate-100 truncate">{title}</h1>
+        </div>
         <RouterSelector 
             routers={routers} 
             selectedRouter={selectedRouter} 

@@ -24,8 +24,45 @@ import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import type { View } from './types.ts';
 
+const useMediaQuery = (query: string): boolean => {
+  const getMatches = (query: string): boolean => {
+    if (typeof window !== 'undefined') {
+      return window.matchMedia(query).matches;
+    }
+    return false;
+  };
+
+  const [matches, setMatches] = useState<boolean>(getMatches(query));
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(query);
+    const handleChange = () => setMatches(mediaQuery.matches);
+    
+    // Listen for changes
+    try {
+        mediaQuery.addEventListener('change', handleChange);
+    } catch (e) {
+        // For older browsers
+        mediaQuery.addListener(handleChange);
+    }
+
+    return () => {
+       try {
+            mediaQuery.removeEventListener('change', handleChange);
+        } catch (e) {
+            // For older browsers
+            mediaQuery.removeListener(handleChange);
+        }
+    };
+  }, [query]);
+
+  return matches;
+};
+
 const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
+  const isLargeScreen = useMediaQuery('(min-width: 1024px)');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(isLargeScreen);
   
   const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
   const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
@@ -37,6 +74,18 @@ const AppContent: React.FC = () => {
   const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
 
   const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization;
+
+  // Effect to manage sidebar visibility based on screen size
+  useEffect(() => {
+    setIsSidebarOpen(isLargeScreen);
+  }, [isLargeScreen]);
+
+  // Close sidebar on view change on mobile
+  useEffect(() => {
+    if (!isLargeScreen) {
+        setIsSidebarOpen(false);
+    }
+  }, [currentView, isLargeScreen]);
 
   useEffect(() => {
     // This effect runs once after the initial data has loaded
@@ -106,16 +155,31 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="flex bg-slate-950 text-slate-100 min-h-screen">
-      <Sidebar currentView={currentView} setCurrentView={setCurrentView} companySettings={companySettings} />
-      <main className="flex-1 flex flex-col">
+      <Sidebar 
+        currentView={currentView} 
+        setCurrentView={setCurrentView} 
+        companySettings={companySettings}
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
+      />
+       {/* Mobile sidebar overlay */}
+      {isSidebarOpen && !isLargeScreen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        ></div>
+      )}
+      <main className="flex-1 flex flex-col min-w-0">
         <TopBar
           title={t(`titles.${currentView}`)}
           routers={routers}
           selectedRouter={selectedRouter}
           onSelectRouter={setSelectedRouterId}
           setCurrentView={setCurrentView}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
-        <div className="p-8 overflow-auto">
+        <div className="p-4 sm:p-8 overflow-auto">
           {renderView()}
         </div>
       </main>
