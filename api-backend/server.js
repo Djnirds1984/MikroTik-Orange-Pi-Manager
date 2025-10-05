@@ -284,7 +284,16 @@ app.post('/api/ppp/secrets/update', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { secretData } = req.body;
         const secretId = secretData.id;
+        
+        // FIX: MikroTik API rejects updates containing read-only properties.
+        // We must remove them before sending the PATCH request to prevent "Bad Request" errors.
         delete secretData.id;
+        delete secretData['.id'];
+        delete secretData['last-logged-out'];
+        delete secretData['last-caller-id'];
+        delete secretData['caller-id'];
+        delete secretData['uptime'];
+
         const response = await apiClient.patch(`/ppp/secret/${secretId}`, camelToKebab(secretData));
         res.status(200).json(response.data);
     });
@@ -329,18 +338,26 @@ app.post('/api/ppp/process-payment', (req, res, next) => {
 
         const scriptName = `expire-${secret.name}`;
         const scriptSource = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
-        const existingScripts = await apiClient.get(`/system/script?name=${scriptName}`);
-        if (existingScripts.data.length > 0) {
-            await apiClient.patch(`/system/script/${existingScripts.data[0]['.id']}`, { source: scriptSource });
+        
+        // FIX: Handle cases where the router returns a single object or nothing, preventing server crashes.
+        const scriptResponse = await apiClient.get(`/system/script?name=${scriptName}`);
+        const existingScripts = Array.isArray(scriptResponse.data) ? scriptResponse.data : (scriptResponse.data ? [scriptResponse.data] : []);
+
+        if (existingScripts.length > 0) {
+            await apiClient.patch(`/system/script/${existingScripts[0]['.id']}`, { source: scriptSource });
         } else {
             await apiClient.put('/system/script', { name: scriptName, source: scriptSource });
         }
 
         const schedulerName = `expire-sched-${secret.name}`;
         const formattedStartDate = formatDateForMikroTik(newDueDate);
-        const existingSchedulers = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
-        if (existingSchedulers.data.length > 0) {
-            await apiClient.patch(`/system/scheduler/${existingSchedulers.data[0]['.id']}`, {
+        
+        // FIX: Handle cases where the router returns a single object or nothing, preventing server crashes.
+        const schedulerResponse = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
+        const existingSchedulers = Array.isArray(schedulerResponse.data) ? schedulerResponse.data : (schedulerResponse.data ? [schedulerResponse.data] : []);
+
+        if (existingSchedulers.length > 0) {
+            await apiClient.patch(`/system/scheduler/${existingSchedulers[0]['.id']}`, {
                 'start-date': formattedStartDate,
                 'on-event': scriptName
             });
