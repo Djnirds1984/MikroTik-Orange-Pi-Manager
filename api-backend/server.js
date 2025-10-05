@@ -382,14 +382,15 @@ app.post('/api/system/ntp/client/set', (req, res, next) => {
             'primary-ntp': settings.primaryNtp,
             'secondary-ntp': settings.secondaryNtp
         };
-        const items = await apiClient.get('/system/ntp/client');
-        if (items.data.length === 0) {
-             // If no client config exists, we can't patch it. We need to create one.
-             // However, the standard is that one always exists but might be disabled.
-             // We'll proceed with patching the first one found.
-             return res.status(404).json({ message: 'NTP client settings not found on router.'});
+        const itemsResponse = await apiClient.get('/system/ntp/client');
+        // Safely access the first item, as the API might not return an array.
+        const configObject = itemsResponse.data?.[0];
+
+        if (!configObject || !configObject['.id']) {
+            return res.status(404).json({ message: 'NTP client settings object with .id not found on router.' });
         }
-        const configId = items.data[0]['.id'];
+        
+        const configId = configObject['.id'];
         await apiClient.patch(`/system/ntp/client/${configId}`, payload);
         res.status(200).json({ message: 'NTP settings updated successfully.' });
     });
