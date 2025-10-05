@@ -470,8 +470,11 @@ app.post('/api/panel/ntp', express.json(), async (req, res) => {
     
     try {
         const ntpConfigContent = `[Time]\nNTP=${settings.primaryNtp}${settings.secondaryNtp ? ' ' + settings.secondaryNtp : ''}\n`;
-        const configPath = '/etc/systemd/timesyncd.conf.d/99-panel-override.conf';
+        const configDir = '/etc/systemd/timesyncd.conf.d';
+        const configPath = `${configDir}/99-panel-override.conf`;
 
+        // FIX: Ensure the config directory exists before writing the file to prevent errors.
+        await runCommand(`sudo mkdir -p ${configDir}`);
         await runCommand(`echo '${ntpConfigContent}' | sudo tee ${configPath}`);
         await runCommand('sudo systemctl restart systemd-timesyncd');
         
