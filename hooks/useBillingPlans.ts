@@ -1,62 +1,60 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import type { BillingPlan, BillingPlanWithId } from '../types.ts';
-
-const STORAGE_KEY = 'mikrotikBillingPlans';
-
-const initialPlans: BillingPlan[] = [
-    { name: 'Basic 5Mbps', price: 10, currency: 'USD', cycle: 'Monthly', pppoeProfile: 'profile-5m', description: 'Good for basic browsing and email.' },
-    { name: 'Standard 25Mbps', price: 25, currency: 'USD', cycle: 'Monthly', pppoeProfile: 'profile-25m', description: 'Ideal for streaming HD video on one device.' },
-    { name: 'Premium 100Mbps', price: 50, currency: 'USD', cycle: 'Monthly', pppoeProfile: 'profile-100m', description: 'Perfect for families and multiple 4K streams.' },
-];
+import { dbApi } from '../services/databaseService.ts';
 
 export const useBillingPlans = () => {
     const [plans, setPlans] = useState<BillingPlanWithId[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchPlans = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            const storedPlans = localStorage.getItem(STORAGE_KEY);
-            if (storedPlans) {
-                setPlans(JSON.parse(storedPlans));
-            } else {
-                // Pre-populate with initial data if nothing is in storage
-                const plansWithIds = initialPlans.map((plan, index) => ({
-                    ...plan,
-                    id: `plan_${Date.now()}_${index}`,
-                }));
-                setPlans(plansWithIds);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(plansWithIds));
-            }
-        } catch (error) {
-            console.error("Failed to parse plans from localStorage", error);
-            setPlans([]);
+            const data = await dbApi.get<BillingPlanWithId[]>('/billing-plans');
+            setPlans(data);
+        } catch (err) {
+            setError((err as Error).message);
+            console.error("Failed to fetch billing plans from DB", err);
+        } finally {
+            setIsLoading(false);
         }
     }, []);
 
-    const savePlans = useCallback((updatedPlans: BillingPlanWithId[]) => {
-        setPlans(updatedPlans);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPlans));
-    }, []);
+    useEffect(() => {
+        fetchPlans();
+    }, [fetchPlans]);
 
-    const addPlan = (planConfig: BillingPlan) => {
-        const newPlan: BillingPlanWithId = {
-            ...planConfig,
-            id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        };
-        savePlans([...plans, newPlan]);
+    const addPlan = async (planConfig: BillingPlan) => {
+        try {
+            const newPlan: BillingPlanWithId = {
+                ...planConfig,
+                id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            };
+            await dbApi.post('/billing-plans', newPlan);
+            await fetchPlans();
+        } catch (err) {
+            console.error("Failed to add billing plan:", err);
+        }
     };
 
-    const updatePlan = (updatedPlan: BillingPlanWithId) => {
-        const updatedPlans = plans.map(plan =>
-            plan.id === updatedPlan.id ? updatedPlan : plan
-        );
-        savePlans(updatedPlans);
+    const updatePlan = async (updatedPlan: BillingPlanWithId) => {
+        try {
+            await dbApi.patch(`/billing-plans/${updatedPlan.id}`, updatedPlan);
+            await fetchPlans();
+        } catch (err) {
+            console.error("Failed to update billing plan:", err);
+        }
     };
 
-    const deletePlan = (planId: string) => {
-        const updatedPlans = plans.filter(plan => plan.id !== planId);
-        savePlans(updatedPlans);
+    const deletePlan = async (planId: string) => {
+        try {
+            await dbApi.delete(`/billing-plans/${planId}`);
+            await fetchPlans();
+        } catch (err) {
+            console.error("Failed to delete billing plan:", err);
+        }
     };
 
-    return { plans, addPlan, updatePlan, deletePlan };
+    return { plans, addPlan, updatePlan, deletePlan, isLoading, error };
 };

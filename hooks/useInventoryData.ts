@@ -1,50 +1,61 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { InventoryItem } from '../types.ts';
-
-const STORAGE_KEY = 'mikrotikInventory';
+import { dbApi } from '../services/databaseService.ts';
 
 export const useInventoryData = () => {
     const [items, setItems] = useState<InventoryItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchItems = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            const storedItems = localStorage.getItem(STORAGE_KEY);
-            if (storedItems) {
-                setItems(JSON.parse(storedItems));
-            }
-        } catch (error) {
-            console.error("Failed to parse inventory from localStorage", error);
-            setItems([]);
+            const data = await dbApi.get<InventoryItem[]>('/inventory');
+            setItems(data);
+        } catch (err) {
+            setError((err as Error).message);
+            console.error("Failed to fetch inventory from DB", err);
+        } finally {
+            setIsLoading(false);
         }
     }, []);
 
-    const saveItems = useCallback((updatedItems: InventoryItem[]) => {
-        // Sort by date added descending before saving
-        const sortedItems = updatedItems.sort((a, b) => new Date(b.dateAdded).getTime() - new Date(a.dateAdded).getTime());
-        setItems(sortedItems);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedItems));
-    }, []);
+    useEffect(() => {
+        fetchItems();
+    }, [fetchItems]);
 
-    const addItem = (newItemData: Omit<InventoryItem, 'id' | 'dateAdded'>) => {
-        const newItem: InventoryItem = {
-            ...newItemData,
-            id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-            dateAdded: new Date().toISOString(),
-        };
-        saveItems([newItem, ...items]);
+    const addItem = async (newItemData: Omit<InventoryItem, 'id' | 'dateAdded'>) => {
+        try {
+            const newItem: InventoryItem = {
+                ...newItemData,
+                id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                dateAdded: new Date().toISOString(),
+            };
+            await dbApi.post('/inventory', newItem);
+            await fetchItems();
+        } catch (err) {
+            console.error("Failed to add inventory item:", err);
+        }
     };
 
-    const updateItem = (updatedItem: InventoryItem) => {
-        const updatedItems = items.map(item =>
-            item.id === updatedItem.id ? updatedItem : item
-        );
-        saveItems(updatedItems);
+    const updateItem = async (updatedItem: InventoryItem) => {
+        try {
+            await dbApi.patch(`/inventory/${updatedItem.id}`, updatedItem);
+            await fetchItems();
+        } catch (err) {
+            console.error("Failed to update inventory item:", err);
+        }
     };
     
-    const deleteItem = (itemId: string) => {
-        const updatedItems = items.filter(item => item.id !== itemId);
-        saveItems(updatedItems);
+    const deleteItem = async (itemId: string) => {
+        try {
+            await dbApi.delete(`/inventory/${itemId}`);
+            await fetchItems();
+        } catch (err) {
+            console.error("Failed to delete inventory item:", err);
+        }
     };
 
-    return { items, addItem, updateItem, deleteItem };
+    return { items, addItem, updateItem, deleteItem, isLoading, error };
 };

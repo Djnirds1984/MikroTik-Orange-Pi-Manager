@@ -15,6 +15,7 @@ import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
 import { Network } from './components/Network.tsx';
 import { Inventory } from './components/Inventory.tsx';
+import { Loader } from './components/Loader.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -22,25 +23,27 @@ import type { View } from './types.ts';
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [selectedRouterId, setSelectedRouterId] = useState<string | null>(() => {
-    // Initialize selected router from localStorage if available
-    try {
-      const storedRouters = JSON.parse(localStorage.getItem('mikrotikRouters') || '[]');
-      return storedRouters.length > 0 ? storedRouters[0].id : null;
-    } catch {
-      return null;
-    }
-  });
-  const { routers, addRouter, updateRouter, deleteRouter } = useRouters();
-  const { sales, addSale, deleteSale, clearSales } = useSalesData();
-  const { items, addItem, updateItem, deleteItem } = useInventoryData();
+  
+  const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
+  const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
+  const { items, addItem, updateItem, deleteItem, isLoading: isLoadingInventory } = useInventoryData();
+
+  const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
+
+  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory;
 
   useEffect(() => {
-    // If there's no selected router but there are routers available, select the first one.
+    // This effect runs once after the initial data has loaded
+    if (!appIsLoading && routers.length > 0 && !selectedRouterId) {
+        setSelectedRouterId(routers[0].id);
+    }
+  }, [appIsLoading, routers, selectedRouterId]);
+
+  useEffect(() => {
+    // This effect ensures a router is always selected if possible
     if (!selectedRouterId && routers.length > 0) {
       setSelectedRouterId(routers[0].id);
     }
-    // If the selected router is deleted, clear the selection and pick the first available.
     if (selectedRouterId && !routers.find(r => r.id === selectedRouterId)) {
         setSelectedRouterId(routers.length > 0 ? routers[0].id : null);
     }
@@ -52,6 +55,15 @@ const App: React.FC = () => {
   );
 
   const renderView = () => {
+    if (appIsLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full">
+                <Loader />
+                <p className="mt-4 text-orange-400">Loading application data...</p>
+            </div>
+        );
+    }
+
     switch (currentView) {
       case 'dashboard':
         return <Dashboard selectedRouter={selectedRouter} />;

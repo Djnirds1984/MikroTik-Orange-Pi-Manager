@@ -1,46 +1,60 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { SaleRecord } from '../types.ts';
-
-const STORAGE_KEY = 'mikrotikSalesReport';
+import { dbApi } from '../services/databaseService.ts';
 
 export const useSalesData = () => {
     const [sales, setSales] = useState<SaleRecord[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchSales = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            const storedSales = localStorage.getItem(STORAGE_KEY);
-            if (storedSales) {
-                setSales(JSON.parse(storedSales));
-            }
-        } catch (error) {
-            console.error("Failed to parse sales from localStorage", error);
-            setSales([]);
+            const data = await dbApi.get<SaleRecord[]>('/sales');
+            setSales(data);
+        } catch (err) {
+            setError((err as Error).message);
+            console.error("Failed to fetch sales from DB", err);
+        } finally {
+            setIsLoading(false);
         }
     }, []);
-
-    const saveSales = useCallback((updatedSales: SaleRecord[]) => {
-        // Sort by date descending before saving
-        const sortedSales = updatedSales.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setSales(sortedSales);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(sortedSales));
-    }, []);
-
-    const addSale = (newSaleData: Omit<SaleRecord, 'id'>) => {
-        const newSale: SaleRecord = {
-            ...newSaleData,
-            id: `sale_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        };
-        saveSales([newSale, ...sales]);
-    };
     
-    const deleteSale = (saleId: string) => {
-        const updatedSales = sales.filter(sale => sale.id !== saleId);
-        saveSales(updatedSales);
-    };
+    useEffect(() => {
+        fetchSales();
+    }, [fetchSales]);
 
-    const clearSales = () => {
-        saveSales([]);
-    };
+    const addSale = useCallback(async (newSaleData: Omit<SaleRecord, 'id'>) => {
+        try {
+            const newSale: SaleRecord = {
+                ...newSaleData,
+                id: `sale_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            };
+            await dbApi.post('/sales', newSale);
+            await fetchSales();
+        } catch (err) {
+             console.error("Failed to add sale:", err);
+        }
+    }, [fetchSales]);
+    
+    const deleteSale = useCallback(async (saleId: string) => {
+        try {
+            await dbApi.delete(`/sales/${saleId}`);
+            await fetchSales();
+        } catch (err) {
+             console.error("Failed to delete sale:", err);
+        }
+    }, [fetchSales]);
 
-    return { sales, addSale, deleteSale, clearSales };
+    const clearSales = useCallback(async () => {
+        try {
+            await dbApi.delete('/sales/all');
+            await fetchSales();
+        } catch (err) {
+            console.error("Failed to clear sales:", err);
+        }
+    }, [fetchSales]);
+
+    return { sales, addSale, deleteSale, clearSales, isLoading, error };
 };

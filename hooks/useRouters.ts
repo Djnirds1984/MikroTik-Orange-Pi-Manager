@@ -1,48 +1,66 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { RouterConfig, RouterConfigWithId } from '../types.ts';
-
-const STORAGE_KEY = 'mikrotikRouters';
+import { dbApi } from '../services/databaseService.ts';
 
 export const useRouters = () => {
     const [routers, setRouters] = useState<RouterConfigWithId[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
+    const fetchRouters = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
         try {
-            const storedRouters = localStorage.getItem(STORAGE_KEY);
-            if (storedRouters) {
-                setRouters(JSON.parse(storedRouters));
-            }
-        } catch (error) {
-            console.error("Failed to parse routers from localStorage", error);
-            setRouters([]);
+            const data = await dbApi.get<RouterConfigWithId[]>('/routers');
+            setRouters(data);
+        } catch (err) {
+            setError((err as Error).message);
+            console.error("Failed to fetch routers from DB", err);
+        } finally {
+            setIsLoading(false);
         }
     }, []);
 
-    const saveRouters = useCallback((updatedRouters: RouterConfigWithId[]) => {
-        setRouters(updatedRouters);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRouters));
-    }, []);
+    useEffect(() => {
+        fetchRouters();
+    }, [fetchRouters]);
 
-    const addRouter = (routerConfig: RouterConfig) => {
-        const newRouter: RouterConfigWithId = {
-            ...routerConfig,
-            // Use a more compatible method for generating a unique ID to support all browsers
-            id: `router_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-        };
-        saveRouters([...routers, newRouter]);
+    const addRouter = async (routerConfig: RouterConfig) => {
+        try {
+            const newRouter: RouterConfigWithId = {
+                ...routerConfig,
+                id: `router_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            };
+            await dbApi.post('/routers', newRouter);
+            await fetchRouters();
+        } catch (err) {
+            console.error("Failed to add router:", err);
+            // Optionally, handle the error in the UI
+        }
     };
 
-    const updateRouter = (updatedRouter: RouterConfigWithId) => {
-        const updatedRouters = routers.map(router => 
-            router.id === updatedRouter.id ? updatedRouter : router
-        );
-        saveRouters(updatedRouters);
+    const updateRouter = async (updatedRouter: RouterConfigWithId) => {
+        try {
+            // The password field is not always sent from the form if unchanged.
+            // We need to merge with the existing data to avoid accidentally wiping it.
+            const existingRouter = routers.find(r => r.id === updatedRouter.id);
+            const dataToSend = { ...existingRouter, ...updatedRouter };
+            
+            await dbApi.patch(`/routers/${updatedRouter.id}`, dataToSend);
+            await fetchRouters();
+        } catch (err) {
+            console.error("Failed to update router:", err);
+        }
     };
 
-    const deleteRouter = (routerId: string) => {
-        const updatedRouters = routers.filter(router => router.id !== routerId);
-        saveRouters(updatedRouters);
+    const deleteRouter = async (routerId: string) => {
+        try {
+            await dbApi.delete(`/routers/${routerId}`);
+            await fetchRouters();
+        } catch (err) {
+            console.error("Failed to delete router:", err);
+        }
     };
 
-    return { routers, addRouter, updateRouter, deleteRouter };
+    return { routers, addRouter, updateRouter, deleteRouter, isLoading, error };
 };

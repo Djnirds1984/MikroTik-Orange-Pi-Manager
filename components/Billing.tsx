@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { BillingPlan, BillingPlanWithId, PppProfile, RouterConfigWithId } from '../types.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
@@ -87,7 +86,7 @@ interface BillingProps {
 }
 
 export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
-    const { plans, addPlan, updatePlan, deletePlan } = useBillingPlans();
+    const { plans, addPlan, updatePlan, deletePlan, isLoading: isLoadingPlans, error: plansError } = useBillingPlans();
     const [editingPlan, setEditingPlan] = useState<BillingPlanWithId | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
@@ -173,34 +172,43 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
                     )}
                 </div>
             )}
+            
+            {isLoadingPlans && (
+                 <div className="flex flex-col items-center justify-center h-64">
+                    <Loader />
+                    <p className="mt-4 text-orange-400">Loading billing plans...</p>
+                </div>
+            )}
 
-            <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
-                <ul role="list" className="divide-y divide-slate-700">
-                    {plans.map((plan) => (
-                        <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-700/50">
-                            <div className="flex items-center gap-4 mb-2 sm:mb-0">
-                                <SignalIcon className="h-8 w-8 text-orange-400 flex-shrink-0" />
-                                <div>
-                                    <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
-                                    <p className="text-sm text-slate-400">
-                                        <span className="font-bold text-slate-200">{plan.price} {plan.currency}</span> / {plan.cycle}
-                                        <span className="mx-2 text-slate-600">|</span>
-                                        Profile: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
-                                    </p>
+            {!isLoadingPlans && (
+                <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
+                    <ul role="list" className="divide-y divide-slate-700">
+                        {plans.map((plan) => (
+                            <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-700/50">
+                                <div className="flex items-center gap-4 mb-2 sm:mb-0">
+                                    <SignalIcon className="h-8 w-8 text-orange-400 flex-shrink-0" />
+                                    <div>
+                                        <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
+                                        <p className="text-sm text-slate-400">
+                                            <span className="font-bold text-slate-200">{plan.price} {plan.currency}</span> / {plan.cycle}
+                                            <span className="mx-2 text-slate-600">|</span>
+                                            Profile: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center space-x-2 self-end sm:self-center">
-                                <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-orange-400">
-                                    <EditIcon className="h-5 w-5" />
-                                </button>
-                                <button onClick={() => handleDelete(plan.id)} className="p-2 text-slate-400 hover:text-red-500">
-                                    <TrashIcon className="h-5 w-5" />
-                                </button>
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            </div>
+                                <div className="flex items-center space-x-2 self-end sm:self-center">
+                                    <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-orange-400">
+                                        <EditIcon className="h-5 w-5" />
+                                    </button>
+                                    <button onClick={() => handleDelete(plan.id)} className="p-2 text-slate-400 hover:text-red-500">
+                                        <TrashIcon className="h-5 w-5" />
+                                    </button>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
         </div>
     );
 };

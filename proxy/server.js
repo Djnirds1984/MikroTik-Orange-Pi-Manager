@@ -5,17 +5,83 @@ const fs = require('fs-extra');
 const { exec, spawn } = require('child_process'); // Import spawn
 const archiver = require('archiver');
 const tar = require('tar');
+const sqlite3 = require('sqlite3');
+const { open } = require('sqlite');
 
 const app = express();
 const port = 3001;
+const projectRoot = path.join(__dirname, '..');
+const dbPath = path.join(projectRoot, 'panel.db');
+let db;
+
+// --- Database Initialization ---
+async function initializeDatabase() {
+  try {
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database,
+    });
+    console.log('Connected to the SQLite database.');
+
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS routers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        user TEXT NOT NULL,
+        password TEXT,
+        port INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS billing_plans (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        price REAL NOT NULL,
+        currency TEXT NOT NULL,
+        cycle TEXT NOT NULL,
+        pppoeProfile TEXT NOT NULL,
+        description TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS sales_records (
+        id TEXT PRIMARY KEY,
+        date TEXT NOT NULL,
+        clientName TEXT NOT NULL,
+        planName TEXT NOT NULL,
+        planPrice REAL NOT NULL,
+        currency TEXT NOT NULL,
+        discountAmount REAL NOT NULL,
+        finalAmount REAL NOT NULL,
+        routerName TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL,
+        serialNumber TEXT,
+        dateAdded TEXT NOT NULL
+      );
+    `);
+    console.log('Database tables are ready.');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    process.exit(1);
+  }
+}
+
+initializeDatabase();
+
+
+// Middleware
+app.use(express.json());
+
 
 // --- Middleware for Live Transpilation ---
-// FIX: Replaced the generic app.use with an explicit .get handler for .ts/.tsx files.
-// This is more robust and prevents the static middleware from incorrectly handling these files
-// with the wrong MIME type.
 app.get(/\.(ts|tsx)$/, async (req, res) => {
     try {
-        const filePath = path.join(__dirname, '..', req.path); // Use req.path for safety
+        const filePath = path.join(__dirname, '..', req.path); 
         
         if (!await fs.pathExists(filePath)) {
             return res.status(404).send('// File not found');
@@ -36,7 +102,6 @@ app.get(/\.(ts|tsx)$/, async (req, res) => {
 
 
 // --- Static File Serving ---
-// This will serve files like index.html, env.js, and any other static assets.
 app.use(express.static(path.join(__dirname, '..')));
 
 // Helper to run shell commands
@@ -52,9 +117,93 @@ const runCommand = (command, cwd = process.cwd()) => {
     });
 };
 
-// --- Updater API Endpoints ---
-const projectRoot = path.join(__dirname, '..');
+// --- New Database API Endpoints ---
+const dbApi = express.Router();
 
+// Routers
+dbApi.get('/routers', async (req, res) => {
+    const routers = await db.all('SELECT * FROM routers');
+    res.json(routers);
+});
+dbApi.post('/routers', async (req, res) => {
+    const { id, name, host, user, password, port } = req.body;
+    await db.run('INSERT INTO routers (id, name, host, user, password, port) VALUES (?, ?, ?, ?, ?, ?)', [id, name, host, user, password, port]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/routers/:id', async (req, res) => {
+    const { name, host, user, password, port } = req.body;
+    await db.run('UPDATE routers SET name = ?, host = ?, user = ?, password = ?, port = ? WHERE id = ?', [name, host, user, password, port, req.params.id]);
+    res.status(200).json({ message: 'Router updated' });
+});
+dbApi.delete('/routers/:id', async (req, res) => {
+    await db.run('DELETE FROM routers WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+// Billing Plans
+dbApi.get('/billing-plans', async (req, res) => {
+    const plans = await db.all('SELECT * FROM billing_plans');
+    res.json(plans);
+});
+dbApi.post('/billing-plans', async (req, res) => {
+    const { id, name, price, currency, cycle, pppoeProfile, description } = req.body;
+    await db.run('INSERT INTO billing_plans (id, name, price, currency, cycle, pppoeProfile, description) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, name, price, currency, cycle, pppoeProfile, description]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/billing-plans/:id', async (req, res) => {
+    const { name, price, currency, cycle, pppoeProfile, description } = req.body;
+    await db.run('UPDATE billing_plans SET name = ?, price = ?, currency = ?, cycle = ?, pppoeProfile = ?, description = ? WHERE id = ?', [name, price, currency, cycle, pppoeProfile, description, req.params.id]);
+    res.status(200).json({ message: 'Plan updated' });
+});
+dbApi.delete('/billing-plans/:id', async (req, res) => {
+    await db.run('DELETE FROM billing_plans WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+// Sales Records
+dbApi.get('/sales', async (req, res) => {
+    const sales = await db.all('SELECT * FROM sales_records ORDER BY date DESC');
+    res.json(sales);
+});
+dbApi.post('/sales', async (req, res) => {
+    const { id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName } = req.body;
+    await db.run('INSERT INTO sales_records (id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName]);
+    res.status(201).json({ id });
+});
+dbApi.delete('/sales/all', async (req, res) => {
+    await db.run('DELETE FROM sales_records');
+    res.status(204).send();
+});
+dbApi.delete('/sales/:id', async (req, res) => {
+    await db.run('DELETE FROM sales_records WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+
+// Inventory Items
+dbApi.get('/inventory', async (req, res) => {
+    const items = await db.all('SELECT * FROM inventory_items ORDER BY dateAdded DESC');
+    res.json(items);
+});
+dbApi.post('/inventory', async (req, res) => {
+    const { id, name, quantity, price, serialNumber, dateAdded } = req.body;
+    await db.run('INSERT INTO inventory_items (id, name, quantity, price, serialNumber, dateAdded) VALUES (?, ?, ?, ?, ?, ?)', [id, name, quantity, price, serialNumber, dateAdded]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/inventory/:id', async (req, res) => {
+    const { name, quantity, price, serialNumber, dateAdded } = req.body;
+    await db.run('UPDATE inventory_items SET name = ?, quantity = ?, price = ?, serialNumber = ?, dateAdded = ? WHERE id = ?', [name, quantity, price, serialNumber, dateAdded, req.params.id]);
+    res.status(200).json({ message: 'Item updated' });
+});
+dbApi.delete('/inventory/:id', async (req, res) => {
+    await db.run('DELETE FROM inventory_items WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+app.use('/api/db', dbApi);
+
+
+// --- Updater API Endpoints ---
 const sendSse = (res, data) => {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
@@ -69,7 +218,6 @@ app.get('/api/update-status', async (req, res) => {
         const remoteUrl = await runCommand('git config --get remote.origin.url', projectRoot);
         sendSse(res, { log: `Remote URL: ${remoteUrl || '[Not Configured]'}` });
         
-        // FIX: Added a check for `remoteUrl` to prevent a crash if the command returns an unexpected empty value.
         if (!remoteUrl || !remoteUrl.startsWith('git@')) {
              throw new Error(`Git remote is not configured for SSH. Current URL is "${remoteUrl || 'Not Set'}". Please use SSH (e.g., git@github.com:user/repo.git) for updates.`);
         }
@@ -93,14 +241,13 @@ app.get('/api/update-status', async (req, res) => {
         console.error('Update check failed:', errorMessage);
         sendSse(res, { status: 'error', message: errorMessage });
     } finally {
-        sendSse(res, { status: 'finished' }); // Signal to the client that we are done
+        sendSse(res, { status: 'finished' }); 
         res.end();
     }
 });
 
 const restartApp = (res, serviceName = 'mikrotik-manager mikrotik-api-backend') => {
     sendSse(res, { log: `\n>>> Restarting application with pm2: ${serviceName}...` });
-    // Restart both servers by their names for reliability
     exec(`pm2 restart ${serviceName}`, (err, stdout, stderr) => {
         if (err) {
             console.error('PM2 restart failed:', stderr);
@@ -123,7 +270,6 @@ app.get('/api/update-app', async (req, res) => {
     const backupFilePath = path.join(backupDir, backupFileName);
 
     try {
-        // 1. Create Backup
         sendSse(res, { log: `>>> Creating backup at ${backupFilePath}` });
         await fs.ensureDir(backupDir);
         
@@ -132,18 +278,16 @@ app.get('/api/update-app', async (req, res) => {
         archive.pipe(output);
         archive.glob('**/*', {
             cwd: projectRoot,
-            ignore: ['backups/**', 'node_modules/**', '.git/**'],
+            ignore: ['backups/**', 'node_modules/**', '.git/**', 'panel.db'], // Exclude DB from app backup
         });
         await archive.finalize();
         sendSse(res, { log: 'Backup created successfully.' });
 
-        // 2. Git Pull
         sendSse(res, { log: '\n>>> Pulling latest changes from Git...' });
-        const pullOutput = await runCommand('git pull origin main', projectRoot); // Assuming 'main' branch
+        const pullOutput = await runCommand('git pull origin main', projectRoot);
         sendSse(res, { log: pullOutput });
         sendSse(res, { log: 'Git pull complete.' });
         
-        // 3. NPM Install
         sendSse(res, { log: '\n>>> Installing dependencies for UI server...' });
         const proxyInstall = await runCommand('npm install', path.join(projectRoot, 'proxy'));
         sendSse(res, { log: proxyInstall });
@@ -153,7 +297,6 @@ app.get('/api/update-app', async (req, res) => {
         sendSse(res, { log: apiInstall });
         sendSse(res, { log: 'Dependencies installed.' });
         
-        // 4. Restart
         sendSse(res, { status: 'restarting' });
         restartApp(res);
 
@@ -196,9 +339,6 @@ app.get('/api/rollback', async (req, res) => {
             throw new Error('Backup file not found.');
         }
 
-        // FIX: Replaced the JavaScript-based tar extraction with a more reliable call
-        // to the system's native `tar` command. This prevents the server from crashing
-        // when trying to overwrite its own running files.
         await runCommand(`tar -xzf "${backupFilePath}" -C "${projectRoot}"`);
         
         sendSse(res, { log: 'Files restored successfully.' });
@@ -226,7 +366,6 @@ app.get('/api/zt/status', async (req, res) => {
         const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
         console.error('ZeroTier status check failed:', errorMessage);
 
-        // Fix: Use a more general check for missing command errors.
         if (errorMessage.includes('not found')) {
             return res.status(404).json({ 
                 code: 'ZEROTIER_NOT_INSTALLED',
@@ -255,7 +394,6 @@ app.get('/api/zt/install', (req, res) => {
     sendSse(res, { log: '>>> Starting ZeroTier installation...' });
     sendSse(res, { log: '>>> This may take a few minutes. Please do not close this window.' });
     
-    // Using 'bash -c' to handle the pipe. This command requires passwordless sudo for the user running the server.
     const installProcess = spawn('sudo', ['bash', '-c', 'curl -s https://install.zerotier.com | bash']);
 
     installProcess.stdout.on('data', (data) => {
@@ -263,7 +401,6 @@ app.get('/api/zt/install', (req, res) => {
     });
 
     installProcess.stderr.on('data', (data) => {
-        // Official installer script sometimes uses stderr for progress messages, so we log them normally.
         sendSse(res, { log: data.toString() });
     });
 
@@ -372,7 +509,7 @@ app.post('/api/fixer/apply-fix', express.text({ type: 'text/plain' }), async (re
         sendSse(res, { log: 'File updated successfully.' });
 
         sendSse(res, { status: 'restarting' });
-        restartApp(res, 'mikrotik-api-backend'); // Only restart the backend
+        restartApp(res, 'mikrotik-api-backend');
 
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -455,29 +592,27 @@ app.get('/api/panel/host-status', async (req, res) => {
             runCommand(diskCmd)
         ]);
 
-        // Parse Memory
         const memLines = memOutput.split('\n');
         const memData = memLines[1].split(/\s+/);
         const totalMem = parseInt(memData[1], 10);
         const usedMem = parseInt(memData[2], 10);
         const memPercent = Math.round((usedMem / totalMem) * 100);
 
-        // Parse Disk
         const diskLines = diskOutput.split('\n');
         const diskData = diskLines[1].split(/\s+/);
-        const totalDisk = parseInt(diskData[1], 10); // in KB
-        const usedDisk = parseInt(diskData[2], 10); // in KB
+        const totalDisk = parseInt(diskData[1], 10); 
+        const usedDisk = parseInt(diskData[2], 10); 
         const diskPercent = parseInt(diskData[4].replace('%', ''), 10);
         
         res.json({
             cpuUsage: Math.round(parseFloat(cpuOutput)) || 0,
             memory: {
-                used: formatBytes(usedMem * 1024 * 1024), // free -m is in MiB
+                used: formatBytes(usedMem * 1024 * 1024),
                 total: formatBytes(totalMem * 1024 * 1024),
                 percent: memPercent,
             },
             disk: {
-                used: formatBytes(usedDisk * 1024), // df -k is in KB
+                used: formatBytes(usedDisk * 1024),
                 total: formatBytes(totalDisk * 1024),
                 percent: diskPercent,
             },
@@ -531,7 +666,6 @@ app.post('/api/panel/ntp', express.json(), async (req, res) => {
         const configDir = '/etc/systemd/timesyncd.conf.d';
         const configPath = `${configDir}/99-panel-override.conf`;
 
-        // FIX: Ensure the config directory exists before writing the file to prevent errors.
         await runCommand(`sudo mkdir -p ${configDir}`);
         await runCommand(`echo '${ntpConfigContent}' | sudo tee ${configPath}`);
         await runCommand('sudo systemctl restart systemd-timesyncd');
@@ -553,7 +687,7 @@ const runStreamingCommand = (res, command, args, cwd) => {
         sendSse(res, { log: data.toString() });
     });
     child.stderr.on('data', (data) => {
-        sendSse(res, { log: data.toString() }); // Stream stderr as normal logs
+        sendSse(res, { log: data.toString() }); 
     });
     child.on('close', (code) => {
         if (code === 0) {
@@ -561,11 +695,9 @@ const runStreamingCommand = (res, command, args, cwd) => {
         } else {
             sendSse(res, { log: `\n>>> Command exited with error code ${code}.` });
         }
-        // Don't close the connection here, let the calling function do it.
     });
     child.on('error', (err) => {
         sendSse(res, { log: `\n>>> Failed to start command: ${err.message}` });
-        // Don't close connection here either
     });
     return child;
 };
@@ -593,7 +725,6 @@ app.get('/api/panel/restart-services', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     
-    // Using 'pm2 restart all' as requested
     const command = 'pm2';
     const args = ['restart', 'all'];
 
@@ -609,7 +740,6 @@ app.get('/api/panel/restart-services', (req, res) => {
         if (code !== 0) {
             sendSse(res, { status: 'error', message: `Restart command failed with code ${code}.` });
         }
-        // Don't send a finished message as the connection will be terminated by the restart.
         res.end();
     });
     child.on('error', (err) => {
@@ -617,7 +747,6 @@ app.get('/api/panel/restart-services', (req, res) => {
         res.end();
     });
 
-    // Unref the child process so the parent (this script) can exit independently if needed.
     child.unref();
 });
 

@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiveConnection, BillingPlanWithId, SaleRecord } from '../types.ts';
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
@@ -271,7 +269,7 @@ export const Users: React.FC<{
     
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
     const [payingSecret, setPayingSecret] = useState<PppSecret | null>(null);
-    const { plans } = useBillingPlans();
+    const { plans, isLoading: isLoadingPlans } = useBillingPlans();
     const [searchTerm, setSearchTerm] = useState('');
 
     const fetchData = useCallback(async () => {
@@ -338,6 +336,10 @@ export const Users: React.FC<{
     }, [secrets, searchTerm]);
 
     const handleAdd = () => {
+        if (isLoadingPlans) {
+            alert("Billing plans are still loading, please wait.");
+            return;
+        }
         if (plans.length === 0) {
             alert("No billing plans found. Please create a billing plan before adding a user.");
             return;
@@ -501,7 +503,7 @@ export const Users: React.FC<{
                             className="w-full md:w-64 bg-slate-700 border border-slate-600 rounded-md py-2 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
                         />
                     </div>
-                    <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg flex-shrink-0">
+                    <button onClick={handleAdd} disabled={isLoadingPlans} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg flex-shrink-0 disabled:opacity-50">
                         Add New User
                     </button>
                 </div>
