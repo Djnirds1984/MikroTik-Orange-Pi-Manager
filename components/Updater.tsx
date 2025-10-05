@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon } from '../constants.tsx';
+import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 
 type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'diverged' | 'error' | 'updating' | 'restarting' | 'rollingback';
@@ -69,6 +69,7 @@ export const Updater: React.FC = () => {
     const [currentVersionInfo, setCurrentVersionInfo] = useState<VersionInfo | null>(null);
     const [newVersionInfo, setNewVersionInfo] = useState<NewVersionInfo | null>(null);
     const [isLoadingCurrentVersion, setIsLoadingCurrentVersion] = useState(true);
+    const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
 
     const fetchBackups = useCallback(async () => {
@@ -194,6 +195,28 @@ export const Updater: React.FC = () => {
          };
     };
 
+    const handleDeleteBackup = async (backupFile: string) => {
+        if (!window.confirm(`Are you sure you want to PERMANENTLY delete the backup "${backupFile}"? This cannot be undone.`)) return;
+
+        setIsDeleting(backupFile);
+        try {
+            const res = await fetch('/api/delete-backup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ backupFile }),
+            });
+            if (!res.ok) {
+                const errorData = await res.json();
+                throw new Error(errorData.message || 'Failed to delete backup.');
+            }
+            await fetchBackups(); // Refresh the list
+        } catch (error) {
+            alert(`Error: ${(error as Error).message}`);
+        } finally {
+            setIsDeleting(null);
+        }
+    };
+
 
     const renderStatusInfo = () => {
         const { status, message, local, remote } = statusInfo;
@@ -207,7 +230,7 @@ export const Updater: React.FC = () => {
         }
     };
     
-    const isWorking = statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'restarting' || statusInfo.status === 'rollingback';
+    const isWorking = statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'restarting' || statusInfo.status === 'rollingback' || !!isDeleting;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -253,9 +276,14 @@ export const Updater: React.FC = () => {
                         {backups.map(backup => (
                             <li key={backup} className="bg-slate-700/50 p-3 rounded-md flex justify-between items-center">
                                 <span className="font-mono text-sm text-slate-300">{backup}</span>
-                                <button onClick={() => handleRollback(backup)} disabled={isWorking} className="px-3 py-1 text-sm bg-sky-600 hover:bg-sky-500 rounded-md font-semibold disabled:opacity-50">
-                                    Restore
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => handleRollback(backup)} disabled={isWorking} className="px-3 py-1 text-sm bg-sky-600 hover:bg-sky-500 rounded-md font-semibold disabled:opacity-50">
+                                        Restore
+                                    </button>
+                                    <button onClick={() => handleDeleteBackup(backup)} disabled={isWorking} className="p-2 text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Delete Backup">
+                                        {isDeleting === backup ? <Loader /> : <TrashIcon className="h-4 w-4" />}
+                                    </button>
+                                </div>
                             </li>
                         ))}
                     </ul>

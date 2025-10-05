@@ -375,6 +375,37 @@ app.get('/api/list-backups', async (req, res) => {
     }
 });
 
+app.post('/api/delete-backup', express.json(), async (req, res) => {
+    const { backupFile } = req.body;
+
+    if (!backupFile || typeof backupFile !== 'string') {
+        return res.status(400).json({ message: 'Invalid backup file specified.' });
+    }
+
+    // Security: Sanitize filename to prevent path traversal
+    const sanitizedFileName = path.basename(backupFile);
+    if (sanitizedFileName !== backupFile) {
+        return res.status(400).json({ message: 'Invalid characters in filename.' });
+    }
+
+    const backupFilePath = path.join(projectRoot, 'backups', sanitizedFileName);
+
+    try {
+        if (!await fs.pathExists(backupFilePath)) {
+            return res.status(404).json({ message: 'Backup file not found.' });
+        }
+
+        await fs.remove(backupFilePath);
+        console.log(`Deleted backup: ${sanitizedFileName}`);
+        res.status(200).json({ message: `Successfully deleted ${sanitizedFileName}` });
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to delete backup ${sanitizedFileName}:`, errorMessage);
+        res.status(500).json({ message: `Could not delete backup: ${errorMessage}` });
+    }
+});
+
 app.get('/api/rollback', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
