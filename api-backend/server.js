@@ -151,9 +151,9 @@ app.post('/api/interfaces', (req, res, next) => {
 // --- Hotspot Endpoints ---
 app.post('/api/hotspot/active', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        // Fix: Use GET to list resources as per standard REST API practices for MikroTik.
         const response = await apiClient.get('/ip/hotspot/active');
-        const data = response.data.map(u => ({
+        const activeUsers = Array.isArray(response.data) ? response.data : [];
+        const data = activeUsers.map(u => ({
             id: u['.id'],
             user: u.user,
             address: u.address,
@@ -169,9 +169,9 @@ app.post('/api/hotspot/active', (req, res, next) => {
 
 app.post('/api/hotspot/hosts', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        // Fix: Use GET to list resources as per standard REST API practices for MikroTik.
         const response = await apiClient.get('/ip/hotspot/host');
-        const data = response.data.map(h => ({
+        const hosts = Array.isArray(response.data) ? response.data : [];
+        const data = hosts.map(h => ({
             id: h['.id'],
             macAddress: h['mac-address'],
             address: h.address,
@@ -200,7 +200,8 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
 app.post('/api/ppp/profiles', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/profile');
-        const data = response.data.map(p => {
+        const profiles = Array.isArray(response.data) ? response.data : [];
+        const data = profiles.map(p => {
             const {
                 '.id': id,
                 name,
@@ -244,7 +245,8 @@ app.post('/api/ppp/profiles/delete', (req, res, next) => {
 app.post('/api/ip/pools', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ip/pool');
-        res.status(200).json(response.data.map(p => ({ ...p, id: p['.id'] })));
+        const pools = Array.isArray(response.data) ? response.data : [];
+        res.status(200).json(pools.map(p => ({ ...p, id: p['.id'] })));
     });
 });
 
@@ -252,14 +254,16 @@ app.post('/api/ip/pools', (req, res, next) => {
 app.post('/api/ppp/secrets', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/secret');
-        res.status(200).json(response.data.map(s => ({ ...s, id: s['.id'] })));
+        const secrets = Array.isArray(response.data) ? response.data : [];
+        res.status(200).json(secrets.map(s => ({ ...s, id: s['.id'] })));
     });
 });
 
 app.post('/api/ppp/active', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/active');
-        res.status(200).json(response.data.map(a => ({ ...a, id: a['.id'] })));
+        const activeConnections = Array.isArray(response.data) ? response.data : [];
+        res.status(200).json(activeConnections.map(a => ({ ...a, id: a['.id'] })));
     });
 });
 

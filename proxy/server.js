@@ -67,9 +67,11 @@ app.get('/api/update-status', async (req, res) => {
     try {
         sendSse(res, { log: '>>> Checking Git remote URL...' });
         const remoteUrl = await runCommand('git config --get remote.origin.url', projectRoot);
-        sendSse(res, { log: `Remote URL: ${remoteUrl}` });
-        if (!remoteUrl.startsWith('git@')) {
-             throw new Error(`Git remote is not configured for SSH. Current URL is ${remoteUrl}. Please use SSH (e.g., git@github.com:user/repo.git) for updates.`);
+        sendSse(res, { log: `Remote URL: ${remoteUrl || '[Not Configured]'}` });
+        
+        // FIX: Added a check for `remoteUrl` to prevent a crash if the command returns an unexpected empty value.
+        if (!remoteUrl || !remoteUrl.startsWith('git@')) {
+             throw new Error(`Git remote is not configured for SSH. Current URL is "${remoteUrl || 'Not Set'}". Please use SSH (e.g., git@github.com:user/repo.git) for updates.`);
         }
         
         sendSse(res, { log: '\n>>> Fetching latest data from remote repository...' });
