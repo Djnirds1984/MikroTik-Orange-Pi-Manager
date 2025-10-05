@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -18,8 +14,10 @@ import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
 import { Network } from './components/Network.tsx';
+import { Inventory } from './components/Inventory.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
+import { useInventoryData } from './hooks/useInventoryData.ts';
 import type { View } from './types.ts';
 
 const App: React.FC = () => {
@@ -35,6 +33,7 @@ const App: React.FC = () => {
   });
   const { routers, addRouter, updateRouter, deleteRouter } = useRouters();
   const { sales, addSale, deleteSale, clearSales } = useSalesData();
+  const { items, addItem, updateItem, deleteItem } = useInventoryData();
 
   useEffect(() => {
     // If there's no selected router but there are routers available, select the first one.
@@ -70,6 +69,8 @@ const App: React.FC = () => {
           return <Billing selectedRouter={selectedRouter} />;
       case 'sales':
           return <SalesReport salesData={sales} deleteSale={deleteSale} clearSales={clearSales} />;
+      case 'inventory':
+          return <Inventory items={items} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
@@ -92,6 +93,7 @@ const App: React.FC = () => {
     users: 'PPPoE Users',
     billing: 'Billing Plans',
     sales: 'Sales Report',
+    inventory: 'Stock & Inventory',
     hotspot: 'Hotspot Management',
     zerotier: 'ZeroTier Management',
     system: 'System Settings',

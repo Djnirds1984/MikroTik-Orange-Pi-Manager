@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network' | 'inventory';
 
 export interface RouterConfig {
   name: string;
@@ -205,4 +205,14 @@ export interface VlanInterface {
     name: string;
     'vlan-id': string;
     interface: string;
+}
+
+// Type for Stock & Inventory
+export interface InventoryItem {
+    id: string;
+    name: string;
+    quantity: number;
+    price?: number;
+    serialNumber?: string;
+    dateAdded: string;
 }
