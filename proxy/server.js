@@ -480,6 +480,83 @@ app.post('/api/panel/ntp', express.json(), async (req, res) => {
     }
 });
 
+// --- Panel Maintenance Actions ---
+const runStreamingCommand = (res, command, args, cwd) => {
+    sendSse(res, { log: `>>> Running command: ${command} ${args.join(' ')} in ${cwd}` });
+
+    const child = spawn(command, args, { cwd, shell: true });
+
+    child.stdout.on('data', (data) => {
+        sendSse(res, { log: data.toString() });
+    });
+    child.stderr.on('data', (data) => {
+        sendSse(res, { log: data.toString() }); // Stream stderr as normal logs
+    });
+    child.on('close', (code) => {
+        if (code === 0) {
+            sendSse(res, { log: `\n>>> Command finished successfully (code ${code}).` });
+        } else {
+            sendSse(res, { log: `\n>>> Command exited with error code ${code}.` });
+        }
+        // Don't close the connection here, let the calling function do it.
+    });
+    child.on('error', (err) => {
+        sendSse(res, { log: `\n>>> Failed to start command: ${err.message}` });
+        // Don't close connection here either
+    });
+    return child;
+};
+
+app.get('/api/panel/reinstall-deps', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const proxyDir = path.join(projectRoot, 'proxy');
+    const apiDir = path.join(projectRoot, 'api-backend');
+
+    const proxyInstall = runStreamingCommand(res, 'npm', ['install'], proxyDir);
+    proxyInstall.on('close', () => {
+        const apiInstall = runStreamingCommand(res, 'npm', ['install'], apiDir);
+        apiInstall.on('close', () => {
+            sendSse(res, { status: 'finished' });
+            res.end();
+        });
+    });
+});
+
+app.get('/api/panel/restart-services', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    // Using 'pm2 restart all' as requested
+    const command = 'pm2';
+    const args = ['restart', 'all'];
+
+    sendSse(res, { log: `>>> Issuing command: ${command} ${args.join(' ')}` });
+    sendSse(res, { log: `>>> The connection will be lost as the server restarts.` });
+
+    const child = spawn(command, args, { cwd: projectRoot, shell: true, detached: true });
+
+    child.stdout.on('data', (data) => sendSse(res, { log: data.toString() }));
+    child.stderr.on('data', (data) => sendSse(res, { log: data.toString() }));
+
+    child.on('exit', (code) => {
+        if (code !== 0) {
+            sendSse(res, { status: 'error', message: `Restart command failed with code ${code}.` });
+        }
+        // Don't send a finished message as the connection will be terminated by the restart.
+        res.end();
+    });
+    child.on('error', (err) => {
+        sendSse(res, { status: 'error', message: `Failed to execute pm2: ${err.message}` });
+        res.end();
+    });
+
+    // Unref the child process so the parent (this script) can exit independently if needed.
+    child.unref();
+});
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'index.html'));
