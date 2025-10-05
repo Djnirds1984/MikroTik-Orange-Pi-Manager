@@ -182,3 +182,18 @@ export interface SaleRecord {
   finalAmount: number;
   routerName: string;
 }
+
+// Type for Panel Host Status
+export interface PanelHostStatus {
+    cpuUsage: number;
+    memory: {
+        used: string;
+        total: string;
+        percent: number;
+    };
+    disk: {
+        used: string;
+        total: string;
+        percent: number;
+    };
+}

@@ -1,7 +1,7 @@
-const API_BASE_URL = `http://${window.location.hostname}:3001`;
+const getApiBaseUrl = () => `http://${window.location.hostname}:3001`;
 
 export const getFileContent = async (): Promise<string> => {
-    const response = await fetch(`${API_BASE_URL}/api/fixer/file-content`);
+    const response = await fetch(`${getApiBaseUrl()}/api/fixer/file-content`);
     if (!response.ok) {
         throw new Error('Failed to fetch backend file content.');
     }
@@ -12,7 +12,7 @@ export const getFileContent = async (): Promise<string> => {
 // The previous implementation was incorrect as fetch returns a Promise, not an EventSource.
 // Also removed extensive commented-out and duplicate code from the function body.
 export const applyFix = (newCode: string): Promise<Response> => {
-    return fetch(`${API_BASE_URL}/api/fixer/apply-fix`, {
+    return fetch(`${getApiBaseUrl()}/api/fixer/apply-fix`, {
         method: 'POST',
         headers: {
             'Content-Type': 'text/plain',

@@ -1,10 +1,10 @@
 import type { ZeroTierStatusResponse } from '../types.ts';
 
 // The API backend is on the same host, but managed by the proxy server on port 3001
-const API_BASE_URL = `http://${window.location.hostname}:3001`;
+const getApiBaseUrl = () => `http://${window.location.hostname}:3001`;
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(`${getApiBaseUrl()}${path}`, {
         headers: {
             'Content-Type': 'application/json',
             ...options.headers,

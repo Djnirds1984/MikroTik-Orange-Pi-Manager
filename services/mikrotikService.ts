@@ -1,11 +1,11 @@
 import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection, NtpSettings } from '../types.ts';
 
 // The new, dedicated API backend runs on port 3002
-const API_BASE_URL = `http://${window.location.hostname}:3002`;
+const getApiBaseUrl = () => `http://${window.location.hostname}:3002`;
 
 // Generic fetch helper for our backend API
 const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: Record<string, any> = {}) => {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -41,7 +41,7 @@ const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: R
 
 export const testRouterConnection = async (routerConfig: RouterConfig): Promise<{ success: boolean, message: string }> => {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/test-connection`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/test-connection`, {
              method: 'POST',
              headers: { 'Content-Type': 'application/json' },
              body: JSON.stringify({ routerConfig })

@@ -434,6 +434,62 @@ ${backendCode}
 // --- Panel Host Management API Endpoints ---
 const ENV_FILE_PATH = path.join(__dirname, '..', 'env.js');
 
+const formatBytes = (bytes, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+app.get('/api/panel/host-status', async (req, res) => {
+    try {
+        const cpuCmd = `top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - $1}'`;
+        const memCmd = `free -m`;
+        const diskCmd = `df -k .`;
+
+        const [cpuOutput, memOutput, diskOutput] = await Promise.all([
+            runCommand(cpuCmd),
+            runCommand(memCmd),
+            runCommand(diskCmd)
+        ]);
+
+        // Parse Memory
+        const memLines = memOutput.split('\n');
+        const memData = memLines[1].split(/\s+/);
+        const totalMem = parseInt(memData[1], 10);
+        const usedMem = parseInt(memData[2], 10);
+        const memPercent = Math.round((usedMem / totalMem) * 100);
+
+        // Parse Disk
+        const diskLines = diskOutput.split('\n');
+        const diskData = diskLines[1].split(/\s+/);
+        const totalDisk = parseInt(diskData[1], 10); // in KB
+        const usedDisk = parseInt(diskData[2], 10); // in KB
+        const diskPercent = parseInt(diskData[4].replace('%', ''), 10);
+        
+        res.json({
+            cpuUsage: Math.round(parseFloat(cpuOutput)) || 0,
+            memory: {
+                used: formatBytes(usedMem * 1024 * 1024), // free -m is in MiB
+                total: formatBytes(totalMem * 1024 * 1024),
+                percent: memPercent,
+            },
+            disk: {
+                used: formatBytes(usedDisk * 1024), // df -k is in KB
+                total: formatBytes(totalDisk * 1024),
+                percent: diskPercent,
+            },
+        });
+
+    } catch (error) {
+        console.error('Failed to get panel host status:', error);
+        res.status(500).json({ message: `Could not get host status: ${error.message}` });
+    }
+});
+
+
 app.post('/api/panel/reboot', (req, res) => {
     console.log('Received request to reboot panel server.');
     runCommand('sudo reboot')

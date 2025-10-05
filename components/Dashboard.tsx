@@ -10,7 +10,8 @@ import {
   CartesianGrid
 } from 'recharts';
 import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
-import type { SystemInfo, InterfaceWithHistory, RouterConfigWithId } from '../types.ts';
+import { getPanelHostStatus } from '../services/panelService.ts';
+import type { SystemInfo, InterfaceWithHistory, RouterConfigWithId, PanelHostStatus } from '../types.ts';
 import { RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 import { AIFixer } from './AIFixer.tsx';
@@ -23,14 +24,17 @@ const DashboardCard: React.FC<{ title: string, children: React.ReactNode, classN
   </div>
 );
 
-const ProgressBar: React.FC<{ value: number, label: string }> = ({ value, label }) => (
+const ProgressBar: React.FC<{ value: number, label: string, colorClass?: string }> = ({ value, label, colorClass = 'bg-orange-500' }) => (
   <div>
     <div className="flex justify-between items-center mb-1">
       <span className="text-sm font-medium text-slate-300">{label}</span>
       <span className="text-sm font-bold text-slate-200">{value}%</span>
     </div>
     <div className="w-full bg-slate-700 rounded-full h-2.5">
-      <div className="bg-orange-500 h-2.5 rounded-full" style={{ width: `${value}%` }}></div>
+      <div 
+        className={`${colorClass} h-2.5 rounded-full transition-all duration-500 ease-in-out`} 
+        style={{ width: `${value}%` }}
+      ></div>
     </div>
   </div>
 );
@@ -56,6 +60,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+    const [panelHostStatus, setPanelHostStatus] = useState<PanelHostStatus | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -109,6 +114,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     useEffect(() => {
         initialFetch();
     }, [initialFetch]);
+    
+    // Effect for polling panel host status every second
+    useEffect(() => {
+        const fetchHostStatus = async () => {
+            try {
+                const data = await getPanelHostStatus();
+                setPanelHostStatus(data);
+            } catch (error) {
+                console.error("Failed to fetch panel host status:", error);
+                // Silently fail for now, or show a small indicator in the card
+            }
+        };
+
+        fetchHostStatus(); // Initial fetch
+        const interval = setInterval(fetchHostStatus, 1000); // Fetch every second
+
+        return () => clearInterval(interval);
+    }, []);
 
     useEffect(() => {
         if (!selectedRouter || isLoading || error || interfaces.length === 0) return;
@@ -190,7 +213,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
 
   return (
     <div className="space-y-6">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <DashboardCard title="System Information">
                 <div className="space-y-3">
                     <InfoItem label="Board Name" value={systemInfo.boardName} />
@@ -200,11 +223,30 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                 </div>
             </DashboardCard>
 
-            <DashboardCard title="Resource Usage">
+            <DashboardCard title="Router Resource Usage">
                 <div className="space-y-4 pt-2">
                     <ProgressBar value={systemInfo.cpuLoad} label="CPU Load" />
                     <ProgressBar value={systemInfo.memoryUsage} label="Memory Usage" />
                 </div>
+            </DashboardCard>
+            
+            <DashboardCard title="Panel Host Status">
+                {panelHostStatus ? (
+                    <div className="space-y-4 pt-2">
+                        <ProgressBar value={panelHostStatus.cpuUsage} label="CPU Load" />
+                        <ProgressBar value={panelHostStatus.memory.percent} label="Memory Usage" />
+                        <div>
+                            <ProgressBar value={panelHostStatus.disk.percent} label="SD Card Storage" colorClass='bg-sky-500' />
+                             <div className="text-xs text-slate-400 text-right mt-1 font-mono">
+                                {panelHostStatus.disk.used} / {panelHostStatus.disk.total}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-slate-500">
+                        <p>Loading host data...</p>
+                    </div>
+                )}
             </DashboardCard>
         </div>
 
