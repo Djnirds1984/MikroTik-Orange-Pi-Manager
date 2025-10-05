@@ -92,6 +92,11 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 
 -   An Orange Pi One (or similar SBC) with Armbian/Debian and SSH access.
 -   Node.js v20+, Git, and PM2 installed.
+-   **Build Tools:** The application has dependencies that may need to be compiled from source. Ensure you have the necessary build tools installed:
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y build-essential
+    ```
 
 ### **Step 1: MikroTik Router Configuration**
 
