@@ -235,6 +235,18 @@ const sendSse = (res, data) => {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+app.get('/api/current-version', async (req, res) => {
+    try {
+        const hash = await runCommand('git rev-parse --short HEAD', projectRoot);
+        const log = await runCommand('git log -1 --pretty=%B', projectRoot);
+        const [title, ...descriptionParts] = log.split('\n');
+        const description = descriptionParts.join('\n').trim();
+        res.json({ title: title.trim(), description, hash });
+    } catch (error) {
+        res.status(500).json({ message: 'Could not get current version info from git.', error: error.message });
+    }
+});
+
 app.get('/api/update-status', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -245,8 +257,8 @@ app.get('/api/update-status', async (req, res) => {
         const remoteUrl = await runCommand('git config --get remote.origin.url', projectRoot);
         sendSse(res, { log: `Remote URL: ${remoteUrl || '[Not Configured]'}` });
         
-        if (!remoteUrl || !remoteUrl.startsWith('git@')) {
-             throw new Error(`Git remote is not configured for SSH. Current URL is "${remoteUrl || 'Not Set'}". Please use SSH (e.g., git@github.com:user/repo.git) for updates.`);
+        if (!remoteUrl) {
+             throw new Error(`Git remote is not configured. Please set up a remote repository to check for updates.`);
         }
         
         sendSse(res, { log: '\n>>> Fetching latest data from remote repository...' });
@@ -260,7 +272,23 @@ app.get('/api/update-status', async (req, res) => {
         if (local === remote) {
             sendSse(res, { status: 'uptodate', message: 'Your panel is up-to-date.', local });
         } else {
-            sendSse(res, { status: 'available', message: 'An update is available.', local, remote });
+            sendSse(res, { log: '\n>>> A new version is available. Fetching changelog...' });
+            const changelog = await runCommand(`git log ${local}..${remote} --pretty=format:"- %s (%h)"`, projectRoot);
+            const newVersionLog = await runCommand(`git log -1 --pretty=%B ${remote}`, projectRoot);
+            const [newVersionTitle, ...newVersionDescParts] = newVersionLog.split('\n');
+            const newVersionDescription = newVersionDescParts.join('\n').trim();
+
+            sendSse(res, {
+                status: 'available',
+                message: `New version ${newVersionTitle.trim()} is available.`,
+                local,
+                remote,
+                newVersionInfo: {
+                    title: newVersionTitle.trim(),
+                    description: newVersionDescription,
+                    changelog: changelog.trim()
+                }
+            });
         }
 
     } catch (error) {

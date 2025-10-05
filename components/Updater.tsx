@@ -9,6 +9,17 @@ type StatusInfo = {
     local?: string;
     remote?: string;
 };
+type VersionInfo = {
+    title: string;
+    description: string;
+    hash?: string;
+};
+type NewVersionInfo = {
+    title: string;
+    description: string;
+    changelog: string;
+};
+
 
 const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
     const logContainerRef = React.useRef<HTMLDivElement>(null);
@@ -27,11 +38,38 @@ const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
     );
 };
 
+const VersionInfoDisplay: React.FC<{ title: string; info: VersionInfo }> = ({ title, info }) => (
+    <div>
+        <h3 className="text-xl font-bold text-slate-100 mb-2">{title}</h3>
+        <div className="bg-slate-900/50 p-4 rounded-lg">
+            <p className="text-lg font-semibold text-orange-400">{info.title} <span className="text-xs font-mono text-slate-500 ml-2">{info.hash}</span></p>
+            {info.description && <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{info.description}</p>}
+        </div>
+    </div>
+);
+
+const ChangelogDisplay: React.FC<{ info: NewVersionInfo }> = ({ info }) => (
+    <div>
+        <h3 className="text-xl font-bold text-slate-100 mb-2">New Version Available: <span className="text-cyan-400">{info.title}</span></h3>
+        <div className="bg-slate-900/50 p-4 rounded-lg space-y-4">
+            {info.description && <p className="text-sm text-slate-300 italic">{info.description}</p>}
+            <div>
+                <h4 className="font-semibold text-slate-200 mb-2">Changelog:</h4>
+                <pre className="text-xs font-mono bg-slate-800 p-3 rounded-md text-slate-300 whitespace-pre-wrap">{info.changelog}</pre>
+            </div>
+        </div>
+    </div>
+);
+
 
 export const Updater: React.FC = () => {
     const [statusInfo, setStatusInfo] = useState<StatusInfo>({ status: 'idle', message: 'Check for the latest version of the panel.' });
     const [backups, setBackups] = useState<string[]>([]);
     const [logs, setLogs] = useState<string[]>([]);
+    const [currentVersionInfo, setCurrentVersionInfo] = useState<VersionInfo | null>(null);
+    const [newVersionInfo, setNewVersionInfo] = useState<NewVersionInfo | null>(null);
+    const [isLoadingCurrentVersion, setIsLoadingCurrentVersion] = useState(true);
+
 
     const fetchBackups = useCallback(async () => {
         try {
@@ -45,11 +83,27 @@ export const Updater: React.FC = () => {
     }, []);
 
     useEffect(() => {
+        const fetchCurrentVersion = async () => {
+            setIsLoadingCurrentVersion(true);
+            try {
+                const res = await fetch('/api/current-version');
+                if (!res.ok) throw new Error('Failed to fetch current version');
+                const data = await res.json();
+                setCurrentVersionInfo(data);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                setIsLoadingCurrentVersion(false);
+            }
+        };
+
+        fetchCurrentVersion();
         fetchBackups();
     }, [fetchBackups]);
 
     const handleCheckForUpdates = () => {
         setLogs([]);
+        setNewVersionInfo(null);
         setStatusInfo({ status: 'checking', message: 'Connecting to repository...' });
 
         const eventSource = new EventSource('/api/update-status');
@@ -57,23 +111,24 @@ export const Updater: React.FC = () => {
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
-            // Gracefully close the connection when the server signals it's done
-            if (data.status === 'finished') {
-                eventSource.close();
-                return;
-            }
-
             if (data.log) {
                 setLogs(prev => [...prev, data.log.trim()]);
             }
-            // Update status info, which may or may not include a new status
+            
+            if (data.newVersionInfo) {
+                setNewVersionInfo(data.newVersionInfo);
+            }
+
             setStatusInfo(prev => ({ ...prev, ...data }));
+
+            if (data.status === 'finished') {
+                eventSource.close();
+            }
         };
 
         eventSource.onerror = () => {
-            // This handler now acts as a fallback. It won't override a successful status.
             setStatusInfo(prev => {
-                if (prev.status === 'uptodate' || prev.status === 'available' || prev.status === 'diverged') {
+                if (prev.status === 'uptodate' || prev.status === 'available') {
                     return prev;
                 }
                 return { status: 'error', message: 'Connection to server failed. Could not check for updates.' };
@@ -109,8 +164,6 @@ export const Updater: React.FC = () => {
         };
     };
     
-    // FIX: Refactored handleRollback to use EventSource with a GET request, as it does not support POST.
-    // This also fixes the wiring of the 'Restore' button.
     const handleRollback = (backupFile: string) => {
         if (!window.confirm(`Are you sure you want to restore the backup "${backupFile}"? This will overwrite the current application files.`)) return;
 
@@ -146,8 +199,8 @@ export const Updater: React.FC = () => {
         const { status, message, local, remote } = statusInfo;
         switch (status) {
             case 'checking': return <div className="flex items-center gap-3"><Loader /><p>{message}</p></div>;
-            case 'uptodate': return <div className="flex items-center gap-3 text-green-400"><CheckCircleIcon className="w-8 h-8" /><p>{message} (<code>{local?.substring(0,7)}</code>)</p></div>;
-            case 'available': return <div className="flex items-center gap-3 text-cyan-400"><CloudArrowUpIcon className="w-8 h-8" /><p>{message} (<code>{remote?.substring(0,7)}</code>)</p></div>;
+            case 'uptodate': return <div className="flex items-center gap-3 text-green-400"><CheckCircleIcon className="w-8 h-8" /><p>{message}</p></div>;
+            case 'available': return <div className="flex items-center gap-3 text-cyan-400"><CloudArrowUpIcon className="w-8 h-8" /><p>{message}</p></div>;
             case 'error': return <div className="flex items-center gap-3 text-red-400"><ExclamationTriangleIcon className="w-8 h-8" /><p>{message}</p></div>;
             case 'restarting': return <div className="flex items-center gap-3 text-orange-400"><Loader /><p>{message}</p></div>
             default: return <div className="flex items-center gap-3"><UpdateIcon className="w-8 h-8 text-slate-500" /><p>{message}</p></div>;
@@ -174,6 +227,17 @@ export const Updater: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            { (isLoadingCurrentVersion && statusInfo.status === 'idle') && <div className="flex justify-center"><Loader /></div> }
+
+            { !isWorking && newVersionInfo && (
+                <ChangelogDisplay info={newVersionInfo} />
+            )}
+
+            { !isWorking && !newVersionInfo && currentVersionInfo && (
+                <VersionInfoDisplay title="Current Version" info={currentVersionInfo} />
+            )}
+
 
             {(statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'rollingback') && logs.length > 0 && (
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-8">
