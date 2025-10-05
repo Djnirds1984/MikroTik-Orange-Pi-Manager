@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -16,6 +17,7 @@ import { Hotspot } from './components/Hotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
+import { Network } from './components/Network.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import type { View } from './types.ts';
@@ -58,6 +60,8 @@ const App: React.FC = () => {
         return <Scripting />;
       case 'routers':
         return <Routers routers={routers} onAddRouter={addRouter} onUpdateRouter={updateRouter} onDeleteRouter={deleteRouter} />;
+      case 'network':
+          return <Network selectedRouter={selectedRouter} />;
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
       case 'users':
@@ -83,6 +87,7 @@ const App: React.FC = () => {
     dashboard: 'Dashboard',
     scripting: 'AI Script Generator',
     routers: 'Router Management',
+    network: 'Network Management',
     pppoe: 'PPPoE Profiles',
     users: 'PPPoE Users',
     billing: 'Billing Plans',

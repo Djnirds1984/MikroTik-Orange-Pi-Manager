@@ -1,5 +1,5 @@
 import React from 'react';
-import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon } from '../constants.tsx';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon } from '../constants.tsx';
 import type { View } from '../types.ts';
 
 interface SidebarProps {
@@ -35,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView })
     { id: 'dashboard', label: 'Dashboard', icon: <EthernetIcon className="w-6 h-6" /> },
     { id: 'scripting', label: 'AI Scripting', icon: <EditIcon className="w-6 h-6" /> },
     { id: 'routers', label: 'Routers', icon: <RouterIcon className="w-6 h-6" /> },
+    { id: 'network', label: 'Network', icon: <ShareIcon className="w-6 h-6" /> },
     { id: 'pppoe', label: 'PPPoE Profiles', icon: <VlanIcon className="w-6 h-6" /> },
     { id: 'users', label: 'PPPoE Users', icon: <UsersIcon className="w-6 h-6" /> },
     { id: 'billing', label: 'Billing Plans', icon: <SignalIcon className="w-6 h-6" /> },

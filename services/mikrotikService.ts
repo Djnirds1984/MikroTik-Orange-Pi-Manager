@@ -1,4 +1,4 @@
-import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection, NtpSettings } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, BillingPlan, PppSecret, PppSecretData, PppActiveConnection, NtpSettings, VlanInterface } from '../types.ts';
 
 // Generic fetch helper for our backend API
 const fetchData = async (path: string, routerConfig: RouterConfigWithId, body: Record<string, any> = {}) => {
@@ -130,4 +130,17 @@ export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> =
 
 export const setRouterNtp = (router: RouterConfigWithId, settings: Omit<NtpSettings, 'enabled'> & {enabled: boolean}): Promise<{ message: string }> => {
     return fetchData('/api/system/ntp/client/set', router, { settings });
+};
+
+// --- Network Management Services (VLAN) ---
+export const getVlans = (router: RouterConfigWithId): Promise<VlanInterface[]> => {
+    return fetchData('/api/network/vlans', router);
+};
+
+export const addVlan = (router: RouterConfigWithId, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => {
+    return fetchData('/api/network/vlans/add', router, { vlanData });
+};
+
+export const deleteVlan = (router: RouterConfigWithId, vlanId: string): Promise<any> => {
+    return fetchData('/api/network/vlans/delete', router, { vlanId });
 };

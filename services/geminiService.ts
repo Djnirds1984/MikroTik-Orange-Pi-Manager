@@ -105,6 +105,21 @@ export const generateMikroTikScript = async (userPrompt: string): Promise<string
   }
 };
 
+export const generateMultiWanScript = async (wanInterfaces: string[], lanInterface: string, type: 'pcc' | 'pbr'): Promise<string> => {
+    const typeDescription = type === 'pcc'
+        ? "PCC (Per Connection Classifier) for load balancing to merge the speed of the WAN links."
+        : "PBR (Policy Based Routing) for a failover setup. The first WAN interface should be the primary, and the rest are backups.";
+
+    const prompt = `Generate a complete MikroTik RouterOS script for a multi-WAN setup with the following specifications:
+- WAN Interfaces: ${wanInterfaces.join(', ')}
+- LAN Interface: ${lanInterface}
+- Configuration Type: ${typeDescription}
+
+The script should include all necessary mangle rules for routing marks, NAT rules for masquerading, and routing table entries. Assume the WAN interfaces receive their IPs via DHCP. Add comments to explain each major step of the script.`;
+
+    return generateMikroTikScript(prompt);
+};
+
 
 export const fixBackendCode = async (backendCode: string, errorMessage: string, routerName: string): Promise<AIFixResponse> => {
     try {

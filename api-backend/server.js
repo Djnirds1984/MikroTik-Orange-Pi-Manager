@@ -396,6 +396,40 @@ app.post('/api/system/ntp/client/set', (req, res, next) => {
     });
 });
 
+// --- Network Management (VLANs) ---
+app.post('/api/network/vlans', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/interface/vlan');
+        const vlans = Array.isArray(response.data) ? response.data : [];
+        const data = vlans.map(v => ({
+            id: v['.id'],
+            name: v.name,
+            'vlan-id': v['vlan-id'],
+            interface: v.interface,
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/network/vlans/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { vlanData } = req.body;
+        // MikroTik requires vlan-id to be a string
+        vlanData['vlan-id'] = String(vlanData['vlan-id']);
+        const response = await apiClient.put('/interface/vlan', vlanData);
+        res.status(201).json(response.data);
+    });
+});
+
+app.post('/api/network/vlans/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { vlanId } = req.body;
+        await apiClient.delete(`/interface/vlan/${vlanId}`);
+        res.status(204).send();
+    });
+});
+
+
 // --- Global Error Handling Middleware (must be the last app.use call) ---
 // This acts as a safety net to catch any unhandled errors from the API routes
 // and prevents the entire server process from crashing.

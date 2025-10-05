@@ -1,4 +1,4 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales';
+export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network';
 
 export interface RouterConfig {
   name: string;
@@ -197,4 +197,12 @@ export interface PanelHostStatus {
         total: string;
         percent: number;
     };
+}
+
+// Type for Network Management Page
+export interface VlanInterface {
+    id: string;
+    name: string;
+    'vlan-id': string;
+    interface: string;
 }
