@@ -96,10 +96,11 @@ export interface IpPool {
 export interface BillingPlan {
     name: string;
     price: number;
-    currency: string;
     cycle: 'Monthly' | 'Quarterly' | 'Yearly';
     pppoeProfile: string;
     description: string;
+    // FIX: Add currency to the billing plan to resolve type errors and associate a currency with each plan.
+    currency: string;
 }
 
 export interface BillingPlanWithId extends BillingPlan {
@@ -224,4 +225,10 @@ export interface CompanySettings {
     contactNumber?: string;
     email?: string;
     logoBase64?: string;
+}
+
+// Type for Panel Localization Settings
+export interface PanelSettings {
+    language: 'en' | 'fil';
+    currency: 'USD' | 'PHP';
 }

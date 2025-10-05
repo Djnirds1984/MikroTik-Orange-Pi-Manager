@@ -21,19 +21,22 @@ import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
+import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import type { View } from './types.ts';
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   
   const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
   const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
   const { items, addItem, updateItem, deleteItem, isLoading: isLoadingInventory } = useInventoryData();
   const { settings: companySettings, updateSettings: updateCompanySettings, isLoading: isLoadingCompany } = useCompanySettings();
+  const { t, isLoading: isLoadingLocalization } = useLocalization();
+
 
   const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
 
-  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany;
+  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization;
 
   useEffect(() => {
     // This effect runs once after the initial data has loaded
@@ -62,7 +65,7 @@ const App: React.FC = () => {
         return (
             <div className="flex flex-col items-center justify-center h-full">
                 <Loader />
-                <p className="mt-4 text-orange-400">Loading application data...</p>
+                <p className="mt-4 text-orange-400">{t('app.loading_data')}</p>
             </div>
         );
     }
@@ -101,29 +104,12 @@ const App: React.FC = () => {
     }
   };
 
-  const titles: Record<View, string> = {
-    dashboard: 'Dashboard',
-    scripting: 'AI Script Generator',
-    routers: 'Router Management',
-    network: 'Network Management',
-    pppoe: 'PPPoE Profiles',
-    users: 'PPPoE Users',
-    billing: 'Billing Plans',
-    sales: 'Sales Report',
-    inventory: 'Stock & Inventory',
-    hotspot: 'Hotspot Management',
-    zerotier: 'ZeroTier Management',
-    company: 'Company Settings',
-    system: 'System Settings',
-    updater: 'Panel Updater',
-  };
-
   return (
     <div className="flex bg-slate-950 text-slate-100 min-h-screen">
       <Sidebar currentView={currentView} setCurrentView={setCurrentView} companySettings={companySettings} />
       <main className="flex-1 flex flex-col">
         <TopBar
-          title={titles[currentView]}
+          title={t(`titles.${currentView}`)}
           routers={routers}
           selectedRouter={selectedRouter}
           onSelectRouter={setSelectedRouterId}
@@ -137,5 +123,12 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => (
+  <LocalizationProvider>
+    <AppContent />
+  </LocalizationProvider>
+);
+
 
 export default App;

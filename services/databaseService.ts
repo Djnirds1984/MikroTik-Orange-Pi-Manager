@@ -28,3 +28,7 @@ export const dbApi = {
     patch: <T>(endpoint: string, body: any) => fetcher<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
     delete: <T>(endpoint: string) => fetcher<T>(endpoint, { method: 'DELETE' }),
 };
+
+// Specific endpoints for panel settings
+export const getPanelSettings = () => dbApi.get('/panel-settings');
+export const savePanelSettings = (settings: any) => dbApi.post('/panel-settings', settings);

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { RouterConfigWithId, View } from '../types.ts';
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
+
 
 interface TopBarProps {
   title: string;
@@ -17,6 +19,7 @@ const RouterSelector: React.FC<{
 }> = ({ routers, selectedRouter, onSelectRouter, setCurrentView }) => {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const { t } = useLocalization();
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -33,9 +36,9 @@ const RouterSelector: React.FC<{
             <button
                 onClick={() => setCurrentView('routers')}
                 className="px-4 py-2 text-sm text-slate-100 bg-orange-600 hover:bg-orange-500 rounded-md transition-colors font-semibold"
-                title="Go to Routers page to add a new router"
+                title={t('topbar.add_router_title')}
             >
-                Add a Router
+                {t('topbar.add_a_router')}
             </button>
         );
     }
@@ -46,8 +49,8 @@ const RouterSelector: React.FC<{
                 onClick={() => setIsOpen(!isOpen)}
                 className="flex items-center gap-2 px-3 py-2 text-sm bg-slate-700 hover:bg-slate-600 rounded-md transition-colors"
             >
-                <span className="text-slate-300">Router:</span>
-                <span className="font-semibold text-white">{selectedRouter?.name || 'Select...'}</span>
+                <span className="text-slate-300">{t('topbar.router')}:</span>
+                <span className="font-semibold text-white">{selectedRouter?.name || t('topbar.select')}</span>
                 <svg className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
             </button>
             {isOpen && (

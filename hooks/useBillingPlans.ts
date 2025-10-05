@@ -12,7 +12,12 @@ export const useBillingPlans = () => {
         setError(null);
         try {
             const data = await dbApi.get<BillingPlanWithId[]>('/billing-plans');
-            setPlans(data);
+            // FIX: Provide a fallback currency for plans created before this update.
+            const dataWithFallback = data.map(plan => ({
+                ...plan,
+                currency: plan.currency || 'USD'
+            }));
+            setPlans(dataWithFallback);
         } catch (err) {
             setError((err as Error).message);
             console.error("Failed to fetch billing plans from DB", err);

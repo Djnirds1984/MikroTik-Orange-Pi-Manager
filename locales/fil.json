@@ -1,0 +1,70 @@
+{
+    "app": {
+        "loading_data": "Nilo-load ang data ng application..."
+    },
+    "sidebar": {
+        "dashboard": "Dashboard",
+        "ai_scripting": "AI Scripting",
+        "routers": "Mga Router",
+        "network": "Network",
+        "pppoe_profiles": "Mga PPPoE Profile",
+        "pppoe_users": "Mga PPPoE User",
+        "billing_plans": "Mga Plano sa Pagsingil",
+        "sales_report": "Ulat ng Benta",
+        "inventory": "Imbentaryo",
+        "hotspot": "Hotspot",
+        "zerotier": "ZeroTier",
+        "company": "Kumpanya",
+        "system_settings": "Mga Setting ng System",
+        "updater": "Updater"
+    },
+    "titles": {
+        "dashboard": "Dashboard",
+        "scripting": "AI Script Generator",
+        "routers": "Pamamahala ng Router",
+        "network": "Pamamahala ng Network",
+        "pppoe": "Mga PPPoE Profile",
+        "users": "Mga PPPoE User",
+        "billing": "Mga Plano sa Pagsingil",
+        "sales": "Ulat ng Benta",
+        "inventory": "Stock at Imbentaryo",
+        "hotspot": "Pamamahala ng Hotspot",
+        "zerotier": "Pamamahala ng ZeroTier",
+        "company": "Mga Setting ng Kumpanya",
+        "system": "Mga Setting ng System",
+        "updater": "Panel Updater"
+    },
+    "topbar": {
+        "add_router_title": "Pumunta sa pahina ng Mga Router para magdagdag ng bagong router",
+        "add_a_router": "Magdagdag ng Router",
+        "router": "Router",
+        "select": "Pumili..."
+    },
+    "common": {
+        "cancel": "Kanselahin",
+        "save": "I-save",
+        "save_plan": "I-save ang Plano"
+    },
+    "billing": {
+        "add_new_plan": "Magdagdag ng Bagong Plano",
+        "select_router_alert": "Mangyaring pumili ng router bago pamahalaan ang mga plano.",
+        "select_router_manage": "Mangyaring pumili ng router mula sa itaas para pamahalaan ang mga plano sa pagsingil.",
+        "loading_plans": "Nilo-load ang mga plano sa pagsingil...",
+        "profile": "Profile",
+        "monthly": "Buwanan",
+        "quarterly": "Kada-tatlong buwan",
+        "yearly": "Taunan",
+        "delete_confirm": "Sigurado ka bang gusto mong burahin ang plano sa pagsingil na ito?",
+        "edit_plan_title": "I-edit ang '{{name}}'",
+        "add_plan_title": "Magdagdag ng Bagong Plano sa Pagsingil",
+        "plan_name": "Pangalan ng Plano",
+        "plan_name_placeholder": "hal., Premium 100Mbps",
+        "pppoe_profile": "PPPoE Profile",
+        "loading_profiles": "Nilo-load ang mga profile...",
+        "no_profiles_found": "Walang nahanap na profile",
+        "price": "Presyo",
+        "cycle": "Siklo",
+        "description": "Deskripsyon",
+        "description_placeholder": "Isang maikling paglalarawan ng plano."
+    }
+}

@@ -1,5 +1,6 @@
 import React from 'react';
 import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon } from '../constants.tsx';
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import type { View, CompanySettings } from '../types.ts';
 
 interface SidebarProps {
@@ -32,21 +33,23 @@ const NavItem: React.FC<{
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings }) => {
+  const { t } = useLocalization();
+  
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <EthernetIcon className="w-6 h-6" /> },
-    { id: 'scripting', label: 'AI Scripting', icon: <EditIcon className="w-6 h-6" /> },
-    { id: 'routers', label: 'Routers', icon: <RouterIcon className="w-6 h-6" /> },
-    { id: 'network', label: 'Network', icon: <ShareIcon className="w-6 h-6" /> },
-    { id: 'pppoe', label: 'PPPoE Profiles', icon: <VlanIcon className="w-6 h-6" /> },
-    { id: 'users', label: 'PPPoE Users', icon: <UsersIcon className="w-6 h-6" /> },
-    { id: 'billing', label: 'Billing Plans', icon: <SignalIcon className="w-6 h-6" /> },
-    { id: 'sales', label: 'Sales Report', icon: <CurrencyDollarIcon className="w-6 h-6" /> },
-    { id: 'inventory', label: 'Stock & Inventory', icon: <ArchiveBoxIcon className="w-6 h-6" /> },
-    { id: 'hotspot', label: 'Hotspot', icon: <WifiIcon className="w-6 h-6" /> },
-    { id: 'zerotier', label: 'ZeroTier', icon: <ZeroTierIcon className="w-6 h-6" /> },
-    { id: 'company', label: 'Company', icon: <BuildingOffice2Icon className="w-6 h-6" /> },
-    { id: 'system', label: 'System Settings', icon: <CogIcon className="w-6 h-6" /> },
-    { id: 'updater', label: 'Updater', icon: <UpdateIcon className="w-6 h-6" /> },
+    { id: 'dashboard', label: t('sidebar.dashboard'), icon: <EthernetIcon className="w-6 h-6" /> },
+    { id: 'scripting', label: t('sidebar.ai_scripting'), icon: <EditIcon className="w-6 h-6" /> },
+    { id: 'routers', label: t('sidebar.routers'), icon: <RouterIcon className="w-6 h-6" /> },
+    { id: 'network', label: t('sidebar.network'), icon: <ShareIcon className="w-6 h-6" /> },
+    { id: 'pppoe', label: t('sidebar.pppoe_profiles'), icon: <VlanIcon className="w-6 h-6" /> },
+    { id: 'users', label: t('sidebar.pppoe_users'), icon: <UsersIcon className="w-6 h-6" /> },
+    { id: 'billing', label: t('sidebar.billing_plans'), icon: <SignalIcon className="w-6 h-6" /> },
+    { id: 'sales', label: t('sidebar.sales_report'), icon: <CurrencyDollarIcon className="w-6 h-6" /> },
+    { id: 'inventory', label: t('sidebar.inventory'), icon: <ArchiveBoxIcon className="w-6 h-6" /> },
+    { id: 'hotspot', label: t('sidebar.hotspot'), icon: <WifiIcon className="w-6 h-6" /> },
+    { id: 'zerotier', label: t('sidebar.zerotier'), icon: <ZeroTierIcon className="w-6 h-6" /> },
+    { id: 'company', label: t('sidebar.company'), icon: <BuildingOffice2Icon className="w-6 h-6" /> },
+    { id: 'system', label: t('sidebar.system_settings'), icon: <CogIcon className="w-6 h-6" /> },
+    { id: 'updater', label: t('sidebar.updater'), icon: <UpdateIcon className="w-6 h-6" /> },
   ] as const;
 
   return (

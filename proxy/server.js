@@ -37,10 +37,10 @@ async function initializeDatabase() {
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         price REAL NOT NULL,
-        currency TEXT NOT NULL,
         cycle TEXT NOT NULL,
         pppoeProfile TEXT NOT NULL,
-        description TEXT
+        description TEXT,
+        currency TEXT NOT NULL DEFAULT 'USD'
       );
 
       CREATE TABLE IF NOT EXISTS sales_records (
@@ -68,7 +68,17 @@ async function initializeDatabase() {
         key TEXT PRIMARY KEY,
         value TEXT
       );
+      
+      CREATE TABLE IF NOT EXISTS panel_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
+    
+    // Set default settings if not present
+    await db.run("INSERT OR IGNORE INTO panel_settings (key, value) VALUES ('language', 'en')");
+    await db.run("INSERT OR IGNORE INTO panel_settings (key, value) VALUES ('currency', 'USD')");
+    
     console.log('Database tables are ready.');
   } catch (error) {
     console.error('Failed to initialize database:', error);
@@ -108,6 +118,8 @@ app.get(/\.(ts|tsx)$/, async (req, res) => {
 
 // --- Static File Serving ---
 app.use(express.static(path.join(__dirname, '..')));
+app.use('/locales', express.static(path.join(__dirname, '..', 'locales')));
+
 
 // Helper to run shell commands
 const runCommand = (command, cwd = process.cwd()) => {
@@ -151,13 +163,13 @@ dbApi.get('/billing-plans', async (req, res) => {
     res.json(plans);
 });
 dbApi.post('/billing-plans', async (req, res) => {
-    const { id, name, price, currency, cycle, pppoeProfile, description } = req.body;
-    await db.run('INSERT INTO billing_plans (id, name, price, currency, cycle, pppoeProfile, description) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, name, price, currency, cycle, pppoeProfile, description]);
+    const { id, name, price, cycle, pppoeProfile, description, currency } = req.body;
+    await db.run('INSERT INTO billing_plans (id, name, price, cycle, pppoeProfile, description, currency) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, name, price, cycle, pppoeProfile, description, currency]);
     res.status(201).json({ id });
 });
 dbApi.patch('/billing-plans/:id', async (req, res) => {
-    const { name, price, currency, cycle, pppoeProfile, description } = req.body;
-    await db.run('UPDATE billing_plans SET name = ?, price = ?, currency = ?, cycle = ?, pppoeProfile = ?, description = ? WHERE id = ?', [name, price, currency, cycle, pppoeProfile, description, req.params.id]);
+    const { name, price, cycle, pppoeProfile, description, currency } = req.body;
+    await db.run('UPDATE billing_plans SET name = ?, price = ?, cycle = ?, pppoeProfile = ?, description = ?, currency = ? WHERE id = ?', [name, price, cycle, pppoeProfile, description, currency, req.params.id]);
     res.status(200).json({ message: 'Plan updated' });
 });
 dbApi.delete('/billing-plans/:id', async (req, res) => {
@@ -224,6 +236,27 @@ dbApi.post('/company-settings', async (req, res) => {
     }
     await stmt.finalize();
     res.status(200).json({ message: 'Company settings saved.' });
+});
+
+// Panel Settings (Localization)
+dbApi.get('/panel-settings', async (req, res) => {
+    const settingsRows = await db.all('SELECT * FROM panel_settings');
+    const settings = settingsRows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+    }, {});
+    res.json(settings);
+});
+dbApi.post('/panel-settings', async (req, res) => {
+    const settings = req.body;
+    const stmt = await db.prepare('INSERT OR REPLACE INTO panel_settings (key, value) VALUES (?, ?)');
+    for (const key in settings) {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) {
+            await stmt.run(key, settings[key]);
+        }
+    }
+    await stmt.finalize();
+    res.status(200).json({ message: 'Panel settings saved.' });
 });
 
 

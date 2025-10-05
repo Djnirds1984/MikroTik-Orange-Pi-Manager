@@ -4,6 +4,8 @@ import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSec
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon, SearchIcon } from '../constants.tsx';
+// FIX: Import useLocalization to handle currency formatting correctly.
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
 
 // --- Helper Functions ---
 const parseComment = (comment: string | undefined): { dueDate?: string; plan?: string } => {
@@ -158,6 +160,8 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
     const [paymentDate, setPaymentDate] = useState('');
     const [discountDays, setDiscountDays] = useState(0);
     const [expiryProfile, setExpiryProfile] = useState('');
+    // FIX: Use localization context to format currency based on the plan's currency.
+    const { language } = useLocalization();
 
     const currentUserPlan = useMemo(() => {
         if (!user) return null;
@@ -183,6 +187,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
 
     const handleSubmit = () => {
         onProcess(discountDays, paymentDate, expiryProfile);
+    };
+    
+    // FIX: Create a robust formatting function that respects the plan's specific currency.
+    const formatInPlanCurrency = (amount: number): string => {
+        if (!currentUserPlan) return amount.toFixed(2);
+        const lang = language === 'fil' ? 'en-PH' : 'en-US';
+        return new Intl.NumberFormat(lang, {
+            style: 'currency',
+            currency: currentUserPlan.currency,
+        }).format(amount);
     };
 
     return (
@@ -223,15 +237,15 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
                         <div className="mt-6 pt-4 border-t border-slate-700 space-y-2 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-slate-400">Plan Price:</span>
-                                <span className="text-slate-200">{currentUserPlan.currency} {planPrice.toFixed(2)}</span>
+                                <span className="text-slate-200">{formatInPlanCurrency(planPrice)}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-400">Discount:</span>
-                                <span className="text-red-400">- {currentUserPlan.currency} {discountAmount.toFixed(2)}</span>
+                                <span className="text-red-400">- {formatInPlanCurrency(discountAmount)}</span>
                             </div>
                             <div className="flex justify-between text-base font-bold mt-2">
                                 <span className="text-green-400">Final Amount:</span>
-                                <span className="text-green-400">{currentUserPlan.currency} {finalAmount.toFixed(2)}</span>
+                                <span className="text-green-400">{formatInPlanCurrency(finalAmount)}</span>
                             </div>
                         </div>
                     ) : (
@@ -417,6 +431,7 @@ export const Users: React.FC<{
                 clientName: payingSecret.name,
                 planName: currentUserPlan.name,
                 planPrice: currentUserPlan.price,
+                // FIX: Pass the currency from the billing plan to the sales record.
                 currency: currentUserPlan.currency,
                 discountAmount: discountAmount,
                 finalAmount: finalAmount,

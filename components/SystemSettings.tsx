@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { RouterConfigWithId, NtpSettings } from '../types.ts';
+import type { RouterConfigWithId, NtpSettings, PanelSettings } from '../types.ts';
 import { getRouterNtp, rebootRouter, setRouterNtp as setRouterNtpService } from '../services/mikrotikService.ts';
 import { getPanelNtp, rebootPanel, setPanelNtp as setPanelNtpService, getGeminiKey, setGeminiKey } from '../services/panelService.ts';
 import { initializeAiClient } from '../services/geminiService.ts';
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, ServerIcon, PowerIcon, ExclamationTriangleIcon, CogIcon, CircleStackIcon, ArrowPathIcon, KeyIcon, EyeIcon, EyeSlashIcon } from '../constants.tsx';
 
@@ -52,15 +53,19 @@ const NtpInfo: React.FC<{ title: string; settings: NtpSettings | null; error: st
 
 
 export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+    const { t, language, currency, setLanguage, setCurrency } = useLocalization();
+
     const [panelNtp, setPanelNtp] = useState<NtpSettings | null>(null);
     const [routerNtp, setRouterNtp] = useState<NtpSettings | null>(null);
     const [formNtp, setFormNtp] = useState({ primaryNtp: '', secondaryNtp: '' });
     const [apiKey, setApiKey] = useState('');
     const [isKeyVisible, setIsKeyVisible] = useState(false);
     const [keyStatus, setKeyStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+    const [localizationStatus, setLocalizationStatus] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+
 
     const [isLoading, setIsLoading] = useState({ panel: true, router: true, key: true });
-    const [isSubmitting, setIsSubmitting] = useState<'panel' | 'router' | 'both' | 'key' | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState<'panel' | 'router' | 'both' | 'key' | 'localization' | null>(null);
     const [errors, setErrors] = useState<{ panel: string | null, router: string | null, key: string | null }>({ panel: null, router: null, key: null });
     
     const [activeOperation, setActiveOperation] = useState<'install' | 'restart' | null>(null);
@@ -154,6 +159,21 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         }
     }
 
+    const handleSaveLocalization = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmitting('localization');
+        setLocalizationStatus(null);
+        try {
+            await setLanguage(language);
+            await setCurrency(currency);
+            setLocalizationStatus({ type: 'success', message: 'Localization settings saved!' });
+        } catch (err) {
+            setLocalizationStatus({ type: 'error', message: (err as Error).message });
+        } finally {
+            setIsSubmitting(null);
+        }
+    }
+
     const handleMaintenanceAction = (action: 'install' | 'restart') => {
         setActiveOperation(action);
         setMaintenanceLogs([]);
@@ -233,6 +253,37 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                         {isSubmitting === 'key' ? 'Saving...' : 'Save Key'}
                     </button>
                 </div>
+            </SettingsCard>
+            
+            <SettingsCard title="Localization" icon={<span className="text-2xl">🌍</span>}>
+                <form onSubmit={handleSaveLocalization} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="language" className="block text-sm font-medium text-slate-300">Language</label>
+                            <select id="language" value={language} onChange={(e) => setLanguage(e.target.value as PanelSettings['language'])} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                <option value="en">English</option>
+                                <option value="fil">Filipino</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="currency" className="block text-sm font-medium text-slate-300">Currency</label>
+                            <select id="currency" value={currency} onChange={(e) => setCurrency(e.target.value as PanelSettings['currency'])} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                <option value="USD">USD - United States Dollar</option>
+                                <option value="PHP">PHP - Philippine Peso</option>
+                            </select>
+                        </div>
+                    </div>
+                     {localizationStatus && (
+                        <div className={`mt-3 text-sm p-2 rounded-md ${localizationStatus.type === 'success' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`}>
+                            {localizationStatus.message}
+                        </div>
+                    )}
+                    <div className="flex justify-end pt-2">
+                        <button type="submit" disabled={isWorking} className="px-4 py-2 text-sm font-semibold bg-orange-600 hover:bg-orange-500 rounded-lg disabled:opacity-50">
+                            {isSubmitting === 'localization' ? 'Saving...' : 'Save Preferences'}
+                        </button>
+                    </div>
+                </form>
             </SettingsCard>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

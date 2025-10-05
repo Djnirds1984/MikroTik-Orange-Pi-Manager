@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { BillingPlan, BillingPlanWithId, PppProfile, RouterConfigWithId } from '../types.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { getPppProfiles } from '../services/mikrotikService.ts';
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { EditIcon, TrashIcon, SignalIcon, RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 
@@ -13,16 +14,23 @@ const PlanForm: React.FC<{
     profiles: PppProfile[];
     isLoadingProfiles: boolean;
 }> = ({ onSave, onCancel, initialData, profiles, isLoadingProfiles }) => {
-    const defaultPlanState: BillingPlan = { name: '', price: 0, currency: 'USD', cycle: 'Monthly', pppoeProfile: '', description: '' };
+    // FIX: Add currency to plan state and handle it during initialization.
+    const { t, currency } = useLocalization();
+    const defaultPlanState: BillingPlan = { name: '', price: 0, cycle: 'Monthly', pppoeProfile: '', description: '', currency };
     const [plan, setPlan] = useState<BillingPlan>(initialData || defaultPlanState);
     
     useEffect(() => {
-        const initialState = { ...defaultPlanState, ...(initialData || {}) };
+        // If it's an existing plan, it will have its own currency.
+        // If it's a new plan, it will get the current global currency from the context.
+        const initialState = initialData ? 
+            { ...initialData } : 
+            { ...defaultPlanState, currency: currency };
+
         if (!initialState.pppoeProfile && profiles.length > 0) {
             initialState.pppoeProfile = profiles[0].name;
         }
         setPlan(initialState);
-    }, [initialData, profiles]);
+    }, [initialData, profiles, currency]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -36,45 +44,41 @@ const PlanForm: React.FC<{
 
     return (
         <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-            <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? `Edit '${initialData.name}'` : 'Add New Billing Plan'}</h3>
+            <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? t('billing.edit_plan_title', { name: initialData.name }) : t('billing.add_plan_title')}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-slate-300">Plan Name</label>
-                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., Premium 100Mbps" />
+                        <label htmlFor="name" className="block text-sm font-medium text-slate-300">{t('billing.plan_name')}</label>
+                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder={t('billing.plan_name_placeholder')} />
                     </div>
                     <div>
-                        <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-300">PPPoE Profile</label>
+                        <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-300">{t('billing.pppoe_profile')}</label>
                         <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500 disabled:opacity-50">
-                            {isLoadingProfiles ? <option>Loading profiles...</option> : profiles.length === 0 ? <option>No profiles found</option> : profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                            {isLoadingProfiles ? <option>{t('billing.loading_profiles')}</option> : profiles.length === 0 ? <option>{t('billing.no_profiles_found')}</option> : profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </select>
                     </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-slate-300">Price</label>
+                        <label htmlFor="price" className="block text-sm font-medium text-slate-300">{t('billing.price')}</label>
                         <input type="number" name="price" value={plan.price} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
                     </div>
                      <div>
-                        <label htmlFor="currency" className="block text-sm font-medium text-slate-300">Currency</label>
-                        <input type="text" name="currency" value={plan.currency} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
-                    </div>
-                     <div>
-                        <label htmlFor="cycle" className="block text-sm font-medium text-slate-300">Cycle</label>
+                        <label htmlFor="cycle" className="block text-sm font-medium text-slate-300">{t('billing.cycle')}</label>
                         <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
-                            <option>Monthly</option>
-                            <option>Quarterly</option>
-                            <option>Yearly</option>
+                            <option>{t('billing.monthly')}</option>
+                            <option>{t('billing.quarterly')}</option>
+                            <option>{t('billing.yearly')}</option>
                         </select>
                     </div>
                 </div>
                 <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-slate-300">Description</label>
-                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="A brief description of the plan."></textarea>
+                    <label htmlFor="description" className="block text-sm font-medium text-slate-300">{t('billing.description')}</label>
+                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder={t('billing.description_placeholder')}></textarea>
                 </div>
                 <div className="flex items-center justify-end space-x-4 pt-4">
-                    <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                    <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">Save Plan</button>
+                    <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">{t('common.cancel')}</button>
+                    <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">{t('common.save_plan')}</button>
                 </div>
             </form>
         </div>
@@ -87,6 +91,7 @@ interface BillingProps {
 
 export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     const { plans, addPlan, updatePlan, deletePlan, isLoading: isLoadingPlans, error: plansError } = useBillingPlans();
+    const { t, formatCurrency } = useLocalization();
     const [editingPlan, setEditingPlan] = useState<BillingPlanWithId | null>(null);
     const [isAdding, setIsAdding] = useState(false);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
@@ -116,14 +121,14 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     };
 
     const handleDelete = (planId: string) => {
-        if (window.confirm("Are you sure you want to delete this billing plan?")) {
+        if (window.confirm(t('billing.delete_confirm'))) {
             deletePlan(planId);
         }
     };
     
     const handleAddNew = () => {
         if (!selectedRouter) {
-            alert("Please select a router before adding a new plan.");
+            alert(t('billing.select_router_alert'));
             return;
         }
         setIsAdding(true);
@@ -132,7 +137,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     
     const handleEdit = (plan: BillingPlanWithId) => {
         if (!selectedRouter) {
-            alert("Please select a router before editing a plan.");
+            alert(t('billing.select_router_alert'));
             return;
         }
         setEditingPlan(plan);
@@ -147,10 +152,10 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     return (
         <div className="max-w-4xl mx-auto">
              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-slate-100">Billing Plans</h2>
+                <h2 className="text-3xl font-bold text-slate-100">{t('titles.billing')}</h2>
                 {!isAdding && !editingPlan && (
                      <button onClick={handleAddNew} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
-                        Add New Plan
+                        {t('billing.add_new_plan')}
                     </button>
                 )}
             </div>
@@ -159,7 +164,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
                 <div className="mb-8">
                     { !selectedRouter ? (
                         <div className="text-center p-8 bg-slate-800 rounded-lg border border-yellow-700 text-yellow-300">
-                           <p>Please select a router from the top bar to manage billing plans.</p>
+                           <p>{t('billing.select_router_manage')}</p>
                         </div>
                     ) : (
                         <PlanForm
@@ -176,7 +181,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
             {isLoadingPlans && (
                  <div className="flex flex-col items-center justify-center h-64">
                     <Loader />
-                    <p className="mt-4 text-orange-400">Loading billing plans...</p>
+                    <p className="mt-4 text-orange-400">{t('billing.loading_plans')}</p>
                 </div>
             )}
 
@@ -190,9 +195,9 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
                                     <div>
                                         <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
                                         <p className="text-sm text-slate-400">
-                                            <span className="font-bold text-slate-200">{plan.price} {plan.currency}</span> / {plan.cycle}
+                                            <span className="font-bold text-slate-200">{formatCurrency(plan.price)}</span> / {t(`billing.${plan.cycle.toLowerCase()}`)}
                                             <span className="mx-2 text-slate-600">|</span>
-                                            Profile: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
+                                            {t('billing.profile')}: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
                                         </p>
                                     </div>
                                 </div>
