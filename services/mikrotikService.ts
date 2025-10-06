@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -86,6 +86,8 @@ export const getIpAddresses = (router: RouterConfig): Promise<IpAddress[]> => mi
 export const getVlans = (router: RouterConfig): Promise<VlanInterface[]> => mikrotikApiPost('/api/network/vlans', { routerConfig: router });
 export const addVlan = (router: RouterConfig, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => mikrotikApiPost('/api/network/vlans/add', { routerConfig: router, vlanData });
 export const deleteVlan = (router: RouterConfig, vlanId: string): Promise<any> => mikrotikApiPost('/api/network/vlans/delete', { routerConfig: router, vlanId });
+export const getWanRoutes = (router: RouterConfig): Promise<WanRoute[]> => mikrotikApiPost('/api/network/wan-routes', { routerConfig: router });
+export const setRouteProperty = (router: RouterConfig, routeId: string, properties: Record<string, any>): Promise<any> => mikrotikApiPost('/api/network/routes/set', { routerConfig: router, routeId, properties });
 
 // System
 export const getRouterNtp = (router: RouterConfig): Promise<NtpSettings> => mikrotikApiPost( '/api/system/ntp/client', { routerConfig: router });

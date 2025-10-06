@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, VlanInterface, Interface, IpAddress } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute } from '../types.ts';
+import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getWanRoutes, setRouteProperty } from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, TrashIcon, VlanIcon, ShareIcon } from '../constants.tsx';
@@ -74,6 +74,107 @@ const VlanFormModal: React.FC<VlanFormModalProps> = ({ isOpen, onClose, onSave, 
         </div>
     );
 };
+
+// --- Multi-WAN Manager Sub-component ---
+const MultiWanManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [routes, setRoutes] = useState<WanRoute[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchRoutes = useCallback(async () => {
+        try {
+            const wanRoutes = await getWanRoutes(selectedRouter);
+            setRoutes(wanRoutes);
+        } catch (err) {
+            console.error("Failed to fetch WAN routes:", err);
+            setError(`Could not fetch WAN routes: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter]);
+
+    useEffect(() => {
+        fetchRoutes();
+        const interval = setInterval(fetchRoutes, 5000); // Poll every 5 seconds
+        return () => clearInterval(interval);
+    }, [fetchRoutes]);
+    
+    const handleToggleRoute = async (routeId: string, isDisabled: boolean) => {
+        try {
+            // Optimistically update UI
+            setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, disabled: !isDisabled } : r));
+            await setRouteProperty(selectedRouter, routeId, { disabled: !isDisabled ? 'true' : 'false' });
+            // Re-fetch to get the authoritative state
+            await fetchRoutes();
+        } catch (err) {
+            alert(`Failed to update route: ${(err as Error).message}`);
+            // Revert UI on failure
+            await fetchRoutes();
+        }
+    };
+
+    if (isLoading) {
+        return <div className="p-6 text-center text-slate-500 dark:text-slate-400">Loading WAN routes...</div>;
+    }
+
+    if (error) {
+        return <div className="p-6 text-center text-red-600 dark:text-red-400">{error}</div>;
+    }
+
+    return (
+        <div className="p-6 space-y-4">
+             <p className="text-sm text-slate-500 dark:text-slate-400">
+                This manager shows your default routes (dst-address 0.0.0.0/0). The 'Active' status reflects the health of the connection. For automatic status updates, enable <code className="text-xs bg-slate-200 dark:bg-slate-700 p-1 rounded">check-gateway=ping</code> on each route in your router.
+            </p>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
+                        <tr>
+                            <th className="px-4 py-3">Status</th>
+                            <th className="px-4 py-3">Gateway</th>
+                            <th className="px-4 py-3">Distance</th>
+                            <th className="px-4 py-3">Comment</th>
+                            <th className="px-4 py-3 text-center">Enabled</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {routes.length > 0 ? routes.map(route => (
+                            <tr key={route.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
+                                <td className="px-4 py-4">
+                                    {route.active ? 
+                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span> :
+                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Inactive</span>
+                                    }
+                                </td>
+                                <td className="px-4 py-4 font-mono text-cyan-600 dark:text-cyan-400">{route.gateway}</td>
+                                <td className="px-4 py-4 font-mono">{route.distance}</td>
+                                <td className="px-4 py-4 text-slate-500 dark:text-slate-400 italic">{route.comment}</td>
+                                <td className="px-4 py-4 text-center">
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={!route.disabled}
+                                            onChange={() => handleToggleRoute(route.id, !route.disabled)}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[--color-primary-600]"></div>
+                                    </label>
+                                </td>
+                            </tr>
+                        )) : (
+                            <tr>
+                                <td colSpan={5} className="text-center py-8 text-slate-500">
+                                    No default WAN routes found.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Main Component ---
 export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
@@ -225,6 +326,15 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 isLoading={isSubmitting}
             />
 
+            {/* Multi-WAN Manager Card */}
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                    <ShareIcon className="w-6 h-6 text-green-500 dark:text-green-400" />
+                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Multi-WAN Manager</h3>
+                </div>
+                <MultiWanManager selectedRouter={selectedRouter} />
+            </div>
+
             {/* VLAN Management Card */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
                 <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
@@ -270,11 +380,11 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 </div>
             </div>
 
-            {/* Multi-WAN Card */}
+            {/* AI Multi-WAN Script Assistant Card */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
                  <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
                     <ShareIcon className="w-6 h-6 text-[--color-primary-500] dark:text-[--color-primary-400]" />
-                    <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400]">AI Multi-WAN Assistant</h3>
+                    <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400]">AI Multi-WAN Script Assistant</h3>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
                     <div className="space-y-4">

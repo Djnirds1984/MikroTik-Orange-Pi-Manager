@@ -441,7 +441,7 @@ app.post('/api/system/ntp/client/set', (req, res, next) => {
     });
 });
 
-// --- Network Management (VLANs) ---
+// --- Network Management (VLANs, WAN Routes) ---
 app.post('/api/network/vlans', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/interface/vlan');
@@ -471,6 +471,34 @@ app.post('/api/network/vlans/delete', (req, res, next) => {
         const { vlanId } = req.body;
         await apiClient.delete(`/interface/vlan/${vlanId}`);
         res.status(204).send();
+    });
+});
+
+app.post('/api/network/wan-routes', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/route?dst-address=0.0.0.0/0');
+        const routes = Array.isArray(response.data) ? response.data : [];
+        const data = routes.map(r => ({
+            id: r['.id'],
+            gateway: r.gateway,
+            distance: r.distance,
+            checkGateway: r['check-gateway'],
+            active: r.active === 'true',
+            disabled: r.disabled === 'true',
+            comment: r.comment,
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/network/routes/set', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { routeId, properties } = req.body;
+        if (!routeId || !properties) {
+            return res.status(400).json({ message: 'Route ID and properties are required.' });
+        }
+        await apiClient.patch(`/ip/route/${routeId}`, properties);
+        res.status(200).json({ message: 'Route updated successfully.' });
     });
 });
 

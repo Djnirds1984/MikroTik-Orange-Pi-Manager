@@ -1,3 +1,5 @@
+import React from 'react';
+
 export type View =
   | 'dashboard'
   | 'scripting'
@@ -253,4 +255,14 @@ export interface Customer {
     address?: string;
     contactNumber?: string;
     email?: string;
+}
+
+export interface WanRoute {
+    id: string;
+    gateway: string;
+    distance: string;
+    checkGateway: string;
+    active: boolean;
+    disabled: boolean;
+    comment?: string;
 }
