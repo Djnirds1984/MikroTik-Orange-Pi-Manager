@@ -1,14 +1,15 @@
-
 const express = require('express');
 const path = require('path');
 const { open } = require('sqlite');
 const sqlite3 = require('@vscode/sqlite3');
 const fs = require('fs-extra');
 const { exec } = require('child_process');
+const util = require('util');
 const archiver = require('archiver');
 const tar = require('tar');
 const esbuild = require('esbuild');
 
+const execPromise = util.promisify(exec);
 const app = express();
 const port = 3001;
 
@@ -384,64 +385,55 @@ app.get('/api/update-status', (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.flushHeaders();
 
-    const commands = [
-        'git fetch origin',
-        'git status -uno'
-    ];
+    const runCommands = async () => {
+        try {
+            // Command 1: git fetch
+            sendSse(res, { log: '> git fetch origin' });
+            // git fetch often prints to stderr on success, so we capture both and log stderr as info, not an error.
+            const { stderr: fetchErr } = await execPromise('git fetch origin', { cwd: projectRoot });
+            if (fetchErr) sendSse(res, { log: fetchErr });
 
-    let commandIndex = 0;
+            // Command 2: git status
+            sendSse(res, { log: '> git status -uno' });
+            const { stdout: statusOut } = await execPromise('git status -uno', { cwd: projectRoot });
+            sendSse(res, { log: statusOut });
 
-    function runNextCommand() {
-        if (commandIndex >= commands.length) {
-            sendSse(res, { status: 'finished' });
-            res.end();
-            return;
-        }
+            if (statusOut.includes('Your branch is up to date')) {
+                sendSse(res, { status: 'uptodate', message: 'Panel is already up to date.' });
+            } else if (statusOut.includes('Your branch is behind')) {
+                sendSse(res, { log: '> git log HEAD..origin/main --oneline' });
+                const { stdout: logOut } = await execPromise('git log HEAD..origin/main --oneline', { cwd: projectRoot });
+                
+                const changelog = logOut || 'Could not retrieve changelog.';
+                const firstLine = changelog.split('\n')[0] || '';
+                const titleMatch = firstLine.match(/^[a-f0-9]+\s(.+)/);
+                const title = titleMatch ? titleMatch[1] : 'New version found';
 
-        const command = commands[commandIndex];
-        sendSse(res, { log: `> ${command}` });
+                const newVersionInfo = {
+                    title: title,
+                    description: 'A new version of the panel is available.',
+                    changelog: changelog
+                };
+                sendSse(res, { status: 'available', message: 'New version available!', newVersionInfo });
 
-        const child = exec(command, { cwd: projectRoot });
-
-        child.stdout.on('data', (data) => {
-            const output = data.toString();
-            sendSse(res, { log: output });
-            
-            if (command.includes('git status')) {
-                if (output.includes('Your branch is up to date')) {
-                    sendSse(res, { status: 'uptodate', message: 'Panel is already up to date.' });
-                } else if (output.includes('Your branch is behind')) {
-                     exec('git log HEAD..origin/main --oneline', { cwd: projectRoot }, (err, stdout) => {
-                        const newVersionInfo = {
-                            title: 'New version found',
-                            description: 'A new version of the panel is available.',
-                            changelog: stdout || 'Could not retrieve changelog.'
-                        };
-                        sendSse(res, { status: 'available', message: 'New version available!', newVersionInfo });
-                    });
-                } else if (output.includes('have diverged')) {
-                    sendSse(res, { status: 'diverged', message: 'Branch has diverged from origin. Manual intervention required.' });
-                }
-            }
-        });
-
-        child.stderr.on('data', (data) => {
-            sendSse(res, { log: `ERROR: ${data.toString()}` });
-            sendSse(res, { status: 'error', message: 'An error occurred during check.' });
-            res.end();
-        });
-
-        child.on('close', (code) => {
-            if (code !== 0 && res.writable) {
-                 // Error was already handled by stderr listener
+            } else if (statusOut.includes('have diverged')) {
+                sendSse(res, { status: 'diverged', message: 'Branch has diverged from origin. Manual intervention required.' });
             } else {
-                commandIndex++;
-                runNextCommand();
+                 sendSse(res, { status: 'uptodate', message: 'Panel is up to date.' });
             }
-        });
-    }
 
-    runNextCommand();
+        } catch (error) {
+            sendSse(res, { log: `ERROR: ${error.stderr || error.message}` });
+            sendSse(res, { status: 'error', message: 'An error occurred during check.' });
+        } finally {
+            if (res.writable) {
+                sendSse(res, { status: 'finished' });
+                res.end();
+            }
+        }
+    };
+
+    runCommands();
 });
 
 app.get('/api/current-version', (req, res) => {
