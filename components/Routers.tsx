@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { RouterConfig, RouterConfigWithId } from '../types.ts';
 import { testRouterConnection } from '../services/mikrotikService.ts';
@@ -70,48 +71,48 @@ const RouterForm: React.FC<RouterFormProps> = ({ onSave, onCancel, initialData }
     };
 
     return (
-        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-            <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? `Edit '${initialData.name}'` : 'Add New Router'}</h3>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? `Edit '${initialData.name}'` : 'Add New Router'}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label htmlFor="name" className="block text-sm font-medium text-slate-300">Router Name</label>
-                    <input type="text" name="name" id="name" value={router.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder="e.g., Home Router" />
+                    <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Router Name</label>
+                    <input type="text" name="name" id="name" value={router.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder="e.g., Home Router" />
                 </div>
                  <div>
-                    <label htmlFor="host" className="block text-sm font-medium text-slate-300">Host / IP Address</label>
-                    <input type="text" name="host" id="host" value={router.host} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder="e.g., 192.168.88.1" />
+                    <label htmlFor="host" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Host / IP Address</label>
+                    <input type="text" name="host" id="host" value={router.host} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder="e.g., 192.168.88.1" />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="user" className="block text-sm font-medium text-slate-300">Username</label>
-                        <input type="text" name="user" id="user" value={router.user} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" />
+                        <label htmlFor="user" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
+                        <input type="text" name="user" id="user" value={router.user} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" />
                     </div>
                     <div>
-                        <label htmlFor="password" className="block text-sm font-medium text-slate-300">Password</label>
-                        <input type="password" name="password" id="password" value={router.password || ''} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder={initialData ? "Leave blank to keep existing" : ""} />
+                        <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                        <input type="password" name="password" id="password" value={router.password || ''} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" placeholder={initialData ? "Leave blank to keep existing" : ""} />
                     </div>
                 </div>
                  <div>
-                    <label htmlFor="port" className="block text-sm font-medium text-slate-300">API Port</label>
-                    <input type="number" name="port" id="port" value={router.port} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" />
+                    <label htmlFor="port" className="block text-sm font-medium text-slate-700 dark:text-slate-300">API Port</label>
+                    <input type="number" name="port" id="port" value={router.port} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm" />
                 </div>
                 
                 {testResult && (
-                    <div className={`p-3 rounded-md text-sm ${testResult.success ? 'bg-green-900/50 text-green-300 border border-green-700' : 'bg-red-900/50 text-red-300 border border-red-700'}`}>
+                    <div className={`p-3 rounded-md text-sm ${testResult.success ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700' : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-700'}`}>
                         {testResult.message}
                     </div>
                 )}
 
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:items-center gap-3 pt-4">
-                     <button type="submit" className="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-[--color-primary-500]">
+                     <button type="submit" className="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-[--color-primary-500]">
                         Save Router
                     </button>
-                    <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none">Cancel</button>
+                    <button type="button" onClick={onCancel} className="w-full sm:w-auto px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none">Cancel</button>
                     <button
                         type="button"
                         onClick={handleTestConnection}
                         disabled={isTesting || !router.host || !router.user}
-                        className="w-full sm:w-auto px-4 py-2 border border-slate-600 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full sm:w-auto px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800 focus:ring-slate-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isTesting ? 'Testing...' : 'Test Connection'}
                     </button>
@@ -166,7 +167,7 @@ export const Routers: React.FC<RoutersProps> = ({ routers, onAddRouter, onUpdate
     return (
         <div className="max-w-4xl mx-auto">
             <div className="flex flex-col gap-4 md:flex-row justify-between md:items-center mb-6">
-                <h2 className="text-3xl font-bold text-slate-100">Manage Routers</h2>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Manage Routers</h2>
                 {!isAdding && !editingRouter && (
                      <button
                         onClick={handleAddNew}
@@ -187,23 +188,23 @@ export const Routers: React.FC<RoutersProps> = ({ routers, onAddRouter, onUpdate
                 </div>
             )}
 
-            <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
-                <ul role="list" className="divide-y divide-slate-700">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
+                <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
                     {routers.length > 0 ? (
                         routers.map((router) => (
-                            <li key={router.id} className="p-4 flex items-center justify-between hover:bg-slate-700/50 transition-colors">
+                            <li key={router.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
                                 <div className="flex items-center gap-4">
-                                    <RouterIcon className="h-8 w-8 text-[--color-primary-400]" />
+                                    <RouterIcon className="h-8 w-8 text-[--color-primary-500] dark:text-[--color-primary-400]" />
                                     <div>
-                                        <p className="text-lg font-semibold text-slate-100">{router.name}</p>
-                                        <p className="text-sm text-slate-400 font-mono">{router.user}@{router.host}:{router.port}</p>
+                                        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{router.name}</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{router.user}@{router.host}:{router.port}</p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    <button onClick={() => handleEdit(router)} className="p-2 text-slate-400 hover:text-[--color-primary-400] rounded-md transition-colors" title="Edit Router">
+                                    <button onClick={() => handleEdit(router)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-[--color-primary-500] dark:hover:text-[--color-primary-400] rounded-md transition-colors" title="Edit Router">
                                         <EditIcon className="h-5 w-5" />
                                     </button>
-                                     <button onClick={() => handleDelete(router.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-md transition-colors" title="Delete Router">
+                                     <button onClick={() => handleDelete(router.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md transition-colors" title="Delete Router">
                                         <TrashIcon className="h-5 w-5" />
                                     </button>
                                 </div>

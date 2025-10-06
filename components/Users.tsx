@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, PppSecret, PppSecretData, PppProfile, PppActiveConnection, BillingPlanWithId, SaleRecord } from '../types.ts';
 import { getPppSecrets, getPppProfiles, getPppActive, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment } from '../services/mikrotikService.ts';
@@ -22,22 +23,22 @@ const parseComment = (comment: string | undefined): { dueDate?: string; plan?: s
 };
 
 const getStatus = (dueDate: string | undefined): { text: string; color: string } => {
-    if (!dueDate) return { text: 'No Info', color: 'text-slate-500' };
+    if (!dueDate) return { text: 'No Info', color: 'text-slate-500 dark:text-slate-500' };
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(dueDate);
     
     if (due < today) {
-        return { text: 'Expired', color: 'text-red-400' };
+        return { text: 'Expired', color: 'text-red-600 dark:text-red-400' };
     }
     const diffTime = due.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
     if (diffDays <= 7) {
-        return { text: `Expires in ${diffDays} day(s)`, color: 'text-yellow-400' };
+        return { text: `Expires in ${diffDays} day(s)`, color: 'text-yellow-600 dark:text-yellow-400' };
     }
     
-    return { text: 'Active', color: 'text-green-400' };
+    return { text: 'Active', color: 'text-green-600 dark:text-green-400' };
 };
 
 // --- Secret Form Modal (Add/Edit User) ---
@@ -112,29 +113,29 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-200 dark:border-slate-700">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
+                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="name" className="block text-sm font-medium text-slate-300">Username</label>
-                                <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                                <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
+                                <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
                             </div>
                             <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-slate-300">Password</label>
-                                <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                                <input type="password" name="password" id="password" value={secret.password || ''} onChange={handleChange} placeholder={initialData ? "Leave blank to keep existing" : ""} required={!initialData} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
                             </div>
                             <div>
-                                <label htmlFor="plan" className="block text-sm font-medium text-slate-300">Billing Plan</label>
-                                <select id="plan" value={selectedPlanId} onChange={handlePlanChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white">
+                                <label htmlFor="plan" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Billing Plan</label>
+                                <select id="plan" value={selectedPlanId} onChange={handlePlanChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white">
                                     {plans.map(p => <option key={p.id} value={p.id}>{p.name} ({p.pppoeProfile})</option>)}
                                 </select>
                             </div>
                         </div>
                     </div>
-                    <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
-                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
+                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600">Cancel</button>
                         <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
                             {isLoading ? 'Saving...' : 'Save User'}
                         </button>
@@ -201,27 +202,27 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700">
                 <div className="p-6">
-                    <h3 className="text-xl font-bold text-[--color-primary-400] mb-2">Record Payment for <span className="text-white">{user.name}</span></h3>
+                    <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-2">Record Payment for <span className="text-slate-900 dark:text-white">{user.name}</span></h3>
                     <div className="space-y-4 mt-4">
                         <div>
-                            <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-300">Payment Date</label>
-                            <input type="date" name="paymentDate" id="paymentDate" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                            <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Payment Date</label>
+                            <input type="date" name="paymentDate" id="paymentDate" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
                         </div>
                         <div>
-                            <label htmlFor="discountDays" className="block text-sm font-medium text-slate-300">Discount for Downtime (Days)</label>
-                            <input type="number" name="discountDays" id="discountDays" value={discountDays} onChange={(e) => setDiscountDays(Number(e.target.value))} min="0" className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                            <label htmlFor="discountDays" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Discount for Downtime (Days)</label>
+                            <input type="number" name="discountDays" id="discountDays" value={discountDays} onChange={(e) => setDiscountDays(Number(e.target.value))} min="0" className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
                         </div>
                         <div>
-                            <label htmlFor="expiryProfile" className="block text-sm font-medium text-slate-300">Profile on Expiry</label>
+                            <label htmlFor="expiryProfile" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile on Expiry</label>
                             <select 
                                 name="expiryProfile" 
                                 id="expiryProfile" 
                                 value={expiryProfile} 
                                 onChange={(e) => setExpiryProfile(e.target.value)} 
                                 required 
-                                className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white"
+                                className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white"
                             >
                                 {profiles.length > 0 ? (
                                     profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)
@@ -234,28 +235,28 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
                     </div>
 
                     {currentUserPlan ? (
-                        <div className="mt-6 pt-4 border-t border-slate-700 space-y-2 text-sm">
+                        <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 space-y-2 text-sm">
                             <div className="flex justify-between">
-                                <span className="text-slate-400">Plan Price:</span>
-                                <span className="text-slate-200">{formatInPlanCurrency(planPrice)}</span>
+                                <span className="text-slate-500 dark:text-slate-400">Plan Price:</span>
+                                <span className="text-slate-700 dark:text-slate-200">{formatInPlanCurrency(planPrice)}</span>
                             </div>
                             <div className="flex justify-between">
-                                <span className="text-slate-400">Discount:</span>
-                                <span className="text-red-400">- {formatInPlanCurrency(discountAmount)}</span>
+                                <span className="text-slate-500 dark:text-slate-400">Discount:</span>
+                                <span className="text-red-600 dark:text-red-400">- {formatInPlanCurrency(discountAmount)}</span>
                             </div>
                             <div className="flex justify-between text-base font-bold mt-2">
-                                <span className="text-green-400">Final Amount:</span>
-                                <span className="text-green-400">{formatInPlanCurrency(finalAmount)}</span>
+                                <span className="text-green-600 dark:text-green-400">Final Amount:</span>
+                                <span className="text-green-600 dark:text-green-400">{formatInPlanCurrency(finalAmount)}</span>
                             </div>
                         </div>
                     ) : (
-                         <div className="mt-6 pt-4 border-t border-slate-700 text-center text-yellow-400 text-sm">
+                         <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700 text-center text-yellow-600 dark:text-yellow-400 text-sm">
                             User does not have a valid billing plan assigned. Payment will only extend access.
                         </div>
                     )}
                 </div>
-                <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
-                    <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
+                <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                    <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600">Cancel</button>
                     <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan || !expiryProfile} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:opacity-50 disabled:cursor-not-allowed">
                         {isLoading ? 'Processing...' : 'Confirm Payment'}
                     </button>
@@ -450,10 +451,10 @@ export const Users: React.FC<{
 
     if (!selectedRouter) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 text-center bg-slate-800 rounded-lg border border-slate-700">
-                <RouterIcon className="w-16 h-16 text-slate-600 mb-4" />
-                <h2 className="text-2xl font-bold text-slate-200">PPPoE User Manager</h2>
-                <p className="mt-2 text-slate-400">Please select a router to manage its PPPoE users.</p>
+            <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <RouterIcon className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4" />
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">PPPoE User Manager</h2>
+                <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router to manage its PPPoE users.</p>
             </div>
         );
     }
@@ -462,16 +463,16 @@ export const Users: React.FC<{
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-[--color-primary-400]">Fetching PPPoE users from {selectedRouter.name}...</p>
+                <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching PPPoE users from {selectedRouter.name}...</p>
             </div>
         );
     }
     
     if (errors.secrets) {
          return (
-            <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
-                <p className="text-xl font-semibold text-red-400">Failed to load user data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{errors.secrets}</p>
+            <div className="flex flex-col items-center justify-center h-64 bg-red-50 dark:bg-slate-800 rounded-lg border border-red-200 dark:border-red-700 p-6 text-center">
+                <p className="text-xl font-semibold text-red-700 dark:text-red-400">Failed to load user data.</p>
+                <p className="mt-2 text-red-600 dark:text-slate-400 text-sm">{errors.secrets}</p>
             </div>
          );
     }
@@ -500,7 +501,7 @@ export const Users: React.FC<{
 
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
                 <div>
-                    <h2 className="text-3xl font-bold text-slate-100">PPPoE Users</h2>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">PPPoE Users</h2>
                     <p className="text-sm text-slate-500 mt-1">
                         NOTE: The payment system uses the MikroTik scheduler to automatically change a user's profile upon their due date.
                     </p>
@@ -515,7 +516,7 @@ export const Users: React.FC<{
                             placeholder="Search user, profile, IP..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full md:w-64 bg-slate-700 border border-slate-600 rounded-md py-2 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[--color-primary-500]"
+                            className="w-full md:w-64 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 pl-10 pr-4 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[--color-primary-500]"
                         />
                     </div>
                     <button onClick={handleAdd} disabled={isLoadingPlans} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg flex-shrink-0 disabled:opacity-50">
@@ -525,7 +526,7 @@ export const Users: React.FC<{
             </div>
             
             {Object.keys(errors).length > 0 && (
-                 <div className="bg-yellow-900/30 border border-yellow-700/50 text-yellow-300 p-3 rounded-lg mb-4 text-sm flex items-center gap-3">
+                 <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg mb-4 text-sm flex items-center gap-3">
                     <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
                     <div>
                         <p className="font-semibold">Data Warning:</p>
@@ -536,10 +537,10 @@ export const Users: React.FC<{
                 </div>
             )}
 
-            <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                        <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
                             <tr>
                                 <th scope="col" className="px-6 py-3">Username</th>
                                 <th scope="col" className="px-6 py-3">Profile</th>
@@ -555,24 +556,24 @@ export const Users: React.FC<{
                                 const subscriptionStatus = getStatus(commentData.dueDate);
                                 const isActive = activeUserNames.has(secret.name);
                                 return (
-                                    <tr key={secret.id} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
-                                        <td className="px-6 py-4 font-medium text-slate-200">{secret.name}</td>
-                                        <td className="px-6 py-4 font-mono text-slate-300">{secret.profile}</td>
+                                    <tr key={secret.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-200">{secret.name}</td>
+                                        <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{secret.profile}</td>
                                         <td className="px-6 py-4">
-                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isActive ? 'bg-green-500/20 text-green-400' : 'bg-slate-600/50 text-slate-400'}`}>
+                                            <span className={`px-2 py-1 text-xs font-semibold rounded-full ${isActive ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' : 'bg-slate-200 dark:bg-slate-600/50 text-slate-600 dark:text-slate-400'}`}>
                                                 {isActive ? 'Online' : 'Offline'}
                                             </span>
                                         </td>
-                                        <td className="px-6 py-4 font-mono text-cyan-400">{commentData.plan || 'N/A'}</td>
+                                        <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{commentData.plan || 'N/A'}</td>
                                         <td className={`px-6 py-4 font-semibold ${subscriptionStatus.color}`}>{commentData.dueDate ? `${subscriptionStatus.text} (${commentData.dueDate})` : subscriptionStatus.text}</td>
                                         <td className="px-6 py-4 text-right space-x-1">
                                             <button onClick={() => handleOpenPayment(secret)} className="px-3 py-1 text-xs bg-sky-600 hover:bg-sky-500 rounded-md font-semibold text-white">
                                                 Pay
                                             </button>
-                                            <button onClick={() => handleEdit(secret)} className="p-2 text-slate-400 hover:text-[--color-primary-400] rounded-md" title="Edit User">
+                                            <button onClick={() => handleEdit(secret)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-[--color-primary-500] dark:hover:text-[--color-primary-400] rounded-md" title="Edit User">
                                                 <EditIcon className="h-5 w-5" />
                                             </button>
-                                            <button onClick={() => handleDelete(secret.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-md" title="Delete User">
+                                            <button onClick={() => handleDelete(secret.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md" title="Delete User">
                                                 <TrashIcon className="h-5 w-5" />
                                             </button>
                                         </td>

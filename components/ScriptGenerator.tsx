@@ -1,5 +1,4 @@
 
-
 import React from 'react';
 
 interface ScriptGeneratorProps {
@@ -19,7 +18,7 @@ export const ScriptGenerator: React.FC<ScriptGeneratorProps> = ({ prompt, setPro
 
   return (
     <div className="flex flex-col space-y-4">
-      <label htmlFor="prompt-input" className="text-lg font-semibold text-slate-300">
+      <label htmlFor="prompt-input" className="text-lg font-semibold text-slate-800 dark:text-slate-300">
         Describe your networking task
       </label>
       <textarea
@@ -28,7 +27,7 @@ export const ScriptGenerator: React.FC<ScriptGeneratorProps> = ({ prompt, setPro
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="e.g., 'Create a firewall rule to block all incoming traffic on port 8080 to the router itself'"
-        className="w-full h-48 p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-[--color-primary-500] focus:outline-none transition-all resize-y text-slate-200 placeholder-slate-500"
+        className="w-full h-48 p-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-[--color-primary-500] focus:outline-none transition-all resize-y text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500"
         disabled={isLoading}
       />
       <button

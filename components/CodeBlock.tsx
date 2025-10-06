@@ -37,16 +37,16 @@ export const CodeBlock: React.FC<CodeBlockProps> = ({ script }) => {
     <div className="relative h-full">
       <button
         onClick={handleCopy}
-        className="absolute top-2 right-2 p-2 bg-slate-700 hover:bg-slate-600 rounded-md text-slate-300 transition-colors"
+        className="absolute top-2 right-2 p-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 rounded-md text-slate-600 dark:text-slate-300 transition-colors"
         aria-label="Copy to clipboard"
       >
         {copied ? (
-          <CheckIcon className="w-5 h-5 text-green-400" />
+          <CheckIcon className="w-5 h-5 text-green-500 dark:text-green-400" />
         ) : (
           <CopyIcon className="w-5 h-5" />
         )}
       </button>
-      <pre className="h-full w-full overflow-auto text-sm bg-transparent rounded-lg text-slate-200">
+      <pre className="h-full w-full overflow-auto text-sm bg-transparent rounded-lg text-slate-900 dark:text-slate-200">
         <code className="language-routeros p-4 block font-mono">
           {script}
         </code>
