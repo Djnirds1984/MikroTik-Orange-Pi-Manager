@@ -22,6 +22,7 @@ import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
+import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import type { View } from './types.ts';
 
 const useMediaQuery = (query: string): boolean => {
@@ -154,7 +155,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <div className="flex bg-slate-950 text-slate-100 min-h-screen">
+    <div className="flex bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 min-h-screen">
       <Sidebar 
         currentView={currentView} 
         setCurrentView={setCurrentView} 
@@ -189,9 +190,11 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <LocalizationProvider>
-    <AppContent />
-  </LocalizationProvider>
+  <ThemeProvider>
+    <LocalizationProvider>
+      <AppContent />
+    </LocalizationProvider>
+  </ThemeProvider>
 );
 
 

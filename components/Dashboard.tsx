@@ -15,11 +15,12 @@ import type { SystemInfo, InterfaceWithHistory, RouterConfigWithId, PanelHostSta
 import { RouterIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 import { AIFixer } from './AIFixer.tsx';
+import { useTheme } from '../contexts/ThemeContext.tsx';
 
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
-  <div className={`bg-slate-800 border border-slate-700 rounded-lg p-6 ${className}`}>
-    <h3 className="text-lg font-semibold text-orange-400 mb-4">{title}</h3>
+  <div className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 ${className}`}>
+    <h3 className="text-lg font-semibold text-orange-500 dark:text-orange-400 mb-4">{title}</h3>
     {children}
   </div>
 );
@@ -27,10 +28,10 @@ const DashboardCard: React.FC<{ title: string, children: React.ReactNode, classN
 const ProgressBar: React.FC<{ value: number, label: string, colorClass?: string }> = ({ value, label, colorClass = 'bg-orange-500' }) => (
   <div>
     <div className="flex justify-between items-center mb-1">
-      <span className="text-sm font-medium text-slate-300">{label}</span>
-      <span className="text-sm font-bold text-slate-200">{value}%</span>
+      <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{label}</span>
+      <span className="text-sm font-bold text-slate-800 dark:text-slate-200">{value}%</span>
     </div>
-    <div className="w-full bg-slate-700 rounded-full h-2.5">
+    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5">
       <div 
         className={`${colorClass} h-2.5 rounded-full transition-all duration-500 ease-in-out`} 
         style={{ width: `${value}%` }}
@@ -40,9 +41,9 @@ const ProgressBar: React.FC<{ value: number, label: string, colorClass?: string 
 );
 
 const InfoItem: React.FC<{ label: string, value: string | number }> = ({ label, value }) => (
-  <div className="flex justify-between items-center py-2 border-b border-slate-700/50 last:border-b-0">
-    <span className="text-slate-400 text-sm">{label}</span>
-    <span className="text-slate-100 font-mono text-sm">{value}</span>
+  <div className="flex justify-between items-center py-2 border-b border-slate-200 dark:border-slate-700/50 last:border-b-0">
+    <span className="text-slate-500 dark:text-slate-400 text-sm">{label}</span>
+    <span className="text-slate-900 dark:text-slate-100 font-mono text-sm">{value}</span>
   </div>
 );
 
@@ -66,6 +67,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     const [error, setError] = useState<string | null>(null);
     const [selectedInterfaceName, setSelectedInterfaceName] = useState<string | null>(null);
     const [showAIFixer, setShowAIFixer] = useState(false);
+    const { isDarkMode } = useTheme();
 
     const initialFetch = useCallback(async () => {
         if (!selectedRouter) {
@@ -170,13 +172,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
         [interfaces, selectedInterfaceName]
     );
 
+    const chartColors = {
+        grid: isDarkMode ? '#475569' : '#e2e8f0',
+        tick: isDarkMode ? '#94a3b8' : '#64748b',
+        axis: isDarkMode ? '#64748b' : '#cbd5e1',
+        tooltipBg: isDarkMode ? 'rgba(30, 41, 59, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+        tooltipBorder: isDarkMode ? '#334155' : '#e2e8f0',
+    };
+
   if (!selectedRouter) {
     return (
-        <div className="flex flex-col items-center justify-center h-96 text-center bg-slate-800 rounded-lg border border-slate-700">
-            <RouterIcon className="w-16 h-16 text-slate-600 mb-4" />
-            <h2 className="text-2xl font-bold text-slate-200">Welcome to the Dashboard</h2>
-            <p className="mt-2 text-slate-400">Please select a router from the dropdown in the header to view its status.</p>
-            <p className="mt-1 text-slate-500 text-sm">If you haven't added any routers yet, go to the 'Routers' page.</p>
+        <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+            <RouterIcon className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4" />
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Welcome to the Dashboard</h2>
+            <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router from the dropdown in the header to view its status.</p>
+            <p className="mt-1 text-slate-400 dark:text-slate-500 text-sm">If you haven't added any routers yet, go to the 'Routers' page.</p>
         </div>
     );
   }
@@ -193,14 +203,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
   if (error || !systemInfo) {
      return (
         <div className="space-y-6">
-            <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
-                <p className="text-xl font-semibold text-red-400">Failed to load router data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{error}</p>
+            <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-800 rounded-lg border border-red-500/50 dark:border-red-700 p-6 text-center">
+                <p className="text-xl font-semibold text-red-500 dark:text-red-400">Failed to load router data.</p>
+                <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">{error}</p>
                 <div className="mt-6 flex items-center space-x-4">
-                     <button onClick={initialFetch} className="px-4 py-2 bg-red-800/50 hover:bg-red-700/50 rounded-lg font-semibold">
+                     <button onClick={initialFetch} className="px-4 py-2 bg-red-100 text-red-700 dark:bg-red-800/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-700/50 rounded-lg font-semibold">
                         Try Again
                     </button>
-                    <button onClick={() => setShowAIFixer(s => !s)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg font-semibold flex items-center gap-2">
+                    <button onClick={() => setShowAIFixer(s => !s)} className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-lg font-semibold flex items-center gap-2 text-white">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.898 20.562L16.25 22.5l-.648-1.938a3.375 3.375 0 00-2.655-2.654L11.25 18l1.938-.648a3.375 3.375 0 002.655-2.654L16.75 13.5l.648 1.938a3.375 3.375 0 002.655 2.654L21.75 18l-1.938.648a3.375 3.375 0 00-2.655 2.654z" /></svg>
                         Try AI Fix
                     </button>
@@ -237,13 +247,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                         <ProgressBar value={panelHostStatus.memory.percent} label="Memory Usage" />
                         <div>
                             <ProgressBar value={panelHostStatus.disk.percent} label="SD Card Storage" colorClass='bg-sky-500' />
-                             <div className="text-xs text-slate-400 text-right mt-1 font-mono">
+                             <div className="text-xs text-slate-500 dark:text-slate-400 text-right mt-1 font-mono">
                                 {panelHostStatus.disk.used} / {panelHostStatus.disk.total}
                             </div>
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center justify-center h-full text-slate-500">
+                    <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500">
                         <p>Loading host data...</p>
                     </div>
                 )}
@@ -259,7 +269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                             id="interface-selector"
                             value={selectedInterfaceName || ''}
                             onChange={(e) => setSelectedInterfaceName(e.target.value)}
-                            className="block w-full max-w-xs bg-slate-700 border border-slate-600 rounded-md shadow-sm py-2 px-3 text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
+                            className="block w-full max-w-xs bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
                         >
                             {interfaces.filter(iface => !iface.name.startsWith('pppoe')).map(iface => <option key={iface.name} value={iface.name}>{iface.name}</option>)}
                         </select>
@@ -278,40 +288,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                                         <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
                                     </linearGradient>
                                 </defs>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#64748b" />
-                                <YAxis unit="M" tick={{ fill: '#94a3b8', fontSize: 12 }} stroke="#64748b" />
+                                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                                <XAxis dataKey="name" tick={{ fill: chartColors.tick, fontSize: 12 }} stroke={chartColors.axis} />
+                                <YAxis unit="M" tick={{ fill: chartColors.tick, fontSize: 12 }} stroke={chartColors.axis} />
                                 <Tooltip
                                     contentStyle={{
-                                        backgroundColor: 'rgba(30, 41, 59, 0.9)',
-                                        borderColor: '#334155',
+                                        backgroundColor: chartColors.tooltipBg,
+                                        borderColor: chartColors.tooltipBorder,
                                         fontSize: '12px',
                                         borderRadius: '0.5rem',
                                     }}
                                     labelStyle={{ display: 'none' }}
-                                    itemStyle={{ padding: 0 }}
+                                    itemStyle={{ padding: 0, color: chartColors.tick }}
                                     formatter={(value: number, name: string) => [`${value.toFixed(2)} Mbit/s`, name === 'rx' ? 'Download' : 'Upload']}
                                 />
-                                <Legend wrapperStyle={{ fontSize: '14px' }} />
+                                <Legend wrapperStyle={{ fontSize: '14px', color: chartColors.tick }} />
                                 <Area type="monotone" dataKey="rx" stroke="#22d3ee" fill="url(#colorRx)" name="Download" isAnimationActive={false} />
                                 <Area type="monotone" dataKey="tx" stroke="#4ade80" fill="url(#colorTx)" name="Upload" isAnimationActive={false} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 text-center border-t border-slate-700/50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 text-center border-t border-slate-200 dark:border-slate-700/50">
                         <div>
-                            <p className="text-sm text-slate-400 uppercase tracking-wider">Download</p>
-                            <p className="text-3xl font-bold text-cyan-400">{formatRate(selectedInterfaceData.rxRate)}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">Download</p>
+                            <p className="text-3xl font-bold text-cyan-500 dark:text-cyan-400">{formatRate(selectedInterfaceData.rxRate)}</p>
                         </div>
                          <div>
-                            <p className="text-sm text-slate-400 uppercase tracking-wider">Upload</p>
-                            <p className="text-3xl font-bold text-green-400">{formatRate(selectedInterfaceData.txRate)}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 uppercase tracking-wider">Upload</p>
+                            <p className="text-3xl font-bold text-green-500 dark:text-green-400">{formatRate(selectedInterfaceData.txRate)}</p>
                         </div>
                     </div>
                 </div>
             ) : (
-                <p className="text-slate-500 text-center py-8">No interfaces found on this router.</p>
+                <p className="text-slate-400 dark:text-slate-500 text-center py-8">No interfaces found on this router.</p>
             )}
         </DashboardCard>
     </div>

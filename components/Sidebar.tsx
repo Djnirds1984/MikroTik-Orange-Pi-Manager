@@ -24,7 +24,7 @@ const NavItem: React.FC<{
         className={`flex items-center w-full p-3 text-base font-normal rounded-lg transition duration-75 group ${
           isActive
             ? 'bg-orange-600 text-white'
-            : 'text-slate-300 hover:bg-slate-700'
+            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
         }`}
       >
         {icon}
@@ -63,23 +63,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 w-64 h-screen bg-slate-900 border-r border-slate-800 transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-50 w-64 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0 ${
         isOpen ? 'translate-x-0' : '-translate-x-full'
       }`}
       aria-label="Sidebar"
     >
-      <div className="flex items-center justify-between h-16 border-b border-slate-800 px-4">
+      <div className="flex items-center justify-between h-16 border-b border-slate-200 dark:border-slate-800 px-4">
           <div className="flex items-center min-w-0">
               {companySettings.logoBase64 ? (
                 <img src={companySettings.logoBase64} alt="Company Logo" className="h-10 w-auto object-contain flex-shrink-0" />
               ) : (
                  <MikroTikLogoIcon className="w-8 h-8 text-orange-500 flex-shrink-0" />
               )}
-              <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-white truncate">
+              <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-slate-900 dark:text-white truncate">
                 {companySettings.companyName || 'MikroTik UI'}
               </span>
           </div>
-          <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-400 hover:text-white p-1" aria-label="Close sidebar">
+          <button onClick={() => setIsOpen(false)} className="lg:hidden text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white p-1" aria-label="Close sidebar">
               <CloseIcon className="w-6 h-6" />
           </button>
       </div>

@@ -5,7 +5,21 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MikroTik AI Script Assistant</title>
+    <script>
+      // Apply theme from localStorage before page load to prevent FOUC
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Configure Tailwind CSS for class-based dark mode
+      tailwind.config = {
+        darkMode: 'class',
+      };
+    </script>
   <script type="importmap">
 {
   "imports": {
@@ -40,7 +54,7 @@
   }
 </style>
 </head>
-  <body class="bg-slate-900">
+  <body>
     <div id="root"></div>
     <script src="/env.js"></script>
     <script type="module" src="/index.tsx"></script>
