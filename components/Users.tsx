@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, PppSecret, PppProfile, PppActiveConnection, PppSecretData, SaleRecord, Customer, BillingPlanWithId } from '../types.ts';
 import {
@@ -84,21 +83,44 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
             return;
         }
 
-        const finalSecretData: PppSecretData = {
+        let existingCommentData = {};
+        if (initialData?.comment) {
+            try {
+                existingCommentData = JSON.parse(initialData.comment);
+            } catch(e) { /* ignore if not valid json, will be overwritten */ }
+        }
+
+        // This object contains only the fields relevant to the MikroTik API
+        const apiSafeSecretData: PppSecretData = {
             name: secret.name!,
             password: secret.password,
-            service: 'pppoe', // Service is now hardcoded as requested
+            service: 'pppoe',
             profile: selectedPlan.pppoeProfile,
-            comment: JSON.stringify({ plan: selectedPlan.name, dueDate: null }), // Initial comment
+            comment: JSON.stringify({ ...existingCommentData, plan: selectedPlan.name }),
             disabled: secret.disabled!,
         };
-
-        const dataToSave = initialData ? { ...initialData, ...finalSecretData } : finalSecretData;
         
-        // if editing and password is blank, don't send it so it's not changed
-        if (initialData && !secret.password) {
-            delete (dataToSave as PppSecret).password;
+        let dataToSave: PppSecret | PppSecretData;
+
+        if (initialData) {
+            // Reconstruct the object for editing to ensure no extra frontend-only properties are included
+            dataToSave = {
+                id: initialData.id,
+                name: apiSafeSecretData.name,
+                service: apiSafeSecretData.service,
+                profile: apiSafeSecretData.profile,
+                comment: apiSafeSecretData.comment,
+                disabled: apiSafeSecretData.disabled,
+            } as PppSecret;
+            // Only add the password to the payload if the user actually entered one.
+            if (apiSafeSecretData.password) {
+                dataToSave.password = apiSafeSecretData.password;
+            }
+        } else {
+            // For new users, the object is already clean.
+            dataToSave = apiSafeSecretData;
         }
+
         onSave(dataToSave, customer);
     };
 
