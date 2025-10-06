@@ -135,33 +135,43 @@ initializeDatabase().catch(err => {
 // --- Generic DB API ---
 const dbRouter = express.Router();
 
-dbRouter.get('/:table', async (req, res) => {
+// Middleware to map API routes to DB table names to fix mismatches
+const tableMapper = (req, res, next) => {
+    const tableMap = {
+        'sales': 'sales_records',
+        'billing-plans': 'billing_plans',
+    };
+    req.tableName = tableMap[req.params.table] || req.params.table;
+    next();
+};
+
+dbRouter.get('/:table', tableMapper, async (req, res) => {
     try {
-        const rows = await db.all(`SELECT * FROM ${req.params.table}`);
+        const rows = await db.all(`SELECT * FROM ${req.tableName}`);
         res.json(rows);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-dbRouter.post('/:table', async (req, res) => {
+dbRouter.post('/:table', tableMapper, async (req, res) => {
     try {
         const columns = Object.keys(req.body).join(', ');
         const placeholders = Object.keys(req.body).map(() => '?').join(', ');
-        await db.run(`INSERT INTO ${req.params.table} (${columns}) VALUES (${placeholders})`, Object.values(req.body));
+        await db.run(`INSERT INTO ${req.tableName} (${columns}) VALUES (${placeholders})`, Object.values(req.body));
         res.status(201).json(req.body);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-dbRouter.patch('/:table/:id', async (req, res) => {
+dbRouter.patch('/:table/:id', tableMapper, async (req, res) => {
     try {
         const updates = Object.keys(req.body).map(key => `${key} = ?`).join(', ');
-        await db.run(`UPDATE ${req.params.table} SET ${updates} WHERE id = ?`, [...Object.values(req.body), req.params.id]);
+        await db.run(`UPDATE ${req.tableName} SET ${updates} WHERE id = ?`, [...Object.values(req.body), req.params.id]);
         res.json(req.body);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-dbRouter.delete('/:table/:id', async (req, res) => {
+dbRouter.delete('/:table/:id', tableMapper, async (req, res) => {
     try {
-        await db.run(`DELETE FROM ${req.params.table} WHERE id = ?`, req.params.id);
+        await db.run(`DELETE FROM ${req.tableName} WHERE id = ?`, req.params.id);
         res.status(204).send();
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
@@ -171,6 +181,7 @@ app.use('/api/db', dbRouter);
 // Special endpoint for clearing all sales
 app.post('/api/db/sales/clear-all', async (req, res) => {
     try {
+        // Use the correct table name here directly
         await db.run('DELETE FROM sales_records');
         res.status(204).send();
     } catch (e) {
