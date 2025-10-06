@@ -1,50 +1,28 @@
-import type { NtpSettings, PanelHostStatus } from '../types.ts';
+import type { PanelHostStatus } from '../types.ts';
 
-const postData = async <T>(path: string, body: Record<string, any> = {}): Promise<T> => {
-  // The panel's own API is served by the proxy on port 3001
-  const apiBaseUrl = `http://${window.location.hostname}:3001`;
-  const response = await fetch(`${apiBaseUrl}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Panel API request failed');
-  }
-  return response.json();
-};
+const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
+    // The panel API is on port 3001
+    const apiBaseUrl = `http://${window.location.hostname}:3001`;
+    const response = await fetch(`${apiBaseUrl}${path}`, {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        },
+        ...options,
+    });
+  
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
+        throw new Error(errorData.message);
+    }
+    
+    if (response.status === 204) { // No Content
+        return null as T;
+    }
 
-const getData = async <T>(path: string): Promise<T> => {
-  const apiBaseUrl = `http://${window.location.hostname}:3001`;
-  const response = await fetch(`${apiBaseUrl}${path}`);
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Panel API request failed');
-  }
-  return response.json();
-}
-
-export const rebootPanel = (): Promise<{ message: string }> => {
-    return postData('/api/panel/reboot');
-};
-
-export const getPanelNtp = (): Promise<NtpSettings> => {
-    return getData('/api/panel/ntp');
-};
-
-export const setPanelNtp = (settings: NtpSettings): Promise<{ message: string }> => {
-    return postData('/api/panel/ntp', { settings });
-};
-
-export const getGeminiKey = (): Promise<{ apiKey: string }> => {
-    return getData('/api/panel/gemini-key');
-};
-
-export const setGeminiKey = (apiKey: string): Promise<{ message: string }> => {
-    return postData('/api/panel/gemini-key', { apiKey });
+    return response.json() as Promise<T>;
 };
 
 export const getPanelHostStatus = (): Promise<PanelHostStatus> => {
-    return getData('/api/panel/host-status');
+    return fetchData<PanelHostStatus>('/api/host-status');
 };
