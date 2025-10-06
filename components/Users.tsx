@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, PppSecret, PppProfile, PppActiveConnection, PppSecretData, SaleRecord, Customer } from '../types.ts';
+import type { RouterConfigWithId, PppSecret, PppProfile, PppActiveConnection, PppSecretData, SaleRecord, Customer, BillingPlanWithId } from '../types.ts';
 import {
     getPppSecrets,
     getPppProfiles,
@@ -7,10 +7,9 @@ import {
     addPppSecret,
     updatePppSecret,
     deletePppSecret,
-    disablePppSecret,
-    enablePppSecret,
-    removePppActiveConnection,
+    processPppPayment,
 } from '../services/mikrotikService.ts';
+import type { PaymentData } from '../services/mikrotikService.ts';
 import { useCustomers } from '../hooks/useCustomers.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { useCompanySettings } from '../hooks/useCompanySettings.ts';
@@ -86,7 +85,7 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                         <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
                         
                         <div className="space-y-4">
-                            <h4 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2">PPPoE Credentials</h4>
+                            <h4 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2">PPPoE Credentials (Required)</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
@@ -112,12 +111,8 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                                     </select>
                                 </div>
                             </div>
-                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Comment / Description</label>
-                                <input type="text" name="comment" value={secret.comment} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
-                            </div>
-
-                             <h4 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 pt-4">Customer Information (Optional)</h4>
+                            
+                            <h4 className="text-md font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 pt-4">Customer Information (Optional)</h4>
                              <div>
                                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
                                 <input type="text" name="fullName" value={customer.fullName || ''} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
@@ -175,7 +170,7 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
     const { plans, isLoading: isLoadingPlans } = useBillingPlans();
     const { settings: companySettings } = useCompanySettings();
     const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [payingCustomer, setPayingCustomer] = useState<Customer | null>(null);
+    const [payingSecret, setPayingSecret] = useState<PppSecret | null>(null);
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -198,7 +193,7 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
             setActiveConnections(activeData);
         } catch (err) {
             console.error("Failed to fetch PPPoE user data:", err);
-            setError(`Could not fetch user data. Ensure the PPP package is enabled on "${selectedRouter.name}".`);
+            setError(`Could not fetch user data. Ensure the PPP package is enabled on "${selectedRouter.name}". Message: ${(err as Error).message}`);
         } finally {
             setIsLoading(false);
         }
@@ -276,55 +271,41 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
         }
     };
     
-    const handleToggleDisable = async (secret: PppSecret) => {
-        if (!selectedRouter) return;
-        setIsSubmitting(true);
-        try {
-            if (secret.disabled === 'true') {
-                await enablePppSecret(selectedRouter, secret.id);
-            } else {
-                await disablePppSecret(selectedRouter, secret.id);
-            }
-            await fetchData();
-        } catch (err) {
-            alert(`Error toggling user status: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleKick = async (activeInfo: PppActiveConnection) => {
-        if (!selectedRouter || !window.confirm(`Are you sure you want to kick user "${activeInfo.name}"?`)) return;
-         setIsSubmitting(true);
-        try {
-            await removePppActiveConnection(selectedRouter, activeInfo.id);
-            await fetchData();
-        } catch (err) {
-            alert(`Error kicking user: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-    
-    const handleOpenPayment = (customer: Customer) => {
-        setPayingCustomer(customer);
+    const handleOpenPayment = (secret: PppSecret) => {
+        setPayingSecret(secret);
         setIsPaymentModalOpen(true);
     };
 
-    const handleProcessPayment = async (saleData: Omit<SaleRecord, 'id' | 'date' | 'routerName'>) => {
-        if (!selectedRouter) return;
+    const handleProcessPayment = async (data: {
+        sale: Omit<SaleRecord, 'id' | 'date' | 'routerName'>,
+        payment: { plan: BillingPlanWithId, nonPaymentProfile: string, discountDays: number, paymentDate: string }
+    }) => {
+        if (!selectedRouter || !payingSecret) return;
+        
         try {
+            // 1. Process payment on the router
+            await processPppPayment(selectedRouter, {
+                secret: payingSecret,
+                ...data.payment
+            });
+
+            // 2. Add record to local sales DB
             await addSale({
-                ...saleData,
+                ...data.sale,
                 date: new Date().toISOString(),
                 routerName: selectedRouter.name,
             });
-            // The modal will close itself after printing
+
+            // 3. Refresh data to show updated comment/due date
+            await fetchData();
+            
+            // The modal will handle printing and closing
+            return true; // Indicate success
         } catch (err) {
             alert(`Error processing payment: ${(err as Error).message}`);
+            return false; // Indicate failure
         }
     };
-
 
     if (!selectedRouter) {
         return (
@@ -357,8 +338,9 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
             <PaymentModal 
                 isOpen={isPaymentModalOpen}
                 onClose={() => setIsPaymentModalOpen(false)}
-                customer={payingCustomer}
+                secret={payingSecret}
                 plans={plans}
+                profiles={profiles}
                 onSave={handleProcessPayment}
                 companySettings={companySettings}
             />
@@ -382,12 +364,22 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
                                 <th className="px-4 py-3">Username</th>
                                 <th className="px-4 py-3">Customer Name</th>
                                 <th className="px-4 py-3">Profile</th>
-                                <th className="px-4 py-3">Last Logged Out</th>
+                                <th className="px-4 py-3">Subscription</th>
                                 <th className="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                             {combinedData.map(user => (
+                             {combinedData.map(user => {
+                                let dueDate = 'No Info';
+                                try {
+                                    if(user.comment) {
+                                        const commentData = JSON.parse(user.comment);
+                                        if (commentData.dueDate) {
+                                            dueDate = new Date(commentData.dueDate).toLocaleDateString();
+                                        }
+                                    }
+                                } catch (e) { /* ignore parse error */ }
+                                return (
                                 <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                     <td className="px-4 py-3">
                                         {user.isActive ? <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Online</span> :
@@ -398,10 +390,12 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
                                     <td className="px-4 py-3 font-mono text-slate-800 dark:text-slate-200">{user.name}</td>
                                     <td className="px-4 py-3">{user.customer?.fullName || <span className="text-slate-400 italic">Not set</span>}</td>
                                     <td className="px-4 py-3 font-mono text-cyan-600 dark:text-cyan-400">{user.profile}</td>
-                                    <td className="px-4 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs">{user['last-logged-out'] || 'never'}</td>
+                                    <td className="px-4 py-3 font-mono text-slate-500 dark:text-slate-400 text-xs">
+                                        {dueDate === 'No Info' ? 'No Info' : `Active (Due: ${dueDate})`}
+                                    </td>
                                     <td className="px-4 py-3 text-right space-x-1">
                                          {user.customer && (
-                                            <button onClick={() => handleOpenPayment(user.customer!)} disabled={isLoadingPlans || isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-green-500 rounded-md" title="Process Payment">
+                                            <button onClick={() => handleOpenPayment(user)} disabled={isLoadingPlans || isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-green-500 rounded-md" title="Process Payment">
                                                 <CurrencyDollarIcon className="h-5 w-5" />
                                             </button>
                                         )}
@@ -413,7 +407,8 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
                                         </button>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
