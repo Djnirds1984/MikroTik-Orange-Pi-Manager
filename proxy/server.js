@@ -1,493 +1,401 @@
 const express = require('express');
+const { transform } = require('esbuild');
 const path = require('path');
-const { open } = require('sqlite');
-const sqlite3 = require('@vscode/sqlite3');
 const fs = require('fs-extra');
-const { exec } = require('child_process');
-const util = require('util');
+const { exec, spawn } = require('child_process'); // Import spawn
 const archiver = require('archiver');
 const tar = require('tar');
-const esbuild = require('esbuild');
+const sqlite3 = require('@vscode/sqlite3');
+const { open } = require('sqlite');
 
-const execPromise = util.promisify(exec);
 const app = express();
 const port = 3001;
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.text({ limit: '10mb' }));
-
-// Middleware to compile TSX/TS files on the fly
-app.get(/\.(tsx|ts)$/, async (req, res, next) => {
-  try {
-    // Construct the file path relative to the project root
-    const filePath = path.join(__dirname, '..', req.path);
-
-    // Check if the file exists
-    if (!await fs.pathExists(filePath)) {
-      return next(); // Pass to the next middleware (express.static) if not found
-    }
-
-    const source = await fs.readFile(filePath, 'utf-8');
-
-    // Use esbuild to transform the TSX/TS code to JavaScript
-    const result = await esbuild.transform(source, {
-      loader: req.path.endsWith('.tsx') ? 'tsx' : 'ts',
-      format: 'esm',
-      sourcemap: 'inline', // Good for debugging
-    });
-
-    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.send(result.code);
-  } catch (error) {
-    console.error(`esbuild compilation error for ${req.path}:`, error);
-    // Send a response that shows the error in the browser console
-    res.status(500).send(`/* ESBuild Compilation Error:\n${error.message.replace(/\*\//g, '*\\/')}\n*/`);
-  }
-});
-
-
-// --- Database Setup ---
+const projectRoot = path.join(__dirname, '..');
+const dbPath = path.join(projectRoot, 'panel.db');
 let db;
-const dbPath = path.join(__dirname, 'panel.db');
 
+// --- Database Initialization ---
 async function initializeDatabase() {
   try {
     db = await open({
       filename: dbPath,
       driver: sqlite3.Database,
     });
-    console.log('Connected to the panel database.');
+    console.log('Connected to the SQLite database.');
 
     await db.exec(`
-        CREATE TABLE IF NOT EXISTS routers (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            host TEXT NOT NULL,
-            user TEXT NOT NULL,
-            password TEXT,
-            port INTEGER NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS billing_plans (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            price REAL NOT NULL,
-            cycle TEXT NOT NULL,
-            pppoeProfile TEXT NOT NULL,
-            description TEXT,
-            currency TEXT DEFAULT 'USD'
-        );
-        CREATE TABLE IF NOT EXISTS sales_records (
-            id TEXT PRIMARY KEY,
-            date TEXT NOT NULL,
-            clientName TEXT NOT NULL,
-            planName TEXT NOT NULL,
-            planPrice REAL NOT NULL,
-            discountAmount REAL NOT NULL,
-            finalAmount REAL NOT NULL,
-            routerName TEXT NOT NULL,
-            currency TEXT NOT NULL,
-            clientAddress TEXT,
-            clientContact TEXT,
-            clientEmail TEXT
-        );
-        CREATE TABLE IF NOT EXISTS inventory (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            quantity INTEGER NOT NULL,
-            price REAL,
-            serialNumber TEXT,
-            dateAdded TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS company_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            companyName TEXT,
-            address TEXT,
-            contactNumber TEXT,
-            email TEXT,
-            logoBase64 TEXT
-        );
-        CREATE TABLE IF NOT EXISTS panel_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        );
-        CREATE TABLE IF NOT EXISTS customers (
-            id TEXT PRIMARY KEY,
-            username TEXT NOT NULL,
-            routerId TEXT NOT NULL,
-            fullName TEXT,
-            address TEXT,
-            contactNumber TEXT,
-            email TEXT,
-            UNIQUE(username, routerId)
-        );
+      CREATE TABLE IF NOT EXISTS routers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        user TEXT NOT NULL,
+        password TEXT,
+        port INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS billing_plans (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        price REAL NOT NULL,
+        cycle TEXT NOT NULL,
+        pppoeProfile TEXT NOT NULL,
+        description TEXT,
+        currency TEXT NOT NULL DEFAULT 'USD'
+      );
+
+      CREATE TABLE IF NOT EXISTS sales_records (
+        id TEXT PRIMARY KEY,
+        date TEXT NOT NULL,
+        clientName TEXT NOT NULL,
+        planName TEXT NOT NULL,
+        planPrice REAL NOT NULL,
+        currency TEXT NOT NULL,
+        discountAmount REAL NOT NULL,
+        finalAmount REAL NOT NULL,
+        routerName TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS inventory_items (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        price REAL,
+        serialNumber TEXT,
+        dateAdded TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS company_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+      
+      CREATE TABLE IF NOT EXISTS panel_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
     
-    // Ensure default settings exist
+    // Set default settings if not present
     await db.run("INSERT OR IGNORE INTO panel_settings (key, value) VALUES ('language', 'en')");
     await db.run("INSERT OR IGNORE INTO panel_settings (key, value) VALUES ('currency', 'USD')");
-    await db.run("INSERT OR IGNORE INTO company_settings (id) SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM company_settings WHERE id = 1)");
-
-
-  } catch (err) {
-    console.error('Database initialization error:', err.message);
+    
+    console.log('Database tables are ready.');
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
     process.exit(1);
   }
 }
 
-// --- Generic DB API Handlers ---
-const handleDbGet = (table) => async (req, res) => {
-  try {
-    // Replace hyphens for table names
-    const tableName = table.replace(/-/g, '_');
-    const items = await db.all(`SELECT * FROM ${tableName}`);
-    res.json(items);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-const handleDbPost = (table) => async (req, res) => {
-  try {
-    const tableName = table.replace(/-/g, '_');
-    const item = req.body;
-    const columns = Object.keys(item).join(', ');
-    const placeholders = Object.keys(item).map(() => '?').join(', ');
-    const values = Object.values(item);
-    await db.run(`INSERT INTO ${tableName} (${columns}) VALUES (${placeholders})`, values);
-    res.status(201).json(item);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-const handleDbPatch = (table) => async (req, res) => {
-  try {
-    const tableName = table.replace(/-/g, '_');
-    const { id } = req.params;
-    const fields = req.body;
-    delete fields.id;
-    const setClause = Object.keys(fields).map(key => `${key} = ?`).join(', ');
-    const values = [...Object.values(fields), id];
-    await db.run(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, values);
-    res.json({ message: 'Updated successfully' });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-const handleDbDelete = (table) => async (req, res) => {
-  try {
-    const tableName = table.replace(/-/g, '_');
-    const { id } = req.params;
-    await db.run(`DELETE FROM ${tableName} WHERE id = ?`, id);
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
+initializeDatabase();
 
 
-// --- Database API Endpoints ---
-const dbRouter = express.Router();
-['routers', 'billing-plans', 'sales', 'inventory', 'customers'].forEach(table => {
-    const endpoint = `/${table}`;
-    dbRouter.get(endpoint, handleDbGet(table));
-    dbRouter.post(endpoint, handleDbPost(table));
-    dbRouter.patch(`${endpoint}/:id`, handleDbPatch(table));
-    dbRouter.delete(`${endpoint}/:id`, handleDbDelete(table));
+// Middleware
+app.use(express.json({ limit: '5mb' }));
+
+
+// --- Middleware for Live Transpilation ---
+app.get(/\.(ts|tsx)$/, async (req, res) => {
+    try {
+        const filePath = path.join(__dirname, '..', req.path); 
+        
+        if (!await fs.pathExists(filePath)) {
+            return res.status(404).send('// File not found');
+        }
+        
+        const source = await fs.readFile(filePath, 'utf8');
+        const result = await transform(source, {
+            loader: req.path.endsWith('.ts') ? 'ts' : 'tsx',
+            target: 'esnext',
+        });
+        res.setHeader('Content-Type', 'application/javascript');
+        res.send(result.code);
+    } catch (e) {
+        console.error('ESBuild transpilation failed:', e);
+        res.status(500).send(`// Transpilation Error: ${e.message}`);
+    }
 });
 
-// Custom endpoints
-dbRouter.post('/sales/clear-all', async (req, res) => {
-    try {
-        await db.run('DELETE FROM sales_records');
-        res.status(204).send();
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+
+// --- Static File Serving ---
+app.use(express.static(path.join(__dirname, '..')));
+app.use('/locales', express.static(path.join(__dirname, '..', 'locales')));
+
+
+// Helper to run shell commands
+const runCommand = (command, cwd = process.cwd()) => {
+    return new Promise((resolve, reject) => {
+        exec(command, { cwd }, (error, stdout, stderr) => {
+            if (error) {
+                console.error(`Command error: ${stderr}`);
+                return reject(new Error(stderr));
+            }
+            resolve(stdout.trim());
+        });
+    });
+};
+
+// --- New Database API Endpoints ---
+const dbApi = express.Router();
+
+// Routers
+dbApi.get('/routers', async (req, res) => {
+    const routers = await db.all('SELECT * FROM routers');
+    res.json(routers);
+});
+dbApi.post('/routers', async (req, res) => {
+    const { id, name, host, user, password, port } = req.body;
+    await db.run('INSERT INTO routers (id, name, host, user, password, port) VALUES (?, ?, ?, ?, ?, ?)', [id, name, host, user, password, port]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/routers/:id', async (req, res) => {
+    const { name, host, user, password, port } = req.body;
+    await db.run('UPDATE routers SET name = ?, host = ?, user = ?, password = ?, port = ? WHERE id = ?', [name, host, user, password, port, req.params.id]);
+    res.status(200).json({ message: 'Router updated' });
+});
+dbApi.delete('/routers/:id', async (req, res) => {
+    await db.run('DELETE FROM routers WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+// Billing Plans
+dbApi.get('/billing-plans', async (req, res) => {
+    const plans = await db.all('SELECT * FROM billing_plans');
+    res.json(plans);
+});
+dbApi.post('/billing-plans', async (req, res) => {
+    const { id, name, price, cycle, pppoeProfile, description, currency } = req.body;
+    await db.run('INSERT INTO billing_plans (id, name, price, cycle, pppoeProfile, description, currency) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, name, price, cycle, pppoeProfile, description, currency]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/billing-plans/:id', async (req, res) => {
+    const { name, price, cycle, pppoeProfile, description, currency } = req.body;
+    await db.run('UPDATE billing_plans SET name = ?, price = ?, cycle = ?, pppoeProfile = ?, description = ?, currency = ? WHERE id = ?', [name, price, cycle, pppoeProfile, description, currency, req.params.id]);
+    res.status(200).json({ message: 'Plan updated' });
+});
+dbApi.delete('/billing-plans/:id', async (req, res) => {
+    await db.run('DELETE FROM billing_plans WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+// Sales Records
+dbApi.get('/sales', async (req, res) => {
+    const sales = await db.all('SELECT * FROM sales_records ORDER BY date DESC');
+    res.json(sales);
+});
+dbApi.post('/sales', async (req, res) => {
+    const { id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName } = req.body;
+    await db.run('INSERT INTO sales_records (id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName]);
+    res.status(201).json({ id });
+});
+dbApi.delete('/sales/all', async (req, res) => {
+    await db.run('DELETE FROM sales_records');
+    res.status(204).send();
+});
+dbApi.delete('/sales/:id', async (req, res) => {
+    await db.run('DELETE FROM sales_records WHERE id = ?', req.params.id);
+    res.status(204).send();
+});
+
+
+// Inventory Items
+dbApi.get('/inventory', async (req, res) => {
+    const items = await db.all('SELECT * FROM inventory_items ORDER BY dateAdded DESC');
+    res.json(items);
+});
+dbApi.post('/inventory', async (req, res) => {
+    const { id, name, quantity, price, serialNumber, dateAdded } = req.body;
+    await db.run('INSERT INTO inventory_items (id, name, quantity, price, serialNumber, dateAdded) VALUES (?, ?, ?, ?, ?, ?)', [id, name, quantity, price, serialNumber, dateAdded]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/inventory/:id', async (req, res) => {
+    const { name, quantity, price, serialNumber, dateAdded } = req.body;
+    await db.run('UPDATE inventory_items SET name = ?, quantity = ?, price = ?, serialNumber = ?, dateAdded = ? WHERE id = ?', [name, quantity, price, serialNumber, dateAdded, req.params.id]);
+    res.status(200).json({ message: 'Item updated' });
+});
+dbApi.delete('/inventory/:id', async (req, res) => {
+    await db.run('DELETE FROM inventory_items WHERE id = ?', req.params.id);
+    res.status(204).send();
 });
 
 // Company Settings
-dbRouter.get('/company-settings', async (req, res) => {
-    try {
-        const settings = await db.get('SELECT * FROM company_settings WHERE id = 1');
-        res.json(settings || {});
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
+dbApi.get('/company-settings', async (req, res) => {
+    const settingsRows = await db.all('SELECT * FROM company_settings');
+    const settings = settingsRows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+    }, {});
+    res.json(settings);
 });
-dbRouter.post('/company-settings', async (req, res) => {
-    try {
-        const settings = req.body;
-        await db.run(
-            `UPDATE company_settings SET companyName = ?, address = ?, contactNumber = ?, email = ?, logoBase64 = ? WHERE id = 1`,
-            [settings.companyName, settings.address, settings.contactNumber, settings.email, settings.logoBase64]
-        );
-        res.json({ message: 'Settings saved' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
-// Panel Settings
-dbRouter.get('/panel-settings', async (req, res) => {
-    try {
-        const rows = await db.all('SELECT * FROM panel_settings');
-        const settings = rows.reduce((acc, row) => {
-            acc[row.key] = row.value;
-            return acc;
-        }, {});
-        res.json(settings);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-dbRouter.post('/panel-settings', async (req, res) => {
-    try {
-        const settings = req.body;
-        for (const key in settings) {
-            await db.run('UPDATE panel_settings SET value = ? WHERE key = ?', [settings[key], key]);
+dbApi.post('/company-settings', async (req, res) => {
+    const settings = req.body;
+    const stmt = await db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (?, ?)');
+    for (const key in settings) {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) {
+            await stmt.run(key, settings[key]);
         }
-        res.json({ message: 'Settings saved' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
     }
+    await stmt.finalize();
+    res.status(200).json({ message: 'Company settings saved.' });
 });
 
-app.use('/api/db', dbRouter);
+// Panel Settings (Localization)
+dbApi.get('/panel-settings', async (req, res) => {
+    const settingsRows = await db.all('SELECT * FROM panel_settings');
+    const settings = settingsRows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+    }, {});
+    res.json(settings);
+});
+dbApi.post('/panel-settings', async (req, res) => {
+    const settings = req.body;
+    const stmt = await db.prepare('INSERT OR REPLACE INTO panel_settings (key, value) VALUES (?, ?)');
+    for (const key in settings) {
+        if (Object.prototype.hasOwnProperty.call(settings, key)) {
+            await stmt.run(key, settings[key]);
+        }
+    }
+    await stmt.finalize();
+    res.status(200).json({ message: 'Panel settings saved.' });
+});
 
-// --- ZeroTier CLI Endpoints ---
-const ztCliCommand = (command) => {
-    return new Promise((resolve, reject) => {
-        // Use sudo if available
-        const cmd = `command -v sudo >/dev/null && sudo zerotier-cli ${command} || zerotier-cli ${command}`;
-        exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                if (stderr.includes('zerotier-cli: missing authentication token and authtoken.secret not found')) {
-                    return reject({ code: 'ZEROTIER_SERVICE_DOWN', message: stderr });
-                }
-                if (stderr.includes('command not found')) {
-                     return reject({ code: 'ZEROTIER_NOT_INSTALLED', message: stderr });
-                }
-                return reject({ code: 'COMMAND_FAILED', message: stderr || error.message });
-            }
-            resolve(stdout);
-        });
-    });
-};
 
-app.get('/api/zt/status', async (req, res) => {
+app.use('/api/db', dbApi);
+
+
+// --- Updater API Endpoints ---
+const sendSse = (res, data) => {
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+app.get('/api/current-version', async (req, res) => {
     try {
-        const [info, networks] = await Promise.all([
-            ztCliCommand('-j info'),
-            ztCliCommand('-j listnetworks')
-        ]);
-        res.json({
-            info: JSON.parse(info),
-            networks: JSON.parse(networks)
-        });
+        const hash = await runCommand('git rev-parse --short HEAD', projectRoot);
+        const log = await runCommand('git log -1 --pretty=%B', projectRoot);
+        const [title, ...descriptionParts] = log.split('\n');
+        const description = descriptionParts.join('\n').trim();
+        res.json({ title: title.trim(), description, hash });
     } catch (error) {
-        res.status(500).json({ message: error.message, code: error.code });
+        res.status(500).json({ message: 'Could not get current version info from git.', error: error.message });
     }
 });
 
-app.post('/api/zt/join', async (req, res) => {
-    try {
-        const { networkId } = req.body;
-        const result = await ztCliCommand(`join ${networkId}`);
-        res.json({ message: result });
-    } catch (error) {
-        res.status(500).json({ message: error.message, code: error.code });
-    }
-});
-
-app.post('/api/zt/leave', async (req, res) => {
-    try {
-        const { networkId } = req.body;
-        const result = await ztCliCommand(`leave ${networkId}`);
-        res.json({ message: result });
-    } catch (error) {
-        res.status(500).json({ message: error.message, code: error.code });
-    }
-});
-
-app.post('/api/zt/set', async (req, res) => {
-    try {
-        const { networkId, setting, value } = req.body;
-        const result = await ztCliCommand(`set ${networkId} ${setting}=${value}`);
-        res.json({ message: result });
-    } catch (error) {
-        res.status(500).json({ message: error.message, code: error.code });
-    }
-});
-
-// --- File System & Panel Management ---
-const projectRoot = path.join(__dirname, '..');
-const apiBackendPath = path.join(projectRoot, 'api-backend', 'server.js');
-const envJsPath = path.join(projectRoot, 'env.js');
-
-app.get('/api/fixer/file-content', async (req, res) => {
-    try {
-        const content = await fs.readFile(apiBackendPath, 'utf-8');
-        res.type('text/plain').send(content);
-    } catch (error) {
-        res.status(500).send('Could not read backend server file.');
-    }
-});
-
-const streamLog = (res, message) => {
-    res.write(`data: ${JSON.stringify({ log: message })}\n\n`);
-};
-
-app.post('/api/fixer/apply-fix', (req, res) => {
+app.get('/api/update-status', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
+    res.setHeader('Connection', 'keep-alive');
 
-    const newCode = req.body;
-    (async () => {
-        try {
-            streamLog(res, '>>> Backing up current backend server file...');
-            await fs.copy(apiBackendPath, `${apiBackendPath}.bak`);
-            streamLog(res, '>>> Backup created.');
+    try {
+        sendSse(res, { log: '>>> Checking Git remote URL...' });
+        const remoteUrl = await runCommand('git config --get remote.origin.url', projectRoot);
+        sendSse(res, { log: `Remote URL: ${remoteUrl || '[Not Configured]'}` });
+        
+        if (!remoteUrl) {
+             throw new Error(`Git remote is not configured. Please set up a remote repository to check for updates.`);
+        }
+        
+        sendSse(res, { log: '\n>>> Fetching latest data from remote repository...' });
+        await runCommand('git fetch origin', projectRoot);
+        sendSse(res, { log: 'Fetch complete.' });
 
-            streamLog(res, '>>> Writing new code to backend server file...');
-            await fs.writeFile(apiBackendPath, newCode);
-            streamLog(res, '>>> File written successfully.');
+        sendSse(res, { log: '\n>>> Comparing local and remote versions...' });
+        const local = await runCommand('git rev-parse HEAD', projectRoot);
+        const remote = await runCommand('git rev-parse @{u}', projectRoot);
+        
+        if (local === remote) {
+            sendSse(res, { status: 'uptodate', message: 'Your panel is up-to-date.', local });
+        } else {
+            sendSse(res, { log: '\n>>> A new version is available. Fetching changelog...' });
+            const changelog = await runCommand(`git log ${local}..${remote} --pretty=format:"- %s (%h)"`, projectRoot);
+            const newVersionLog = await runCommand(`git log -1 --pretty=%B ${remote}`, projectRoot);
+            const [newVersionTitle, ...newVersionDescParts] = newVersionLog.split('\n');
+            const newVersionDescription = newVersionDescParts.join('\n').trim();
 
-            streamLog(res, '>>> Restarting API backend service via pm2...');
-            res.write(`data: ${JSON.stringify({ status: 'restarting' })}\n\n`);
-
-            exec('pm2 restart mikrotik-api-backend', (error, stdout, stderr) => {
-                // This part might not be reached if the connection is severed by the restart
-                if (error) {
-                    console.error(`pm2 restart error: ${error}`);
-                    streamLog(res, `>>> PM2 restart command failed: ${stderr}`);
-                    res.write(`data: ${JSON.stringify({ status: 'error', message: stderr })}\n\n`);
-                } else {
-                    streamLog(res, `>>> PM2 restart successful: ${stdout}`);
+            sendSse(res, {
+                status: 'available',
+                message: `New version ${newVersionTitle.trim()} is available.`,
+                local,
+                remote,
+                newVersionInfo: {
+                    title: newVersionTitle.trim(),
+                    description: newVersionDescription,
+                    changelog: changelog.trim()
                 }
-                res.end();
             });
-        } catch (error) {
-            streamLog(res, `>>> An error occurred: ${error.message}`);
-            res.write(`data: ${JSON.stringify({ status: 'error', message: error.message })}\n\n`);
-            res.end();
         }
-    })();
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Update check failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
+    } finally {
+        sendSse(res, { status: 'finished' }); 
+        res.end();
+    }
 });
 
-// --- Updater ---
-const sendSse = (res, data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-
-app.get('/api/update-status', (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
-
-    const runCommands = async () => {
-        try {
-            // Command 1: git fetch
-            sendSse(res, { log: '> git fetch origin' });
-            // git fetch often prints to stderr on success, so we capture both and log stderr as info, not an error.
-            const { stderr: fetchErr } = await execPromise('git fetch origin', { cwd: projectRoot });
-            if (fetchErr) sendSse(res, { log: fetchErr });
-
-            // Command 2: git status
-            sendSse(res, { log: '> git status -uno' });
-            const { stdout: statusOut } = await execPromise('git status -uno', { cwd: projectRoot });
-            sendSse(res, { log: statusOut });
-
-            if (statusOut.includes('Your branch is up to date')) {
-                sendSse(res, { status: 'uptodate', message: 'Panel is already up to date.' });
-            } else if (statusOut.includes('Your branch is behind')) {
-                sendSse(res, { log: '> git log HEAD..origin/main --oneline' });
-                const { stdout: logOut } = await execPromise('git log HEAD..origin/main --oneline', { cwd: projectRoot });
-                
-                const changelog = logOut || 'Could not retrieve changelog.';
-                const firstLine = changelog.split('\n')[0] || '';
-                const titleMatch = firstLine.match(/^[a-f0-9]+\s(.+)/);
-                const title = titleMatch ? titleMatch[1] : 'New version found';
-
-                const newVersionInfo = {
-                    title: title,
-                    description: 'A new version of the panel is available.',
-                    changelog: changelog
-                };
-                sendSse(res, { status: 'available', message: 'New version available!', newVersionInfo });
-
-            } else if (statusOut.includes('have diverged')) {
-                sendSse(res, { status: 'diverged', message: 'Branch has diverged from origin. Manual intervention required.' });
-            } else {
-                 sendSse(res, { status: 'uptodate', message: 'Panel is up to date.' });
-            }
-
-        } catch (error) {
-            sendSse(res, { log: `ERROR: ${error.stderr || error.message}` });
-            sendSse(res, { status: 'error', message: 'An error occurred during check.' });
-        } finally {
-            if (res.writable) {
-                sendSse(res, { status: 'finished' });
-                res.end();
-            }
-        }
-    };
-
-    runCommands();
-});
-
-app.get('/api/current-version', (req, res) => {
-    exec('git log -1 --pretty=format:"%h%n%s%n%b"', { cwd: projectRoot }, (err, stdout) => {
+const restartApp = (res, serviceName = 'mikrotik-manager mikrotik-api-backend') => {
+    sendSse(res, { log: `\n>>> Restarting application with pm2: ${serviceName}...` });
+    exec(`pm2 restart ${serviceName}`, (err, stdout, stderr) => {
         if (err) {
-            return res.status(500).json({ error: 'Could not get current version' });
+            console.error('PM2 restart failed:', stderr);
+            sendSse(res, { status: 'error', message: `Failed to restart server: ${stderr}` });
+        } else {
+            console.log('PM2 restart successful:', stdout);
+            sendSse(res, { log: 'Restart command issued successfully.' });
         }
-        const [hash, title, ...description] = stdout.split('\n');
-        res.json({ hash, title, description: description.join('\n').trim() });
+        res.end();
     });
-});
+};
 
-app.get('/api/update-app', (req, res) => {
+app.get('/api/update-app', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
+    res.setHeader('Connection', 'keep-alive');
 
     const backupDir = path.join(projectRoot, 'backups');
-    const backupFileName = `backup-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
+    const backupFileName = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
     const backupFilePath = path.join(backupDir, backupFileName);
 
-    const commands = [
-        `mkdir -p ${backupDir}`,
-        `tar -czf ${backupFilePath} --exclude=backups --exclude=.git --exclude=node_modules --exclude=api-backend/node_modules --exclude=proxy/node_modules .`,
-        'git reset --hard origin/main',
-        'npm install --prefix proxy',
-        'npm install --prefix api-backend',
-        'pm2 restart all'
-    ];
-    let cmdIdx = 0;
-
-    const run = () => {
-        if (cmdIdx >= commands.length) {
-            sendSse(res, { status: 'restarting' });
-            res.end();
-            return;
-        }
-        const cmd = commands[cmdIdx];
-        sendSse(res, { log: `\n> ${cmd}` });
-        const child = exec(cmd, { cwd: projectRoot });
-        child.stdout.on('data', data => sendSse(res, { log: data.toString() }));
-        child.stderr.on('data', data => sendSse(res, { log: `STDERR: ${data.toString()}` }));
-        child.on('close', code => {
-            if (code !== 0) {
-                sendSse(res, { status: 'error', message: `Command failed with code ${code}.` });
-                res.end();
-            } else {
-                cmdIdx++;
-                run();
-            }
+    try {
+        sendSse(res, { log: `>>> Creating backup at ${backupFilePath}` });
+        await fs.ensureDir(backupDir);
+        
+        const archive = archiver('tar', { gzip: true });
+        const output = fs.createWriteStream(backupFilePath);
+        archive.pipe(output);
+        archive.glob('**/*', {
+            cwd: projectRoot,
+            ignore: ['backups/**', 'node_modules/**', '.git/**', 'panel.db'], // Exclude DB from app backup
         });
-    };
-    run();
+        await archive.finalize();
+        sendSse(res, { log: 'Backup created successfully.' });
+
+        sendSse(res, { log: '\n>>> Pulling latest changes from Git...' });
+        const pullOutput = await runCommand('git pull origin main', projectRoot);
+        sendSse(res, { log: pullOutput });
+        sendSse(res, { log: 'Git pull complete.' });
+        
+        sendSse(res, { log: '\n>>> Installing dependencies for UI server...' });
+        const proxyInstall = await runCommand('npm install', path.join(projectRoot, 'proxy'));
+        sendSse(res, { log: proxyInstall });
+        
+        sendSse(res, { log: '\n>>> Installing dependencies for API backend...' });
+        const apiInstall = await runCommand('npm install', path.join(projectRoot, 'api-backend'));
+        sendSse(res, { log: apiInstall });
+        sendSse(res, { log: 'Dependencies installed.' });
+        
+        sendSse(res, { status: 'restarting' });
+        restartApp(res);
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Update process failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
+        res.end();
+    }
 });
+
 
 app.get('/api/list-backups', async (req, res) => {
     try {
@@ -496,257 +404,511 @@ app.get('/api/list-backups', async (req, res) => {
         const files = await fs.readdir(backupDir);
         res.json(files.filter(f => f.endsWith('.tar.gz')).sort().reverse());
     } catch (error) {
-        res.status(500).json({ message: 'Failed to list backups.' });
+        res.status(500).json({ message: 'Could not list backups.' });
     }
 });
 
-app.post('/api/delete-backup', async (req, res) => {
+app.post('/api/delete-backup', express.json(), async (req, res) => {
+    const { backupFile } = req.body;
+
+    if (!backupFile || typeof backupFile !== 'string') {
+        return res.status(400).json({ message: 'Invalid backup file specified.' });
+    }
+
+    // Security: Sanitize filename to prevent path traversal
+    const sanitizedFileName = path.basename(backupFile);
+    if (sanitizedFileName !== backupFile) {
+        return res.status(400).json({ message: 'Invalid characters in filename.' });
+    }
+
+    const backupFilePath = path.join(projectRoot, 'backups', sanitizedFileName);
+
     try {
-        const { backupFile } = req.body;
-        if (!backupFile || !/^[a-zA-Z0-9_.-]+\.tar\.gz$/.test(backupFile)) {
-            return res.status(400).json({ message: 'Invalid backup file name.' });
+        if (!await fs.pathExists(backupFilePath)) {
+            return res.status(404).json({ message: 'Backup file not found.' });
         }
-        const filePath = path.join(projectRoot, 'backups', backupFile);
-        await fs.remove(filePath);
-        res.json({ message: 'Backup deleted.' });
+
+        await fs.remove(backupFilePath);
+        console.log(`Deleted backup: ${sanitizedFileName}`);
+        res.status(200).json({ message: `Successfully deleted ${sanitizedFileName}` });
+
     } catch (error) {
-        res.status(500).json({ message: 'Failed to delete backup.' });
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`Failed to delete backup ${sanitizedFileName}:`, errorMessage);
+        res.status(500).json({ message: `Could not delete backup: ${errorMessage}` });
     }
 });
 
-app.get('/api/rollback', (req, res) => {
+app.get('/api/rollback', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
+    res.setHeader('Connection', 'keep-alive');
 
     const { backupFile } = req.query;
-    if (!backupFile || !/^[a-zA-Z0-9_.-]+\.tar\.gz$/.test(backupFile)) {
-        sendSse(res, { status: 'error', message: 'Invalid backup file name.' });
+    if (!backupFile || typeof backupFile !== 'string') {
+        sendSse(res, { status: 'error', message: 'Invalid backup file specified.' });
         return res.end();
     }
-    const backupFilePath = path.join(projectRoot, 'backups', backupFile);
-    
-    sendSse(res, { log: `Starting rollback from ${backupFile}` });
-    
-    fs.exists(backupFilePath)
-    .then(exists => {
-        if (!exists) throw new Error('Backup file not found.');
-        
-        sendSse(res, { log: '>>> Extracting backup...' });
-        return tar.x({
-            file: backupFilePath,
-            cwd: projectRoot,
-            onentry: (entry) => sendSse(res, {log: `Restoring ${entry.path}`})
-        });
-    })
-    .then(() => {
-        sendSse(res, { log: '>>> Extraction complete. Restarting services...' });
-        return new Promise((resolve, reject) => {
-            exec('pm2 restart all', { cwd: projectRoot }, (err, stdout, stderr) => {
-                if (err) return reject(new Error(stderr));
-                sendSse(res, { log: stdout });
-                resolve();
-            });
-        });
-    })
-    .then(() => {
-        sendSse(res, { status: 'restarting' });
-        res.end();
-    })
-    .catch(err => {
-        sendSse(res, { status: 'error', message: err.message });
-        res.end();
-    });
-});
 
-// --- Panel Management ---
-const execSudo = (command, res) => {
-    return new Promise((resolve, reject) => {
-        exec(`sudo ${command}`, (error, stdout, stderr) => {
-            if (error) {
-                 if (stderr.includes('sudo: a password is required')) {
-                    return reject(new Error("This action requires the panel's user to have passwordless sudo permissions."));
-                 }
-                return reject(new Error(stderr || error.message));
-            }
-            resolve(stdout);
-        });
-    });
-}
-app.post('/api/panel/reboot', async (req, res) => {
+    const backupFilePath = path.join(projectRoot, 'backups', backupFile);
+
     try {
-        await execSudo('reboot');
-        res.json({ message: 'Reboot command sent to panel host.' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
+        sendSse(res, { log: `>>> Starting rollback from ${backupFile}` });
+        if (!await fs.pathExists(backupFilePath)) {
+            throw new Error('Backup file not found.');
+        }
+
+        await runCommand(`tar -xzf "${backupFilePath}" -C "${projectRoot}"`);
+        
+        sendSse(res, { log: 'Files restored successfully.' });
+        
+        sendSse(res, { status: 'restarting' });
+        restartApp(res);
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('Rollback failed:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
+        res.end();
     }
 });
 
-// FIX: Add missing maintenance endpoints for System Settings page
+// --- ZeroTier Panel Management API Endpoints ---
+app.get('/api/zt/status', async (req, res) => {
+    try {
+        const networksJson = await runCommand('zerotier-cli -j listnetworks');
+        const networks = JSON.parse(networksJson);
+        const infoJson = await runCommand('zerotier-cli -j info');
+        const info = JSON.parse(infoJson);
+        res.status(200).json({ info, networks });
+    } catch (error) {
+        const errorMessage = (error instanceof Error ? error.message : String(error)).toLowerCase();
+        console.error('ZeroTier status check failed:', errorMessage);
+
+        if (errorMessage.includes('not found')) {
+            return res.status(404).json({ 
+                code: 'ZEROTIER_NOT_INSTALLED',
+                message: 'zerotier-cli was not found. The ZeroTier One service is likely not installed on the host system.'
+            });
+        }
+        if (errorMessage.includes('cannot connect')) {
+            return res.status(503).json({
+                code: 'ZEROTIER_SERVICE_DOWN',
+                message: 'Could not connect to the ZeroTier One service. It may be stopped or malfunctioning.'
+            });
+        }
+        res.status(500).json({ 
+            code: 'UNKNOWN_ERROR',
+            message: 'Failed to get ZeroTier status.', 
+            error: errorMessage 
+        });
+    }
+});
+
+app.get('/api/zt/install', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    sendSse(res, { log: '>>> Starting ZeroTier installation...' });
+    sendSse(res, { log: '>>> This may take a few minutes. Please do not close this window.' });
+    
+    const installProcess = spawn('sudo', ['bash', '-c', 'curl -s https://install.zerotier.com | bash']);
+
+    installProcess.stdout.on('data', (data) => {
+        sendSse(res, { log: data.toString() });
+    });
+
+    installProcess.stderr.on('data', (data) => {
+        sendSse(res, { log: data.toString() });
+    });
+
+    installProcess.on('close', (code) => {
+        if (code === 0) {
+            sendSse(res, { status: 'success', log: '\n>>> Installation completed successfully!' });
+        } else {
+            sendSse(res, { status: 'error', message: `Installation process exited with code ${code}. Please check the log for details.` });
+        }
+        sendSse(res, { status: 'finished' });
+        res.end();
+    });
+
+    installProcess.on('error', (err) => {
+        sendSse(res, { status: 'error', message: `Failed to start installation process: ${err.message}` });
+        sendSse(res, { status: 'finished' });
+        res.end();
+    });
+});
+
+
+app.post('/api/zt/join', express.json(), async (req, res) => {
+    const { networkId } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId)) {
+        return res.status(400).json({ message: 'A valid 16-digit Network ID is required.' });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli join ${networkId}`);
+        res.status(200).json({ message: `Successfully sent join request for network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier join failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to join network ${networkId}.`, error: error.message });
+    }
+});
+
+app.post('/api/zt/leave', express.json(), async (req, res) => {
+    const { networkId } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId)) {
+        return res.status(400).json({ message: 'A valid 16-digit Network ID is required.' });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli leave ${networkId}`);
+        res.status(200).json({ message: `Successfully left network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier leave failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to leave network ${networkId}.`, error: error.message });
+    }
+});
+
+app.post('/api/zt/set', express.json(), async (req, res) => {
+    const { networkId, setting, value } = req.body;
+    if (!networkId || !/^[0-9a-fA-F]{16}$/.test(networkId) || !setting || typeof value !== 'boolean') {
+        return res.status(400).json({ message: 'Invalid request. networkId, setting, and a boolean value are required.' });
+    }
+    const allowedSettings = ['allowManaged', 'allowGlobal', 'allowDefault'];
+    if(!allowedSettings.includes(setting)) {
+        return res.status(400).json({ message: `Invalid setting. Allowed settings are: ${allowedSettings.join(', ')}` });
+    }
+    try {
+        const stdout = await runCommand(`zerotier-cli set ${networkId} ${setting}=${value}`);
+        res.status(200).json({ message: `Set ${setting} to ${value} for network ${networkId}.`, detail: stdout });
+    } catch (error) {
+        console.error(`ZeroTier set failed for ${networkId}:`, error);
+        res.status(500).json({ message: `Failed to set ${setting} for network ${networkId}.`, error: error.message });
+    }
+});
+
+// --- AI Fixer API Endpoints ---
+const ALLOWED_FILE = 'api-backend/server.js';
+const TARGET_FILE_PATH = path.join(projectRoot, ALLOWED_FILE);
+
+app.get('/api/fixer/file-content', async (req, res) => {
+    try {
+        const content = await fs.readFile(TARGET_FILE_PATH, 'utf-8');
+        res.setHeader('Content-Type', 'text/plain');
+        res.send(content);
+    } catch (error) {
+        console.error('AI Fixer failed to read file:', error);
+        res.status(500).json({ message: `Could not read the backend file: ${error.message}` });
+    }
+});
+
+app.post('/api/fixer/apply-fix', express.text({ type: 'text/plain' }), async (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const newCode = req.body;
+    if (!newCode || typeof newCode !== 'string') {
+        sendSse(res, { status: 'error', message: 'No code provided to apply.' });
+        return res.end();
+    }
+
+    const backupDir = path.join(projectRoot, 'backups');
+    const backupFileName = `backup-aifix-${new Date().toISOString().replace(/:/g, '-')}.js.bak`;
+    const backupFilePath = path.join(backupDir, backupFileName);
+
+    try {
+        sendSse(res, { log: `>>> Backing up current backend server file to ${backupFileName}...` });
+        await fs.ensureDir(backupDir);
+        await fs.copy(TARGET_FILE_PATH, backupFilePath);
+        sendSse(res, { log: 'Backup complete.' });
+
+        sendSse(res, { log: '\n>>> Applying new code...' });
+        await fs.writeFile(TARGET_FILE_PATH, newCode, 'utf-8');
+        sendSse(res, { log: 'File updated successfully.' });
+
+        sendSse(res, { status: 'restarting' });
+        restartApp(res, 'mikrotik-api-backend');
+
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('AI Fixer failed to apply fix:', errorMessage);
+        sendSse(res, { status: 'error', message: errorMessage });
+        res.end();
+    }
+});
+
+// --- AI Help & Report Generation API ---
+app.post('/api/generate-report', express.json(), async (req, res) => {
+    const { view, routerName, geminiAnalysis } = req.body;
+    
+    let ztStatus = 'ZeroTier status could not be retrieved.';
+    try {
+        const ztInfo = await runCommand('zerotier-cli -j info');
+        const ztNetworks = await runCommand('zerotier-cli -j listnetworks');
+        ztStatus = `--- ZeroTier Info ---\n${JSON.stringify(JSON.parse(ztInfo), null, 2)}\n\n--- ZeroTier Networks ---\n${JSON.stringify(JSON.parse(ztNetworks), null, 2)}`;
+    } catch (e) {
+        ztStatus = `Could not get ZeroTier status. Error: ${e.message}`;
+    }
+
+    let backendCode = 'Backend code could not be read.';
+    try {
+        backendCode = await fs.readFile(TARGET_FILE_PATH, 'utf-8');
+    } catch (e) {
+        backendCode = `Could not read backend code. Error: ${e.message}`;
+    }
+
+    const report = `
+=========================================
+      AI SYSTEM DIAGNOSTIC REPORT
+=========================================
+Report Generated: ${new Date().toISOString()}
+
+--- CONTEXT ---
+- Current Page: ${view}
+- Selected Router: ${routerName || 'None'}
+
+--- AI ANALYSIS ---
+${geminiAnalysis}
+
+=========================================
+      RAW SYSTEM DATA
+=========================================
+
+--- PANEL HOST ZEROTIER STATUS ---
+${ztStatus}
+
+--- BACKEND SERVER CODE (api-backend/server.js) ---
+${backendCode}
+`;
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Content-Disposition', 'attachment; filename=system-report.txt');
+    res.send(report);
+});
+
+// --- Panel Host Management API Endpoints ---
+const ENV_FILE_PATH = path.join(__dirname, '..', 'env.js');
+
+const formatBytes = (bytes, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+};
+
+app.get('/api/panel/host-status', async (req, res) => {
+    try {
+        const cpuCmd = `top -bn1 | grep "Cpu(s)" | sed "s/.*, *\\([0-9.]*\\)%* id.*/\\1/" | awk '{print 100 - $1}'`;
+        const memCmd = `free -m`;
+        const diskCmd = `df -k .`;
+
+        const [cpuOutput, memOutput, diskOutput] = await Promise.all([
+            runCommand(cpuCmd),
+            runCommand(memCmd),
+            runCommand(diskCmd)
+        ]);
+
+        const memLines = memOutput.split('\n');
+        const memData = memLines[1].split(/\s+/);
+        const totalMem = parseInt(memData[1], 10);
+        const usedMem = parseInt(memData[2], 10);
+        const memPercent = Math.round((usedMem / totalMem) * 100);
+
+        const diskLines = diskOutput.split('\n');
+        const diskData = diskLines[1].split(/\s+/);
+        const totalDisk = parseInt(diskData[1], 10); 
+        const usedDisk = parseInt(diskData[2], 10); 
+        const diskPercent = parseInt(diskData[4].replace('%', ''), 10);
+        
+        res.json({
+            cpuUsage: Math.round(parseFloat(cpuOutput)) || 0,
+            memory: {
+                used: formatBytes(usedMem * 1024 * 1024),
+                total: formatBytes(totalMem * 1024 * 1024),
+                percent: memPercent,
+            },
+            disk: {
+                used: formatBytes(usedDisk * 1024),
+                total: formatBytes(totalDisk * 1024),
+                percent: diskPercent,
+            },
+        });
+
+    } catch (error) {
+        console.error('Failed to get panel host status:', error);
+        res.status(500).json({ message: `Could not get host status: ${error.message}` });
+    }
+});
+
+
+app.post('/api/panel/reboot', (req, res) => {
+    console.log('Received request to reboot panel server.');
+    runCommand('sudo reboot')
+        .then(() => {
+            res.status(200).json({ message: 'Reboot command issued. The server will go down shortly.' });
+        })
+        .catch(err => {
+            console.error('Failed to issue reboot command:', err);
+            res.status(500).json({ message: `Failed to reboot: ${err.message}. Ensure passwordless sudo is configured.` });
+        });
+});
+
+app.get('/api/panel/ntp', async (req, res) => {
+    try {
+        const statusOutput = await runCommand('timedatectl status');
+        const ntpServiceActive = statusOutput.includes('NTP service: active');
+        const ntpConf = await runCommand(`cat /etc/systemd/timesyncd.conf | grep NTP= | cut -d'=' -f2`);
+        const [primaryNtp = '', secondaryNtp = ''] = ntpConf.split(' ');
+        
+        res.status(200).json({
+            enabled: ntpServiceActive,
+            primaryNtp,
+            secondaryNtp
+        });
+    } catch (error) {
+        console.error('Failed to get panel NTP status:', error);
+        res.status(500).json({ message: `Could not get NTP status: ${error.message}` });
+    }
+});
+
+app.post('/api/panel/ntp', express.json(), async (req, res) => {
+    const { settings } = req.body;
+    if (!settings || typeof settings.primaryNtp !== 'string') {
+        return res.status(400).json({ message: 'Invalid NTP settings provided.' });
+    }
+    
+    try {
+        const ntpConfigContent = `[Time]\nNTP=${settings.primaryNtp}${settings.secondaryNtp ? ' ' + settings.secondaryNtp : ''}\n`;
+        const configDir = '/etc/systemd/timesyncd.conf.d';
+        const configPath = `${configDir}/99-panel-override.conf`;
+
+        await runCommand(`sudo mkdir -p ${configDir}`);
+        await runCommand(`echo '${ntpConfigContent}' | sudo tee ${configPath}`);
+        await runCommand('sudo systemctl restart systemd-timesyncd');
+        
+        res.status(200).json({ message: 'NTP settings applied. The service has been restarted.' });
+    } catch (error) {
+        console.error('Failed to set panel NTP settings:', error);
+        res.status(500).json({ message: `Failed to apply NTP settings: ${error.message}. Ensure passwordless sudo is configured.` });
+    }
+});
+
+// --- Panel Maintenance Actions ---
+const runStreamingCommand = (res, command, args, cwd) => {
+    sendSse(res, { log: `>>> Running command: ${command} ${args.join(' ')} in ${cwd}` });
+
+    const child = spawn(command, args, { cwd, shell: true });
+
+    child.stdout.on('data', (data) => {
+        sendSse(res, { log: data.toString() });
+    });
+    child.stderr.on('data', (data) => {
+        sendSse(res, { log: data.toString() }); 
+    });
+    child.on('close', (code) => {
+        if (code === 0) {
+            sendSse(res, { log: `\n>>> Command finished successfully (code ${code}).` });
+        } else {
+            sendSse(res, { log: `\n>>> Command exited with error code ${code}.` });
+        }
+    });
+    child.on('error', (err) => {
+        sendSse(res, { log: `\n>>> Failed to start command: ${err.message}` });
+    });
+    return child;
+};
+
 app.get('/api/panel/reinstall-deps', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
+    res.setHeader('Connection', 'keep-alive');
+    
+    const proxyDir = path.join(projectRoot, 'proxy');
+    const apiDir = path.join(projectRoot, 'api-backend');
 
-    const commands = [
-        'npm install --prefix proxy',
-        'npm install --prefix api-backend'
-    ];
-    let cmdIdx = 0;
-
-    const run = () => {
-        if (cmdIdx >= commands.length) {
+    const proxyInstall = runStreamingCommand(res, 'npm', ['install'], proxyDir);
+    proxyInstall.on('close', () => {
+        const apiInstall = runStreamingCommand(res, 'npm', ['install'], apiDir);
+        apiInstall.on('close', () => {
             sendSse(res, { status: 'finished' });
             res.end();
-            return;
-        }
-        const cmd = commands[cmdIdx];
-        sendSse(res, { log: `\n> ${cmd}` });
-        const child = exec(cmd, { cwd: projectRoot });
-
-        child.stdout.on('data', data => sendSse(res, { log: data.toString() }));
-        child.stderr.on('data', data => sendSse(res, { log: data.toString() })); // Log stderr as info for npm
-        
-        child.on('close', code => {
-            if (code !== 0) {
-                sendSse(res, { status: 'error', message: `Command failed with code ${code}. See logs for details.` });
-                res.end();
-            } else {
-                cmdIdx++;
-                run();
-            }
         });
-        
-        child.on('error', (err) => {
-            sendSse(res, { status: 'error', message: `Failed to execute command: ${err.message}` });
-            res.end();
-        });
-    };
-    run();
+    });
 });
 
 app.get('/api/panel/restart-services', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
-    res.flushHeaders();
+    res.setHeader('Connection', 'keep-alive');
     
-    sendSse(res, { log: '> pm2 restart all' });
+    const command = 'pm2';
+    const args = ['restart', 'all'];
 
-    exec('pm2 restart all', { cwd: projectRoot }, (error, stdout, stderr) => {
-        // This response may or may not reach the client if the server restarts too quickly.
-        // The client-side is designed to handle a dropped connection during restart.
-        if (error) {
-            sendSse(res, { status: 'error', message: stderr || error.message });
-            res.end();
-            return;
+    sendSse(res, { log: `>>> Issuing command: ${command} ${args.join(' ')}` });
+    sendSse(res, { log: `>>> The connection will be lost as the server restarts.` });
+
+    const child = spawn(command, args, { cwd: projectRoot, shell: true, detached: true });
+
+    child.stdout.on('data', (data) => sendSse(res, { log: data.toString() }));
+    child.stderr.on('data', (data) => sendSse(res, { log: data.toString() }));
+
+    child.on('exit', (code) => {
+        if (code !== 0) {
+            sendSse(res, { status: 'error', message: `Restart command failed with code ${code}.` });
         }
-        sendSse(res, { log: stdout });
-        // The connection will be terminated by the server restart process.
+        res.end();
     });
+    child.on('error', (err) => {
+        sendSse(res, { status: 'error', message: `Failed to execute pm2: ${err.message}` });
+        res.end();
+    });
+
+    child.unref();
 });
 
+// --- Gemini API Key Management ---
 app.get('/api/panel/gemini-key', async (req, res) => {
     try {
-        const content = await fs.readFile(envJsPath, 'utf-8');
-        const match = content.match(/API_KEY:\s*"([^"]*)"/);
-        res.json({ apiKey: match ? match[1] : '' });
-    } catch (err) {
-        res.status(500).json({ message: 'Could not read env.js' });
-    }
-});
-app.post('/api/panel/gemini-key', async (req, res) => {
-     try {
-        const { apiKey } = req.body;
-        let content = await fs.readFile(envJsPath, 'utf-8');
-        content = content.replace(/API_KEY:\s*"[^"]*"/, `API_KEY: "${apiKey}"`);
-        await fs.writeFile(envJsPath, content);
-        res.json({ message: 'API Key updated. It will be active on next page reload.' });
-    } catch (err) {
-        res.status(500).json({ message: 'Failed to write to env.js' });
-    }
-});
-
-app.get('/api/panel/host-status', (req, res) => {
-    const commands = {
-        cpu: "top -bn1 | grep 'Cpu(s)' | awk '{print $2 + $4}'",
-        mem: "free -m | awk 'NR==2{printf \"{\\\"total\\\":\\\"%sMB\\\", \\\"used\\\":\\\"%sMB\\\", \\\"free\\\":\\\"%sMB\\\", \\\"percent\\\":%d}\", $2, $3, $4, $3*100/$2 }'",
-        disk: "df -h / | awk 'NR==2{printf \"{\\\"total\\\":\\\"%s\\\", \\\"used\\\":\\\"%s\\\", \\\"free\\\":\\\"%s\\\", \\\"percent\\\":%d}\", $2, $3, $4, $5}'"
-    };
-    
-    const promises = Object.entries(commands).map(([key, cmd]) => 
-        new Promise((resolve, reject) => {
-            exec(cmd, (err, stdout, stderr) => {
-                if (err) return reject(stderr);
-                resolve({ [key]: stdout.trim() });
-            });
-        })
-    );
-
-    Promise.all(promises)
-        .then(results => {
-            const status = results.reduce((acc, result) => ({...acc, ...result}), {});
-            res.json({
-                cpuUsage: parseFloat(status.cpu),
-                memory: JSON.parse(status.mem),
-                disk: JSON.parse(status.disk),
-            });
-        })
-        .catch(error => {
-            res.status(500).json({ message: "Failed to get host status.", error });
-        });
-});
-
-app.post('/api/generate-report', async (req, res) => {
-    try {
-        const { view, routerName, geminiAnalysis } = req.body;
-        const [ztStatus, backendCode, ...logs] = await Promise.all([
-             ztCliCommand('-j status').catch(e => `Error: ${e.message}`),
-             fs.readFile(apiBackendPath, 'utf-8').catch(() => 'Could not read backend file.'),
-             // Add other log fetching logic here if needed
-        ]);
-
-        let report = `
-=========================================
- MIKROTIK PANEL - SYSTEM REPORT
-=========================================
-Date: ${new Date().toISOString()}
-
--------[ AI Diagnosis Summary ]-------
-${geminiAnalysis}
-
--------[ Current State ]-------
-Page View: ${view}
-Selected Router: ${routerName || 'None'}
-
--------[ ZeroTier Host Status ]-------
-${ztStatus}
-
--------[ API Backend Code (api-backend/server.js) ]-------
-${backendCode}
-
-`;
-        res.setHeader('Content-disposition', 'attachment; filename=mikrotik-panel-report.txt');
-        res.setHeader('Content-type', 'text/plain');
-        res.charset = 'UTF-8';
-        res.write(report);
-        res.end();
+        const content = await fs.readFile(ENV_FILE_PATH, 'utf-8');
+        const match = content.match(/API_KEY\s*:\s*['"](.*?)['"]/);
+        const apiKey = match ? match[1] : '';
+        res.status(200).json({ apiKey });
     } catch (error) {
-        res.status(500).json({ message: `Failed to generate report: ${error.message}` });
+        console.error('Failed to read env.js for API key:', error);
+        res.status(500).json({ message: `Could not read env.js: ${error.message}` });
+    }
+});
+
+app.post('/api/panel/gemini-key', express.json(), async (req, res) => {
+    const { apiKey } = req.body;
+    if (typeof apiKey !== 'string') {
+        return res.status(400).json({ message: 'Invalid API key provided.' });
+    }
+
+    try {
+        let content = await fs.readFile(ENV_FILE_PATH, 'utf-8');
+        const updatedContent = content.replace(/(API_KEY\s*:\s*['"]).*?(['"])/, `$1${apiKey}$2`);
+        
+        if (content === updatedContent) {
+            throw new Error('Could not find the API_KEY field in env.js to update.');
+        }
+
+        await fs.writeFile(ENV_FILE_PATH, updatedContent, 'utf-8');
+        res.status(200).json({ message: 'API key saved successfully. It is now active for all AI features.' });
+    } catch (error) {
+        console.error('Failed to write env.js for API key:', error);
+        res.status(500).json({ message: `Could not save API key: ${error.message}` });
     }
 });
 
 
-// --- Serve Static Frontend ---
-// Must be last after all API routes
-const staticPath = path.join(__dirname, '..');
-app.use(express.static(staticPath));
 app.get('*', (req, res) => {
-  res.sendFile(path.join(staticPath, 'index.html'));
+  res.sendFile(path.join(__dirname, '..', 'index.html'));
 });
 
-
-initializeDatabase().then(() => {
-  app.listen(port, () => {
-    console.log(`MikroTik Manager UI server running. Access it at http://localhost:${port}`);
-  });
+app.listen(port, () => {
+  console.log(`MikroTik Manager UI server running. Access it at http://<your_ip_address>:${port}`);
 });
