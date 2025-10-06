@@ -14,6 +14,34 @@ const projectRoot = path.join(__dirname, '..');
 const dbPath = path.join(projectRoot, 'panel.db');
 let db;
 
+// --- Database Migration Helper ---
+const runMigrations = async (db) => {
+    console.log('Running database migrations...');
+    try {
+        // Migration for sales_records table (add customer detail columns)
+        const salesColumns = await db.all('PRAGMA table_info(sales_records)');
+        const salesColumnNames = salesColumns.map(c => c.name);
+        
+        if (!salesColumnNames.includes('clientAddress')) {
+            await db.exec('ALTER TABLE sales_records ADD COLUMN clientAddress TEXT');
+            console.log('  - Added column: clientAddress to sales_records');
+        }
+        if (!salesColumnNames.includes('clientContact')) {
+            await db.exec('ALTER TABLE sales_records ADD COLUMN clientContact TEXT');
+             console.log('  - Added column: clientContact to sales_records');
+        }
+        if (!salesColumnNames.includes('clientEmail')) {
+            await db.exec('ALTER TABLE sales_records ADD COLUMN clientEmail TEXT');
+             console.log('  - Added column: clientEmail to sales_records');
+        }
+
+        console.log('Migrations complete.');
+    } catch (error) {
+        console.error('Error during database migration:', error);
+    }
+};
+
+
 // --- Database Initialization ---
 async function initializeDatabase() {
   try {
@@ -52,10 +80,7 @@ async function initializeDatabase() {
         currency TEXT NOT NULL,
         discountAmount REAL NOT NULL,
         finalAmount REAL NOT NULL,
-        routerName TEXT NOT NULL,
-        clientAddress TEXT,
-        clientContact TEXT,
-        clientEmail TEXT
+        routerName TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS inventory_items (
@@ -87,6 +112,9 @@ async function initializeDatabase() {
           email TEXT
       );
     `);
+    
+    // After initial setup, run migrations to handle updates for existing databases
+    await runMigrations(db);
     
     // Set default settings if not present
     await db.run("INSERT OR IGNORE INTO panel_settings (key, value) VALUES ('language', 'en')");
