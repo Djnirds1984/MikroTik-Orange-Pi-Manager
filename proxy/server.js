@@ -52,7 +52,10 @@ async function initializeDatabase() {
         currency TEXT NOT NULL,
         discountAmount REAL NOT NULL,
         finalAmount REAL NOT NULL,
-        routerName TEXT NOT NULL
+        routerName TEXT NOT NULL,
+        clientAddress TEXT,
+        clientContact TEXT,
+        clientEmail TEXT
       );
 
       CREATE TABLE IF NOT EXISTS inventory_items (
@@ -72,6 +75,16 @@ async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS panel_settings (
         key TEXT PRIMARY KEY,
         value TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS customers (
+          id TEXT PRIMARY KEY,
+          username TEXT NOT NULL,
+          routerId TEXT NOT NULL,
+          fullName TEXT,
+          address TEXT,
+          contactNumber TEXT,
+          email TEXT
       );
     `);
     
@@ -183,8 +196,11 @@ dbApi.get('/sales', async (req, res) => {
     res.json(sales);
 });
 dbApi.post('/sales', async (req, res) => {
-    const { id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName } = req.body;
-    await db.run('INSERT INTO sales_records (id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName]);
+    const { id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName, clientAddress, clientContact, clientEmail } = req.body;
+    await db.run(
+        'INSERT INTO sales_records (id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName, clientAddress, clientContact, clientEmail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [id, date, clientName, planName, planPrice, currency, discountAmount, finalAmount, routerName, clientAddress, clientContact, clientEmail]
+    );
     res.status(201).json({ id });
 });
 dbApi.delete('/sales/all', async (req, res) => {
@@ -257,6 +273,26 @@ dbApi.post('/panel-settings', async (req, res) => {
     }
     await stmt.finalize();
     res.status(200).json({ message: 'Panel settings saved.' });
+});
+
+// Customers
+dbApi.get('/customers', async (req, res) => {
+    const customers = await db.all('SELECT * FROM customers');
+    res.json(customers);
+});
+dbApi.post('/customers', async (req, res) => {
+    const { id, username, routerId, fullName, address, contactNumber, email } = req.body;
+    await db.run('INSERT INTO customers (id, username, routerId, fullName, address, contactNumber, email) VALUES (?, ?, ?, ?, ?, ?, ?)', [id, username, routerId, fullName, address, contactNumber, email]);
+    res.status(201).json({ id });
+});
+dbApi.patch('/customers/:id', async (req, res) => {
+    const { username, routerId, fullName, address, contactNumber, email } = req.body;
+    await db.run('UPDATE customers SET username = ?, routerId = ?, fullName = ?, address = ?, contactNumber = ?, email = ? WHERE id = ?', [username, routerId, fullName, address, contactNumber, email, req.params.id]);
+    res.status(200).json({ message: 'Customer updated' });
+});
+dbApi.delete('/customers/:id', async (req, res) => {
+    await db.run('DELETE FROM customers WHERE id = ?', req.params.id);
+    res.status(204).send();
 });
 
 
