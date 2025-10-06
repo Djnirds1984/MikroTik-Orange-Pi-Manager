@@ -19,8 +19,8 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
         onClick={onClick}
         className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors duration-200 focus:outline-none ${
             isActive
-                ? 'border-[--color-primary-500] text-[--color-primary-400]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
+                ? 'border-[--color-primary-500] text-[--color-primary-500] dark:text-[--color-primary-400]'
+                : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
         }`}
     >
         {icon}
@@ -100,10 +100,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
     if (!selectedRouter) {
         return (
-            <div className="flex flex-col items-center justify-center h-96 text-center bg-slate-800 rounded-lg border border-slate-700">
-                <RouterIcon className="w-16 h-16 text-slate-600 mb-4" />
-                <h2 className="text-2xl font-bold text-slate-200">Hotspot Manager</h2>
-                <p className="mt-2 text-slate-400">Please select a router to manage its Hotspot.</p>
+            <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <RouterIcon className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4" />
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Hotspot Manager</h2>
+                <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router to manage its Hotspot.</p>
             </div>
         );
     }
@@ -112,25 +112,25 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
+                <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
             </div>
         );
     }
     
     if (errors.active && errors.hosts) {
          return (
-            <div className="flex flex-col items-center justify-center h-64 bg-slate-800 rounded-lg border border-red-700 p-6 text-center">
-                <p className="text-xl font-semibold text-red-400">Failed to load Hotspot data.</p>
-                <p className="mt-2 text-slate-400 text-sm">{errors.active}</p>
+            <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 p-6 text-center">
+                <p className="text-xl font-semibold text-red-600 dark:text-red-400">Failed to load Hotspot data.</p>
+                <p className="mt-2 text-slate-500 dark:text-slate-400 text-sm">{errors.active}</p>
             </div>
          );
     }
 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
-            <h2 className="text-3xl font-bold text-slate-100">Hotspot Management</h2>
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Hotspot Management</h2>
 
-            <div className="border-b border-slate-700">
+            <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="flex space-x-2" aria-label="Tabs">
                     <TabButton
                         label="User Activity"
@@ -149,7 +149,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
 
             {Object.keys(errors).length > 0 && (
-                 <div className="bg-yellow-900/30 border border-yellow-700/50 text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
+                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
                     <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
                     <div>
                         <p className="font-semibold">Data Warning:</p>
@@ -164,11 +164,11 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 <div className="space-y-8">
                     {/* Active Users Table */}
                     <div>
-                        <h3 className="text-xl font-semibold text-slate-200 mb-4">Active Users ({activeUsers.length})</h3>
-                        <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
+                        <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">Active Users ({activeUsers.length})</h3>
+                        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                                    <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
                                         <tr>
                                             <th scope="col" className="px-6 py-3">User</th>
                                             <th scope="col" className="px-6 py-3">Address</th>
@@ -180,14 +180,14 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                     </thead>
                                     <tbody>
                                         {activeUsers.length > 0 ? activeUsers.map(user => (
-                                            <tr key={user.id} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
-                                                <td className="px-6 py-4 font-medium text-slate-200">{user.user}</td>
-                                                <td className="px-6 py-4 font-mono text-cyan-400">{user.address}</td>
-                                                <td className="px-6 py-4 font-mono text-slate-300">{user.macAddress}</td>
-                                                <td className="px-6 py-4 font-mono text-slate-300">{user.uptime}</td>
-                                                <td className="px-6 py-4 font-mono text-green-400">{formatBytes(user.bytesIn)} / {formatBytes(user.bytesOut)}</td>
+                                            <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-200">{user.user}</td>
+                                                <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{user.address}</td>
+                                                <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{user.macAddress}</td>
+                                                <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{user.uptime}</td>
+                                                <td className="px-6 py-4 font-mono text-green-600 dark:text-green-400">{formatBytes(user.bytesIn)} / {formatBytes(user.bytesOut)}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => handleKickUser(user.id)} disabled={isSubmitting} className="p-2 text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Kick User">
+                                                    <button onClick={() => handleKickUser(user.id)} disabled={isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Kick User">
                                                         <TrashIcon className="h-5 w-5" />
                                                     </button>
                                                 </td>
@@ -207,11 +207,11 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
                     {/* Hosts Table */}
                     <div>
-                        <h3 className="text-xl font-semibold text-slate-200 mb-4">All Hosts ({hosts.length})</h3>
-                         <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md overflow-hidden">
+                        <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">All Hosts ({hosts.length})</h3>
+                         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm text-left">
-                                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                                    <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
                                         <tr>
                                             <th scope="col" className="px-6 py-3">MAC Address</th>
                                             <th scope="col" className="px-6 py-3">Address</th>
@@ -221,14 +221,14 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                     </thead>
                                     <tbody>
                                         {hosts.length > 0 ? hosts.map(host => (
-                                            <tr key={host.id} className="border-b border-slate-700 last:border-b-0 hover:bg-slate-700/50">
-                                                <td className="px-6 py-4 font-mono text-slate-200">{host.macAddress}</td>
-                                                <td className="px-6 py-4 font-mono text-cyan-400">{host.address}</td>
-                                                <td className="px-6 py-4 font-mono text-slate-300">{host.toAddress}</td>
+                                            <tr key={host.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                                <td className="px-6 py-4 font-mono text-slate-900 dark:text-slate-200">{host.macAddress}</td>
+                                                <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{host.address}</td>
+                                                <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{host.toAddress}</td>
                                                 <td className="px-6 py-4 space-x-2">
-                                                    {host.authorized && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-500/20 text-green-400">Authorized</span>}
-                                                    {host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-500/20 text-sky-400">Bypassed</span>}
-                                                    {!host.authorized && !host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-600/50 text-slate-400">Guest</span>}
+                                                    {host.authorized && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Authorized</span>}
+                                                    {host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400">Bypassed</span>}
+                                                    {!host.authorized && !host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600/50 text-slate-600 dark:text-slate-400">Guest</span>}
                                                 </td>
                                             </tr>
                                         )) : (

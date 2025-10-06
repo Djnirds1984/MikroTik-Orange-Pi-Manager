@@ -114,15 +114,15 @@ const HelpModal: React.FC<{
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl h-[80vh] border border-slate-700 flex flex-col">
-                <header className="p-4 border-b border-slate-700 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-[--color-primary-400]">AI Assistant</h3>
-                    <button onClick={onClose} className="p-1 text-slate-400 hover:text-white">&times;</button>
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl h-[80vh] border border-slate-200 dark:border-slate-700 flex flex-col">
+                <header className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400]">AI Assistant</h3>
+                    <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-800 dark:hover:text-white">&times;</button>
                 </header>
                 <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
                     {history.map((msg, index) => (
                         <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-[--color-primary-600] text-white' : 'bg-slate-700 text-slate-200'}`}>
+                            <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-[--color-primary-600] text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200'}`}>
                                 <p className="text-sm whitespace-pre-wrap">{msg.content.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
                                     .split('\n')
                                     .map((line, i) => <span key={i} dangerouslySetInnerHTML={{__html: line}} className="block"/>)
@@ -130,23 +130,23 @@ const HelpModal: React.FC<{
                             </div>
                         </div>
                     ))}
-                    {isLoading && <div className="flex justify-start"><div className="max-w-lg p-3 rounded-lg bg-slate-700"><Loader/></div></div>}
+                    {isLoading && <div className="flex justify-start"><div className="max-w-lg p-3 rounded-lg bg-slate-100 dark:bg-slate-700"><Loader/></div></div>}
                 </div>
-                <footer className="p-4 border-t border-slate-700">
+                <footer className="p-4 border-t border-slate-200 dark:border-slate-700">
                     <div className="flex items-center gap-2">
                         <textarea
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             placeholder="Ask a question or describe your problem..."
-                            className="flex-1 p-2 bg-slate-700 border border-slate-600 rounded-md text-white resize-none"
+                            className="flex-1 p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md text-slate-900 dark:text-white resize-none"
                             rows={2}
                             disabled={isLoading}
                         />
-                        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="px-4 py-2 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-md disabled:opacity-50">Send</button>
+                        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="px-4 py-2 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-md disabled:opacity-50 text-white">Send</button>
                     </div>
                     <div className="mt-2 text-center">
-                         <button onClick={handleGenerateReport} disabled={isReporting} className="text-xs text-slate-400 hover:text-sky-400 disabled:opacity-50">
+                         <button onClick={handleGenerateReport} disabled={isReporting} className="text-xs text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 disabled:opacity-50">
                             {isReporting ? 'Generating...' : 'Generate System Report (.txt)'}
                         </button>
                     </div>

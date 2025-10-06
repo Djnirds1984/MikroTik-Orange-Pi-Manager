@@ -43,29 +43,29 @@ const PlanForm: React.FC<{
     };
 
     return (
-        <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-            <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? t('billing.edit_plan_title', { name: initialData.name }) : t('billing.add_plan_title')}</h3>
+        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? t('billing.edit_plan_title', { name: initialData.name }) : t('billing.add_plan_title')}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="name" className="block text-sm font-medium text-slate-300">{t('billing.plan_name')}</label>
-                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.plan_name_placeholder')} />
+                        <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('billing.plan_name')}</label>
+                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.plan_name_placeholder')} />
                     </div>
                     <div>
-                        <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-300">{t('billing.pppoe_profile')}</label>
-                        <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] disabled:opacity-50">
+                        <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('billing.pppoe_profile')}</label>
+                        <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] disabled:opacity-50">
                             {isLoadingProfiles ? <option>{t('billing.loading_profiles')}</option> : profiles.length === 0 ? <option>{t('billing.no_profiles_found')}</option> : profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </select>
                     </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="price" className="block text-sm font-medium text-slate-300">{t('billing.price')}</label>
-                        <input type="number" name="price" value={plan.price} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white" />
+                        <label htmlFor="price" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('billing.price')}</label>
+                        <input type="number" name="price" value={plan.price} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
                     </div>
                      <div>
-                        <label htmlFor="cycle" className="block text-sm font-medium text-slate-300">{t('billing.cycle')}</label>
-                        <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]">
+                        <label htmlFor="cycle" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('billing.cycle')}</label>
+                        <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500]">
                             <option>{t('billing.monthly')}</option>
                             <option>{t('billing.quarterly')}</option>
                             <option>{t('billing.yearly')}</option>
@@ -73,11 +73,11 @@ const PlanForm: React.FC<{
                     </div>
                 </div>
                 <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-slate-300">{t('billing.description')}</label>
-                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.description_placeholder')}></textarea>
+                    <label htmlFor="description" className="block text-sm font-medium text-slate-700 dark:text-slate-300">{t('billing.description')}</label>
+                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.description_placeholder')}></textarea>
                 </div>
                 <div className="flex items-center justify-end space-x-4 pt-4">
-                    <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">{t('common.cancel')}</button>
+                    <button type="button" onClick={onCancel} className="px-4 py-2 border border-slate-300 dark:border-slate-600 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700">{t('common.cancel')}</button>
                     <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">{t('common.save_plan')}</button>
                 </div>
             </form>
@@ -152,7 +152,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
     return (
         <div className="max-w-4xl mx-auto">
              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-3xl font-bold text-slate-100">{t('titles.billing')}</h2>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">{t('titles.billing')}</h2>
                 {!isAdding && !editingPlan && (
                      <button onClick={handleAddNew} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg">
                         {t('billing.add_new_plan')}
@@ -163,7 +163,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
             {(isAdding || editingPlan) && (
                 <div className="mb-8">
                     { !selectedRouter ? (
-                        <div className="text-center p-8 bg-slate-800 rounded-lg border border-yellow-700 text-yellow-300">
+                        <div className="text-center p-8 bg-yellow-50 dark:bg-slate-800 rounded-lg border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-300">
                            <p>{t('billing.select_router_manage')}</p>
                         </div>
                     ) : (
@@ -181,31 +181,31 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
             {isLoadingPlans && (
                  <div className="flex flex-col items-center justify-center h-64">
                     <Loader />
-                    <p className="mt-4 text-[--color-primary-400]">{t('billing.loading_plans')}</p>
+                    <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">{t('billing.loading_plans')}</p>
                 </div>
             )}
 
             {!isLoadingPlans && (
-                <div className="bg-slate-800 border border-slate-700 rounded-lg shadow-md">
-                    <ul role="list" className="divide-y divide-slate-700">
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
+                    <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
                         {plans.map((plan) => (
-                            <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-700/50">
+                            <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                 <div className="flex items-center gap-4 mb-2 sm:mb-0">
-                                    <SignalIcon className="h-8 w-8 text-[--color-primary-400] flex-shrink-0" />
+                                    <SignalIcon className="h-8 w-8 text-[--color-primary-500] dark:text-[--color-primary-400] flex-shrink-0" />
                                     <div>
-                                        <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
-                                        <p className="text-sm text-slate-400">
-                                            <span className="font-bold text-slate-200">{formatCurrency(plan.price)}</span> / {t(`billing.${plan.cycle.toLowerCase()}`)}
-                                            <span className="mx-2 text-slate-600">|</span>
-                                            {t('billing.profile')}: <span className="font-mono bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
+                                        <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan.name}</p>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                                            <span className="font-bold text-slate-800 dark:text-slate-200">{formatCurrency(plan.price)}</span> / {t(`billing.${plan.cycle.toLowerCase()}`)}
+                                            <span className="mx-2 text-slate-300 dark:text-slate-600">|</span>
+                                            {t('billing.profile')}: <span className="font-mono bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">{plan.pppoeProfile}</span>
                                         </p>
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2 self-end sm:self-center">
-                                    <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-[--color-primary-400]">
+                                    <button onClick={() => handleEdit(plan)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-[--color-primary-500] dark:hover:text-[--color-primary-400]">
                                         <EditIcon className="h-5 w-5" />
                                     </button>
-                                    <button onClick={() => handleDelete(plan.id)} className="p-2 text-slate-400 hover:text-red-500">
+                                    <button onClick={() => handleDelete(plan.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500">
                                         <TrashIcon className="h-5 w-5" />
                                     </button>
                                 </div>
