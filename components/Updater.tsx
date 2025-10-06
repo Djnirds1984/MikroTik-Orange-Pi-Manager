@@ -112,6 +112,11 @@ export const Updater: React.FC = () => {
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
 
+            if (data.status === 'finished') {
+                eventSource.close();
+                return; // Stop processing here to preserve the final status (e.g., 'available')
+            }
+
             if (data.log) {
                 setLogs(prev => [...prev, data.log.trim()]);
             }
@@ -121,10 +126,6 @@ export const Updater: React.FC = () => {
             }
 
             setStatusInfo(prev => ({ ...prev, ...data }));
-
-            if (data.status === 'finished') {
-                eventSource.close();
-            }
         };
 
         eventSource.onerror = () => {
