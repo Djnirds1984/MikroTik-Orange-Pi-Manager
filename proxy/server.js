@@ -582,6 +582,69 @@ app.post('/api/panel/reboot', async (req, res) => {
     }
 });
 
+// FIX: Add missing maintenance endpoints for System Settings page
+app.get('/api/panel/reinstall-deps', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+
+    const commands = [
+        'npm install --prefix proxy',
+        'npm install --prefix api-backend'
+    ];
+    let cmdIdx = 0;
+
+    const run = () => {
+        if (cmdIdx >= commands.length) {
+            sendSse(res, { status: 'finished' });
+            res.end();
+            return;
+        }
+        const cmd = commands[cmdIdx];
+        sendSse(res, { log: `\n> ${cmd}` });
+        const child = exec(cmd, { cwd: projectRoot });
+
+        child.stdout.on('data', data => sendSse(res, { log: data.toString() }));
+        child.stderr.on('data', data => sendSse(res, { log: data.toString() })); // Log stderr as info for npm
+        
+        child.on('close', code => {
+            if (code !== 0) {
+                sendSse(res, { status: 'error', message: `Command failed with code ${code}. See logs for details.` });
+                res.end();
+            } else {
+                cmdIdx++;
+                run();
+            }
+        });
+        
+        child.on('error', (err) => {
+            sendSse(res, { status: 'error', message: `Failed to execute command: ${err.message}` });
+            res.end();
+        });
+    };
+    run();
+});
+
+app.get('/api/panel/restart-services', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.flushHeaders();
+    
+    sendSse(res, { log: '> pm2 restart all' });
+
+    exec('pm2 restart all', { cwd: projectRoot }, (error, stdout, stderr) => {
+        // This response may or may not reach the client if the server restarts too quickly.
+        // The client-side is designed to handle a dropped connection during restart.
+        if (error) {
+            sendSse(res, { status: 'error', message: stderr || error.message });
+            res.end();
+            return;
+        }
+        sendSse(res, { log: stdout });
+        // The connection will be terminated by the server restart process.
+    });
+});
+
 app.get('/api/panel/gemini-key', async (req, res) => {
     try {
         const content = await fs.readFile(envJsPath, 'utf-8');
