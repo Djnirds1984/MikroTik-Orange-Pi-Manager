@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getWanRoutes, setRouteProperty } from '../services/mikrotikService.ts';
+import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, TrashIcon, VlanIcon, ShareIcon } from '../constants.tsx';
@@ -75,41 +75,56 @@ const VlanFormModal: React.FC<VlanFormModalProps> = ({ isOpen, onClose, onSave, 
     );
 };
 
-// --- Multi-WAN Manager Sub-component ---
-const MultiWanManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+// --- Automated Failover Manager Sub-component ---
+const AutomatedFailoverManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [routes, setRoutes] = useState<WanRoute[]>([]);
+    const [isFailoverEnabled, setIsFailoverEnabled] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [isConfiguring, setIsConfiguring] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchRoutes = useCallback(async () => {
+    const fetchData = useCallback(async () => {
         try {
-            const wanRoutes = await getWanRoutes(selectedRouter);
+            const [wanRoutes, failoverStatus] = await Promise.all([
+                getWanRoutes(selectedRouter),
+                getWanFailoverStatus(selectedRouter)
+            ]);
             setRoutes(wanRoutes);
+            setIsFailoverEnabled(failoverStatus.enabled);
         } catch (err) {
-            console.error("Failed to fetch WAN routes:", err);
-            setError(`Could not fetch WAN routes: ${(err as Error).message}`);
+            console.error("Failed to fetch WAN data:", err);
+            setError(`Could not fetch WAN data: ${(err as Error).message}`);
         } finally {
             setIsLoading(false);
         }
     }, [selectedRouter]);
 
     useEffect(() => {
-        fetchRoutes();
-        const interval = setInterval(fetchRoutes, 5000); // Poll every 5 seconds
+        fetchData();
+        const interval = setInterval(fetchData, 5000); // Poll every 5 seconds
         return () => clearInterval(interval);
-    }, [fetchRoutes]);
+    }, [fetchData]);
     
     const handleToggleRoute = async (routeId: string, isDisabled: boolean) => {
         try {
-            // Optimistically update UI
             setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, disabled: !isDisabled } : r));
             await setRouteProperty(selectedRouter, routeId, { disabled: !isDisabled ? 'true' : 'false' });
-            // Re-fetch to get the authoritative state
-            await fetchRoutes();
+            await fetchData();
         } catch (err) {
             alert(`Failed to update route: ${(err as Error).message}`);
-            // Revert UI on failure
-            await fetchRoutes();
+            await fetchData();
+        }
+    };
+
+    const handleToggleAutomatedFailover = async () => {
+        setIsConfiguring(true);
+        try {
+            await configureWanFailover(selectedRouter, !isFailoverEnabled);
+            await fetchData(); // Refresh state from router
+        } catch (err) {
+            alert(`Failed to configure failover: ${(err as Error).message}`);
+        } finally {
+            setIsConfiguring(false);
         }
     };
 
@@ -123,9 +138,27 @@ const MultiWanManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
 
     return (
         <div className="p-6 space-y-4">
-             <p className="text-sm text-slate-500 dark:text-slate-400">
-                This manager shows your default routes (dst-address 0.0.0.0/0). The 'Active' status reflects the health of the connection. For automatic status updates, enable <code className="text-xs bg-slate-200 dark:bg-slate-700 p-1 rounded">check-gateway=ping</code> on each route in your router.
-            </p>
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                 <div>
+                    <h4 className="font-semibold text-slate-800 dark:text-slate-200">Enable Automated Failover</h4>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        This enables the router's built-in gateway check. It will automatically disable routes if their gateway becomes unreachable via ping.
+                    </p>
+                </div>
+                <div className="flex-shrink-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={isFailoverEnabled}
+                            onChange={handleToggleAutomatedFailover}
+                            disabled={isConfiguring}
+                            className="sr-only peer"
+                        />
+                        <div className="w-14 h-8 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-[--color-primary-600] disabled:opacity-50"></div>
+                    </label>
+                </div>
+            </div>
+            
             <div className="overflow-x-auto">
                 <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
@@ -134,7 +167,7 @@ const MultiWanManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
                             <th className="px-4 py-3">Gateway</th>
                             <th className="px-4 py-3">Distance</th>
                             <th className="px-4 py-3">Comment</th>
-                            <th className="px-4 py-3 text-center">Enabled</th>
+                            <th className="px-4 py-3 text-center">Manual Override</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -326,13 +359,13 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 isLoading={isSubmitting}
             />
 
-            {/* Multi-WAN Manager Card */}
+            {/* Automated Failover Manager Card */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
                 <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
                     <ShareIcon className="w-6 h-6 text-green-500 dark:text-green-400" />
-                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Multi-WAN Manager</h3>
+                    <h3 className="text-lg font-semibold text-green-600 dark:text-green-400">Automated Failover Manager</h3>
                 </div>
-                <MultiWanManager selectedRouter={selectedRouter} />
+                <AutomatedFailoverManager selectedRouter={selectedRouter} />
             </div>
 
             {/* VLAN Management Card */}

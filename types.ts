@@ -266,3 +266,7 @@ export interface WanRoute {
     disabled: boolean;
     comment?: string;
 }
+
+export interface FailoverStatus {
+    enabled: boolean;
+}

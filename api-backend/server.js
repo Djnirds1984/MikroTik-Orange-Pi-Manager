@@ -502,6 +502,39 @@ app.post('/api/network/routes/set', (req, res, next) => {
     });
 });
 
+// --- Automated Failover Management ---
+app.post('/api/network/wan-failover/status', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/route?dst-address=0.0.0.0/0');
+        const routes = Array.isArray(response.data) ? response.data : [];
+        // If at least one non-disabled default route is using check-gateway=ping, we consider it enabled.
+        const isEnabled = routes.some(r => r.disabled === 'false' && r['check-gateway'] === 'ping');
+        res.status(200).json({ enabled: isEnabled });
+    });
+});
+
+app.post('/api/network/wan-failover/configure', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { enabled } = req.body;
+        if (typeof enabled !== 'boolean') {
+            return res.status(400).json({ message: 'A boolean "enabled" property is required.' });
+        }
+
+        const response = await apiClient.get('/ip/route?dst-address=0.0.0.0/0');
+        const routes = Array.isArray(response.data) ? response.data : [];
+        
+        const propertyToSet = { 'check-gateway': enabled ? 'ping' : 'main' };
+
+        const updatePromises = routes.map(route => 
+            apiClient.patch(`/ip/route/${route['.id']}`, propertyToSet)
+        );
+
+        await Promise.all(updatePromises);
+
+        res.status(200).json({ message: `Automated failover has been ${enabled ? 'enabled' : 'disabled'}.` });
+    });
+});
+
 
 // --- Global Error Handling Middleware (must be the last app.use call) ---
 // This acts as a safety net to catch any unhandled errors from the API routes
