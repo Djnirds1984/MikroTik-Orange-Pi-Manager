@@ -7,12 +7,43 @@ const fs = require('fs-extra');
 const { exec } = require('child_process');
 const archiver = require('archiver');
 const tar = require('tar');
+const esbuild = require('esbuild');
 
 const app = express();
 const port = 3001;
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ limit: '10mb' }));
+
+// Middleware to compile TSX/TS files on the fly
+app.get(/\.(tsx|ts)$/, async (req, res, next) => {
+  try {
+    // Construct the file path relative to the project root
+    const filePath = path.join(__dirname, '..', req.path);
+
+    // Check if the file exists
+    if (!await fs.pathExists(filePath)) {
+      return next(); // Pass to the next middleware (express.static) if not found
+    }
+
+    const source = await fs.readFile(filePath, 'utf-8');
+
+    // Use esbuild to transform the TSX/TS code to JavaScript
+    const result = await esbuild.transform(source, {
+      loader: req.path.endsWith('.tsx') ? 'tsx' : 'ts',
+      format: 'esm',
+      sourcemap: 'inline', // Good for debugging
+    });
+
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.send(result.code);
+  } catch (error) {
+    console.error(`esbuild compilation error for ${req.path}:`, error);
+    // Send a response that shows the error in the browser console
+    res.status(500).send(`/* ESBuild Compilation Error:\n${error.message.replace(/\*\//g, '*\\/')}\n*/`);
+  }
+});
+
 
 // --- Database Setup ---
 let db;
@@ -105,7 +136,9 @@ async function initializeDatabase() {
 // --- Generic DB API Handlers ---
 const handleDbGet = (table) => async (req, res) => {
   try {
-    const items = await db.all(`SELECT * FROM ${table}`);
+    // Replace hyphens for table names
+    const tableName = table.replace(/-/g, '_');
+    const items = await db.all(`SELECT * FROM ${tableName}`);
     res.json(items);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -114,11 +147,12 @@ const handleDbGet = (table) => async (req, res) => {
 
 const handleDbPost = (table) => async (req, res) => {
   try {
+    const tableName = table.replace(/-/g, '_');
     const item = req.body;
     const columns = Object.keys(item).join(', ');
     const placeholders = Object.keys(item).map(() => '?').join(', ');
     const values = Object.values(item);
-    await db.run(`INSERT INTO ${table} (${columns}) VALUES (${placeholders})`, values);
+    await db.run(`INSERT INTO ${tableName} (${columns}) VALUES (${placeholders})`, values);
     res.status(201).json(item);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -127,12 +161,13 @@ const handleDbPost = (table) => async (req, res) => {
 
 const handleDbPatch = (table) => async (req, res) => {
   try {
+    const tableName = table.replace(/-/g, '_');
     const { id } = req.params;
     const fields = req.body;
     delete fields.id;
     const setClause = Object.keys(fields).map(key => `${key} = ?`).join(', ');
     const values = [...Object.values(fields), id];
-    await db.run(`UPDATE ${table} SET ${setClause} WHERE id = ?`, values);
+    await db.run(`UPDATE ${tableName} SET ${setClause} WHERE id = ?`, values);
     res.json({ message: 'Updated successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -141,8 +176,9 @@ const handleDbPatch = (table) => async (req, res) => {
 
 const handleDbDelete = (table) => async (req, res) => {
   try {
+    const tableName = table.replace(/-/g, '_');
     const { id } = req.params;
-    await db.run(`DELETE FROM ${table} WHERE id = ?`, id);
+    await db.run(`DELETE FROM ${tableName} WHERE id = ?`, id);
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -153,10 +189,11 @@ const handleDbDelete = (table) => async (req, res) => {
 // --- Database API Endpoints ---
 const dbRouter = express.Router();
 ['routers', 'billing-plans', 'sales', 'inventory', 'customers'].forEach(table => {
-    dbRouter.get(`/${table}`, handleDbGet(table));
-    dbRouter.post(`/${table}`, handleDbPost(table));
-    dbRouter.patch(`/${table}/:id`, handleDbPatch(table));
-    dbRouter.delete(`/${table}/:id`, handleDbDelete(table));
+    const endpoint = `/${table}`;
+    dbRouter.get(endpoint, handleDbGet(table));
+    dbRouter.post(endpoint, handleDbPost(table));
+    dbRouter.patch(`${endpoint}/:id`, handleDbPatch(table));
+    dbRouter.delete(`${endpoint}/:id`, handleDbDelete(table));
 });
 
 // Custom endpoints
