@@ -44,16 +44,16 @@ const PlanForm: React.FC<{
 
     return (
         <div className="bg-slate-800 p-6 rounded-lg border border-slate-700">
-            <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? t('billing.edit_plan_title', { name: initialData.name }) : t('billing.add_plan_title')}</h3>
+            <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? t('billing.edit_plan_title', { name: initialData.name }) : t('billing.add_plan_title')}</h3>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-slate-300">{t('billing.plan_name')}</label>
-                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder={t('billing.plan_name_placeholder')} />
+                        <input type="text" name="name" value={plan.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.plan_name_placeholder')} />
                     </div>
                     <div>
                         <label htmlFor="pppoeProfile" className="block text-sm font-medium text-slate-300">{t('billing.pppoe_profile')}</label>
-                        <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500 disabled:opacity-50">
+                        <select name="pppoeProfile" value={plan.pppoeProfile} onChange={handleChange} required disabled={isLoadingProfiles || profiles.length === 0} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500] disabled:opacity-50">
                             {isLoadingProfiles ? <option>{t('billing.loading_profiles')}</option> : profiles.length === 0 ? <option>{t('billing.no_profiles_found')}</option> : profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                         </select>
                     </div>
@@ -65,7 +65,7 @@ const PlanForm: React.FC<{
                     </div>
                      <div>
                         <label htmlFor="cycle" className="block text-sm font-medium text-slate-300">{t('billing.cycle')}</label>
-                        <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
+                        <select name="cycle" value={plan.cycle} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]">
                             <option>{t('billing.monthly')}</option>
                             <option>{t('billing.quarterly')}</option>
                             <option>{t('billing.yearly')}</option>
@@ -74,11 +74,11 @@ const PlanForm: React.FC<{
                 </div>
                 <div>
                     <label htmlFor="description" className="block text-sm font-medium text-slate-300">{t('billing.description')}</label>
-                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder={t('billing.description_placeholder')}></textarea>
+                    <textarea name="description" value={plan.description} onChange={handleChange} rows={2} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder={t('billing.description_placeholder')}></textarea>
                 </div>
                 <div className="flex items-center justify-end space-x-4 pt-4">
                     <button type="button" onClick={onCancel} className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">{t('common.cancel')}</button>
-                    <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">{t('common.save_plan')}</button>
+                    <button type="submit" className="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">{t('common.save_plan')}</button>
                 </div>
             </form>
         </div>
@@ -154,7 +154,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
              <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-100">{t('titles.billing')}</h2>
                 {!isAdding && !editingPlan && (
-                     <button onClick={handleAddNew} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
+                     <button onClick={handleAddNew} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg">
                         {t('billing.add_new_plan')}
                     </button>
                 )}
@@ -181,7 +181,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
             {isLoadingPlans && (
                  <div className="flex flex-col items-center justify-center h-64">
                     <Loader />
-                    <p className="mt-4 text-orange-400">{t('billing.loading_plans')}</p>
+                    <p className="mt-4 text-[--color-primary-400]">{t('billing.loading_plans')}</p>
                 </div>
             )}
 
@@ -191,7 +191,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
                         {plans.map((plan) => (
                             <li key={plan.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between hover:bg-slate-700/50">
                                 <div className="flex items-center gap-4 mb-2 sm:mb-0">
-                                    <SignalIcon className="h-8 w-8 text-orange-400 flex-shrink-0" />
+                                    <SignalIcon className="h-8 w-8 text-[--color-primary-400] flex-shrink-0" />
                                     <div>
                                         <p className="text-lg font-semibold text-slate-100">{plan.name}</p>
                                         <p className="text-sm text-slate-400">
@@ -202,7 +202,7 @@ export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-2 self-end sm:self-center">
-                                    <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-orange-400">
+                                    <button onClick={() => handleEdit(plan)} className="p-2 text-slate-400 hover:text-[--color-primary-400]">
                                         <EditIcon className="h-5 w-5" />
                                     </button>
                                     <button onClick={() => handleDelete(plan.id)} className="p-2 text-slate-400 hover:text-red-500">

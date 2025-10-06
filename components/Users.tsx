@@ -115,7 +115,7 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-700">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
+                        <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="name" className="block text-sm font-medium text-slate-300">Username</label>
@@ -135,7 +135,7 @@ const SecretFormModal: React.FC<SecretFormModalProps> = ({ isOpen, onClose, onSa
                     </div>
                     <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500">
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
                             {isLoading ? 'Saving...' : 'Save User'}
                         </button>
                     </div>
@@ -203,7 +203,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-md border border-slate-700">
                 <div className="p-6">
-                    <h3 className="text-xl font-bold text-orange-400 mb-2">Record Payment for <span className="text-white">{user.name}</span></h3>
+                    <h3 className="text-xl font-bold text-[--color-primary-400] mb-2">Record Payment for <span className="text-white">{user.name}</span></h3>
                     <div className="space-y-4 mt-4">
                         <div>
                             <label htmlFor="paymentDate" className="block text-sm font-medium text-slate-300">Payment Date</label>
@@ -256,7 +256,7 @@ const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, onProcess,
                 </div>
                 <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                     <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700">Cancel</button>
-                    <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan || !expiryProfile} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button type="button" onClick={handleSubmit} disabled={isLoading || !currentUserPlan || !expiryProfile} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:opacity-50 disabled:cursor-not-allowed">
                         {isLoading ? 'Processing...' : 'Confirm Payment'}
                     </button>
                 </div>
@@ -462,7 +462,7 @@ export const Users: React.FC<{
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-orange-400">Fetching PPPoE users from {selectedRouter.name}...</p>
+                <p className="mt-4 text-[--color-primary-400]">Fetching PPPoE users from {selectedRouter.name}...</p>
             </div>
         );
     }
@@ -515,10 +515,10 @@ export const Users: React.FC<{
                             placeholder="Search user, profile, IP..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full md:w-64 bg-slate-700 border border-slate-600 rounded-md py-2 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+                            className="w-full md:w-64 bg-slate-700 border border-slate-600 rounded-md py-2 pl-10 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-[--color-primary-500]"
                         />
                     </div>
-                    <button onClick={handleAdd} disabled={isLoadingPlans} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg flex-shrink-0 disabled:opacity-50">
+                    <button onClick={handleAdd} disabled={isLoadingPlans} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg flex-shrink-0 disabled:opacity-50">
                         Add New User
                     </button>
                 </div>
@@ -569,7 +569,7 @@ export const Users: React.FC<{
                                             <button onClick={() => handleOpenPayment(secret)} className="px-3 py-1 text-xs bg-sky-600 hover:bg-sky-500 rounded-md font-semibold text-white">
                                                 Pay
                                             </button>
-                                            <button onClick={() => handleEdit(secret)} className="p-2 text-slate-400 hover:text-orange-400 rounded-md" title="Edit User">
+                                            <button onClick={() => handleEdit(secret)} className="p-2 text-slate-400 hover:text-[--color-primary-400] rounded-md" title="Edit User">
                                                 <EditIcon className="h-5 w-5" />
                                             </button>
                                             <button onClick={() => handleDelete(secret.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-md" title="Delete User">

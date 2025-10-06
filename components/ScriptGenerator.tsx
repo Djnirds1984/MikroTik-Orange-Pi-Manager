@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 interface ScriptGeneratorProps {
@@ -27,13 +28,13 @@ export const ScriptGenerator: React.FC<ScriptGeneratorProps> = ({ prompt, setPro
         onChange={(e) => setPrompt(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="e.g., 'Create a firewall rule to block all incoming traffic on port 8080 to the router itself'"
-        className="w-full h-48 p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none transition-all resize-y text-slate-200 placeholder-slate-500"
+        className="w-full h-48 p-3 bg-slate-800 border border-slate-700 rounded-lg focus:ring-2 focus:ring-[--color-primary-500] focus:outline-none transition-all resize-y text-slate-200 placeholder-slate-500"
         disabled={isLoading}
       />
       <button
         onClick={onSubmit}
         disabled={isLoading}
-        className="w-full bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors duration-200"
+        className="w-full bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:bg-[--color-primary-800] disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center transition-colors duration-200"
       >
         {isLoading ? 'Generating...' : 'Generate Script'}
         <span className="ml-2 text-xs font-mono bg-black/20 px-1.5 py-0.5 rounded">[Ctrl+Enter]</span>

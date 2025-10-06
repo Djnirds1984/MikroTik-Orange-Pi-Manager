@@ -115,7 +115,7 @@ const AppContent: React.FC = () => {
         return (
             <div className="flex flex-col items-center justify-center h-full">
                 <Loader />
-                <p className="mt-4 text-orange-400">{t('app.loading_data')}</p>
+                <p className="mt-4 text-[--color-primary-400]">{t('app.loading_data')}</p>
             </div>
         );
     }

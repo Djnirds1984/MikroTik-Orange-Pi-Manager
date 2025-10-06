@@ -23,7 +23,7 @@ const NavItem: React.FC<{
         onClick={onClick}
         className={`flex items-center w-full p-3 text-base font-normal rounded-lg transition duration-75 group ${
           isActive
-            ? 'bg-orange-600 text-white'
+            ? 'bg-[--color-primary-600] text-white'
             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
         }`}
       >
@@ -73,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
               {companySettings.logoBase64 ? (
                 <img src={companySettings.logoBase64} alt="Company Logo" className="h-10 w-auto object-contain flex-shrink-0" />
               ) : (
-                 <MikroTikLogoIcon className="w-8 h-8 text-orange-500 flex-shrink-0" />
+                 <MikroTikLogoIcon className="w-8 h-8 text-[--color-primary-500] flex-shrink-0" />
               )}
               <span className="self-center ml-3 text-xl font-semibold whitespace-nowrap text-slate-900 dark:text-white truncate">
                 {companySettings.companyName || 'MikroTik UI'}

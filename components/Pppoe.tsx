@@ -52,16 +52,16 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-700">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-orange-400 mb-4">{initialData ? 'Edit Profile' : 'Add New Profile'}</h3>
+                        <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">{initialData ? 'Edit Profile' : 'Add New Profile'}</h3>
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="name" className="block text-sm font-medium text-slate-300">Profile Name</label>
-                                <input type="text" name="name" id="name" value={profile.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" />
+                                <input type="text" name="name" id="name" value={profile.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" />
                             </div>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <label htmlFor="localAddress" className="block text-sm font-medium text-slate-300">Local Address</label>
-                                    <input type="text" name="localAddress" id="localAddress" value={profile.localAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., 10.0.0.1" />
+                                    <input type="text" name="localAddress" id="localAddress" value={profile.localAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder="e.g., 10.0.0.1" />
                                 </div>
                                 <div>
                                     <label htmlFor="remoteAddress" className="block text-sm font-medium text-slate-300">Remote Address (Pool)</label>
@@ -71,7 +71,7 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
                                             <span>{poolError} List may be incomplete.</span>
                                         </div>
                                     }
-                                    <select name="remoteAddress" id="remoteAddress" value={profile.remoteAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500">
+                                    <select name="remoteAddress" id="remoteAddress" value={profile.remoteAddress} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]">
                                         <option value="none">none</option>
                                         {pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
                                     </select>
@@ -79,13 +79,13 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
                             </div>
                              <div>
                                 <label htmlFor="rateLimit" className="block text-sm font-medium text-slate-300">Rate Limit (rx/tx)</label>
-                                <input type="text" name="rateLimit" id="rateLimit" value={profile.rateLimit} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., 5M/10M" />
+                                <input type="text" name="rateLimit" id="rateLimit" value={profile.rateLimit} onChange={handleChange} className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder="e.g., 5M/10M" />
                             </div>
                         </div>
                     </div>
                     <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancel</button>
-                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-wait">
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:opacity-50 disabled:cursor-wait">
                             {isLoading ? 'Saving...' : 'Save Profile'}
                         </button>
                     </div>
@@ -203,7 +203,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-orange-400">Fetching PPPoE data from {selectedRouter.name}...</p>
+                <p className="mt-4 text-[--color-primary-400]">Fetching PPPoE data from {selectedRouter.name}...</p>
             </div>
         );
     }
@@ -233,7 +233,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
 
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-3xl font-bold text-slate-100">PPPoE Profiles</h2>
-                <button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg">
+                <button onClick={handleAdd} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg">
                     Add New Profile
                 </button>
             </div>
@@ -258,7 +258,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({
                                     <td className="px-6 py-4 font-mono text-cyan-400">{profile.remoteAddress || 'none'}</td>
                                     <td className="px-6 py-4 font-mono text-green-400">{profile.rateLimit || 'N/A'}</td>
                                     <td className="px-6 py-4 text-right space-x-2">
-                                        <button onClick={() => handleEdit(profile)} className="p-2 text-slate-400 hover:text-orange-400 rounded-md" title="Edit Profile">
+                                        <button onClick={() => handleEdit(profile)} className="p-2 text-slate-400 hover:text-[--color-primary-400] rounded-md" title="Edit Profile">
                                             <EditIcon className="h-5 w-5" />
                                         </button>
                                         <button onClick={() => handleDelete(profile.id)} className="p-2 text-slate-400 hover:text-red-500 rounded-md" title="Delete Profile">

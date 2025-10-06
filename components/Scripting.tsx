@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback } from 'react';
 import { ScriptGenerator } from './ScriptGenerator.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
@@ -68,7 +69,7 @@ export const Scripting: React.FC = () => {
           {isLoading && (
             <div className="absolute inset-0 bg-slate-800 bg-opacity-75 flex flex-col items-center justify-center rounded-lg z-10">
               <Loader />
-              <p className="mt-4 text-orange-400">AI is thinking...</p>
+              <p className="mt-4 text-[--color-primary-400]">AI is thinking...</p>
             </div>
           )}
           {error && (

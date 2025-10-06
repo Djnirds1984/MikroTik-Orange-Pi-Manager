@@ -19,7 +19,7 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
         onClick={onClick}
         className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors duration-200 focus:outline-none ${
             isActive
-                ? 'border-orange-500 text-orange-400'
+                ? 'border-[--color-primary-500] text-[--color-primary-400]'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
         }`}
     >
@@ -112,7 +112,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-orange-400">Fetching Hotspot data from {selectedRouter.name}...</p>
+                <p className="mt-4 text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
             </div>
         );
     }

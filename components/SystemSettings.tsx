@@ -12,7 +12,7 @@ const SettingsCard: React.FC<{ title: string; children: React.ReactNode; icon: R
   <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
     <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
       {icon}
-      <h3 className="text-lg font-semibold text-orange-500 dark:text-orange-400">{title}</h3>
+      <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400]">{title}</h3>
     </div>
     <div className="p-6">{children}</div>
   </div>
@@ -227,7 +227,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                             onClick={() => setTheme(t)}
                             className={`w-full rounded-md py-2 text-sm font-medium transition-colors capitalize ${
                                 theme === t
-                                    ? 'bg-orange-600 text-white shadow-sm'
+                                    ? 'bg-[--color-primary-600] text-white shadow-sm'
                                     : 'text-slate-600 dark:text-slate-300 hover:bg-white/50 dark:hover:bg-slate-600/50'
                             }`}
                         >
@@ -237,7 +237,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                 </div>
             </SettingsCard>
             
-            <SettingsCard title="AI Configuration" icon={<KeyIcon className="w-6 h-6 text-orange-400" />}>
+            <SettingsCard title="AI Configuration" icon={<KeyIcon className="w-6 h-6 text-[--color-primary-400]" />}>
                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
                     Manage the Google Gemini API key used for all AI features like script generation and troubleshooting. You can get a key from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-sky-500 dark:text-sky-400 hover:underline">Google AI Studio</a>.
                 </p>
@@ -272,7 +272,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                     </div>
                 )}
                 <div className="flex justify-end mt-4">
-                    <button onClick={handleSaveKey} disabled={isWorking || isLoading.key} className="px-4 py-2 text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50">
+                    <button onClick={handleSaveKey} disabled={isWorking || isLoading.key} className="px-4 py-2 text-sm font-semibold text-white bg-[--color-primary-600] hover:bg-[--color-primary-700] rounded-lg disabled:opacity-50">
                         {isSubmitting === 'key' ? 'Saving...' : 'Save Key'}
                     </button>
                 </div>
@@ -302,7 +302,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                         </div>
                     )}
                     <div className="flex justify-end pt-2">
-                        <button type="submit" disabled={isWorking} className="px-4 py-2 text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded-lg disabled:opacity-50">
+                        <button type="submit" disabled={isWorking} className="px-4 py-2 text-sm font-semibold text-white bg-[--color-primary-600] hover:bg-[--color-primary-700] rounded-lg disabled:opacity-50">
                             {isSubmitting === 'localization' ? 'Saving...' : 'Save Preferences'}
                         </button>
                     </div>
@@ -310,7 +310,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
             </SettingsCard>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <SettingsCard title="Panel Host" icon={<ServerIcon className="w-6 h-6 text-orange-400" />}>
+                <SettingsCard title="Panel Host" icon={<ServerIcon className="w-6 h-6 text-[--color-primary-400]" />}>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Manage the Orange Pi or server running this web panel.</p>
                     <button onClick={handleRebootPanel} disabled={isWorking} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                         <PowerIcon className="w-5 h-5" />
@@ -318,7 +318,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                     </button>
                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-2 text-center">Requires passwordless `sudo` permissions.</p>
                 </SettingsCard>
-                <SettingsCard title="MikroTik Router" icon={<RouterIcon className="w-6 h-6 text-orange-400" />}>
+                <SettingsCard title="MikroTik Router" icon={<RouterIcon className="w-6 h-6 text-[--color-primary-400]" />}>
                     <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Manage the currently selected MikroTik router.</p>
                     <button onClick={handleRebootRouter} disabled={!selectedRouter || isWorking} className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg transition-colors disabled:bg-slate-600 dark:disabled:bg-slate-700 disabled:cursor-not-allowed">
                         <PowerIcon className="w-5 h-5" />
@@ -344,11 +344,11 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="primaryNtp" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Primary NTP Server</label>
-                            <input type="text" name="primaryNtp" id="primaryNtp" value={formNtp.primaryNtp} onChange={(e) => setFormNtp(p => ({...p, primaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., time.google.com" />
+                            <input type="text" name="primaryNtp" id="primaryNtp" value={formNtp.primaryNtp} onChange={(e) => setFormNtp(p => ({...p, primaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder="e.g., time.google.com" />
                         </div>
                         <div>
                             <label htmlFor="secondaryNtp" className="block text-sm font-medium text-slate-600 dark:text-slate-300">Secondary NTP Server</label>
-                            <input type="text" name="secondaryNtp" id="secondaryNtp" value={formNtp.secondaryNtp} onChange={(e) => setFormNtp(p => ({...p, secondaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-orange-500" placeholder="e.g., pool.ntp.org" />
+                            <input type="text" name="secondaryNtp" id="secondaryNtp" value={formNtp.secondaryNtp} onChange={(e) => setFormNtp(p => ({...p, secondaryNtp: e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500]" placeholder="e.g., pool.ntp.org" />
                         </div>
                     </div>
                     <div className="flex flex-col sm:flex-row justify-end items-center gap-3 pt-4">
@@ -358,14 +358,14 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                         <button onClick={() => handleApplyNtp('router')} disabled={!selectedRouter || isWorking} className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg w-full sm:w-auto disabled:opacity-50">
                              {isSubmitting === 'router' ? <Loader /> : 'Apply to Router'}
                         </button>
-                        <button onClick={() => handleApplyNtp('both')} disabled={!selectedRouter || isWorking} className="px-4 py-2 text-sm font-semibold text-white bg-orange-600 hover:bg-orange-700 rounded-lg w-full sm:w-auto disabled:opacity-50">
+                        <button onClick={() => handleApplyNtp('both')} disabled={!selectedRouter || isWorking} className="px-4 py-2 text-sm font-semibold text-white bg-[--color-primary-600] hover:bg-[--color-primary-700] rounded-lg w-full sm:w-auto disabled:opacity-50">
                              {isSubmitting === 'both' ? <Loader /> : 'Apply to Both'}
                         </button>
                     </div>
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Panel Maintenance" icon={<CogIcon className="w-6 h-6 text-orange-400" />}>
+            <SettingsCard title="Panel Maintenance" icon={<CogIcon className="w-6 h-6 text-[--color-primary-400]" />}>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
                     Use these actions for troubleshooting or after manually updating files via Git. These actions require `npm` and `pm2` to be installed globally on the panel server.
                 </p>

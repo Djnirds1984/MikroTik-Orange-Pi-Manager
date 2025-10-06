@@ -42,7 +42,7 @@ const VersionInfoDisplay: React.FC<{ title: string; info: VersionInfo }> = ({ ti
     <div>
         <h3 className="text-xl font-bold text-slate-100 mb-2">{title}</h3>
         <div className="bg-slate-900/50 p-4 rounded-lg">
-            <p className="text-lg font-semibold text-orange-400">{info.title} <span className="text-xs font-mono text-slate-500 ml-2">{info.hash}</span></p>
+            <p className="text-lg font-semibold text-[--color-primary-400]">{info.title} <span className="text-xs font-mono text-slate-500 ml-2">{info.hash}</span></p>
             {info.description && <p className="mt-2 text-sm text-slate-300 whitespace-pre-wrap">{info.description}</p>}
         </div>
     </div>
@@ -226,7 +226,7 @@ export const Updater: React.FC = () => {
             case 'uptodate': return <div className="flex items-center gap-3 text-green-400"><CheckCircleIcon className="w-8 h-8" /><p>{message}</p></div>;
             case 'available': return <div className="flex items-center gap-3 text-cyan-400"><CloudArrowUpIcon className="w-8 h-8" /><p>{message}</p></div>;
             case 'error': return <div className="flex items-center gap-3 text-red-400"><ExclamationTriangleIcon className="w-8 h-8" /><p>{message}</p></div>;
-            case 'restarting': return <div className="flex items-center gap-3 text-orange-400"><Loader /><p>{message}</p></div>
+            case 'restarting': return <div className="flex items-center gap-3 text-[--color-primary-400]"><Loader /><p>{message}</p></div>
             default: return <div className="flex items-center gap-3"><UpdateIcon className="w-8 h-8 text-slate-500" /><p>{message}</p></div>;
         }
     };
@@ -245,7 +245,7 @@ export const Updater: React.FC = () => {
                         Check for Updates
                     </button>
                     {statusInfo.status === 'available' && (
-                        <button onClick={handleUpdate} disabled={isWorking} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold disabled:opacity-50">
+                        <button onClick={handleUpdate} disabled={isWorking} className="px-4 py-2 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold disabled:opacity-50">
                             Install Update
                         </button>
                     )}

@@ -7,7 +7,7 @@ import { QuestionMarkCircleIcon } from '../constants.tsx';
 const HelpButton: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     <button
         onClick={onClick}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-orange-600 hover:bg-orange-500 text-white rounded-full p-3 sm:p-4 shadow-lg z-40 transition-transform hover:scale-110"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-full p-3 sm:p-4 shadow-lg z-40 transition-transform hover:scale-110"
         aria-label="Open AI Help"
     >
         <QuestionMarkCircleIcon className="w-6 h-6 sm:w-8 sm:h-8" />
@@ -116,13 +116,13 @@ const HelpModal: React.FC<{
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl h-[80vh] border border-slate-700 flex flex-col">
                 <header className="p-4 border-b border-slate-700 flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-orange-400">AI Assistant</h3>
+                    <h3 className="text-xl font-bold text-[--color-primary-400]">AI Assistant</h3>
                     <button onClick={onClose} className="p-1 text-slate-400 hover:text-white">&times;</button>
                 </header>
                 <div ref={chatContainerRef} className="flex-1 p-4 overflow-y-auto space-y-4">
                     {history.map((msg, index) => (
                         <div key={index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-orange-600 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                            <div className={`max-w-lg p-3 rounded-lg ${msg.role === 'user' ? 'bg-[--color-primary-600] text-white' : 'bg-slate-700 text-slate-200'}`}>
                                 <p className="text-sm whitespace-pre-wrap">{msg.content.replace(/\*\*(.*?)\*\*/g, '<strong class="font-bold">$1</strong>')
                                     .split('\n')
                                     .map((line, i) => <span key={i} dangerouslySetInnerHTML={{__html: line}} className="block"/>)
@@ -143,7 +143,7 @@ const HelpModal: React.FC<{
                             rows={2}
                             disabled={isLoading}
                         />
-                        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="px-4 py-2 bg-orange-600 hover:bg-orange-500 rounded-md disabled:opacity-50">Send</button>
+                        <button onClick={handleSend} disabled={isLoading || !input.trim()} className="px-4 py-2 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-md disabled:opacity-50">Send</button>
                     </div>
                     <div className="mt-2 text-center">
                          <button onClick={handleGenerateReport} disabled={isReporting} className="text-xs text-slate-400 hover:text-sky-400 disabled:opacity-50">

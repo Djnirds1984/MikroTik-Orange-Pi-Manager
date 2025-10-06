@@ -20,12 +20,12 @@ import { useTheme } from '../contexts/ThemeContext.tsx';
 
 const DashboardCard: React.FC<{ title: string, children: React.ReactNode, className?: string }> = ({ title, children, className }) => (
   <div className={`bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6 ${className}`}>
-    <h3 className="text-lg font-semibold text-orange-500 dark:text-orange-400 mb-4">{title}</h3>
+    <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{title}</h3>
     {children}
   </div>
 );
 
-const ProgressBar: React.FC<{ value: number, label: string, colorClass?: string }> = ({ value, label, colorClass = 'bg-orange-500' }) => (
+const ProgressBar: React.FC<{ value: number, label: string, colorClass?: string }> = ({ value, label, colorClass = 'bg-[--color-primary-500]' }) => (
   <div>
     <div className="flex justify-between items-center mb-1">
       <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{label}</span>
@@ -195,7 +195,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
     return (
       <div className="flex flex-col items-center justify-center h-64">
         <Loader />
-        <p className="mt-4 text-orange-400">Connecting to {selectedRouter.name}...</p>
+        <p className="mt-4 text-[--color-primary-400]">Connecting to {selectedRouter.name}...</p>
       </div>
     );
   }
@@ -269,7 +269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ selectedRouter }) => {
                             id="interface-selector"
                             value={selectedInterfaceName || ''}
                             onChange={(e) => setSelectedInterfaceName(e.target.value)}
-                            className="block w-full max-w-xs bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-orange-500 focus:border-orange-500 sm:text-sm font-mono"
+                            className="block w-full max-w-xs bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] sm:text-sm font-mono"
                         >
                             {interfaces.filter(iface => !iface.name.startsWith('pppoe')).map(iface => <option key={iface.name} value={iface.name}>{iface.name}</option>)}
                         </select>

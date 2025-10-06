@@ -47,7 +47,7 @@ const AddNetworkModal: React.FC<{
             <div className="bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-700">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-orange-400 mb-4">Join ZeroTier Network</h3>
+                        <h3 className="text-xl font-bold text-[--color-primary-400] mb-4">Join ZeroTier Network</h3>
                         <div className="space-y-4">
                             <div>
                                 <label htmlFor="networkId" className="block text-sm font-medium text-slate-300">16-digit Network ID</label>
@@ -60,7 +60,7 @@ const AddNetworkModal: React.FC<{
                                     required
                                     pattern="^[0-9a-fA-F]{16}$"
                                     title="Please enter a 16-character hexadecimal Network ID"
-                                    className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white font-mono tracking-wider focus:outline-none focus:ring-orange-500"
+                                    className="mt-1 block w-full bg-slate-700 border border-slate-600 rounded-md py-2 px-3 text-white font-mono tracking-wider focus:outline-none focus:ring-[--color-primary-500]"
                                     placeholder="e.g., 8056c2e21c000001"
                                 />
                             </div>
@@ -68,7 +68,7 @@ const AddNetworkModal: React.FC<{
                     </div>
                     <div className="bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-300 hover:bg-slate-700 disabled:opacity-50">Cancel</button>
-                        <button type="submit" disabled={isLoading || !networkId.match(/^[0-9a-fA-F]{16}$/)} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="submit" disabled={isLoading || !networkId.match(/^[0-9a-fA-F]{16}$/)} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:opacity-50 disabled:cursor-not-allowed">
                             {isLoading ? 'Joining...' : 'Join Network'}
                         </button>
                     </div>
@@ -87,7 +87,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
             disabled={disabled}
             className="sr-only peer"
         />
-        <div className="w-11 h-6 bg-slate-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-orange-500 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-600 disabled:opacity-50"></div>
+        <div className="w-11 h-6 bg-slate-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[--color-primary-600] disabled:opacity-50"></div>
     </label>
 );
 
@@ -213,7 +213,7 @@ export const ZeroTier: React.FC = () => {
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
-                <p className="mt-4 text-orange-400">Fetching ZeroTier status from panel host...</p>
+                <p className="mt-4 text-[--color-primary-400]">Fetching ZeroTier status from panel host...</p>
             </div>
         );
     }
@@ -222,7 +222,7 @@ export const ZeroTier: React.FC = () => {
         return (
             <div className="bg-slate-800 border border-slate-700 rounded-lg p-8 max-w-3xl mx-auto">
                 <div className="text-center">
-                    <ZeroTierIcon className="w-16 h-16 text-orange-500 mx-auto mb-4" />
+                    <ZeroTierIcon className="w-16 h-16 text-[--color-primary-500] mx-auto mb-4" />
                     <h2 className="text-2xl font-bold text-slate-100">ZeroTier One Not Found</h2>
                     <p className="mt-2 text-slate-400">The `zerotier-cli` command was not found on this system. Please install it to continue.</p>
                 </div>
@@ -244,7 +244,7 @@ export const ZeroTier: React.FC = () => {
                 
                 {status !== 'installing' && (
                     <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 border-t border-slate-700">
-                        <button onClick={handleInstall} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold w-full sm:w-auto">
+                        <button onClick={handleInstall} className="px-5 py-2.5 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold w-full sm:w-auto">
                            Install Automatically
                         </button>
                         <button onClick={fetchData} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg font-semibold w-full sm:w-auto">
@@ -272,7 +272,7 @@ export const ZeroTier: React.FC = () => {
                     </div>
                 </div>
                 
-                <button onClick={fetchData} className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 rounded-lg font-semibold">
+                <button onClick={fetchData} className="px-5 py-2.5 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold">
                     Re-check Status
                 </button>
             </div>
@@ -306,13 +306,13 @@ export const ZeroTier: React.FC = () => {
                         <h2 className="text-3xl font-bold text-slate-100">ZeroTier Panel Management</h2>
                         <p className="text-slate-400 mt-1">Manage the ZeroTier service running on this panel's host.</p>
                     </div>
-                    <button onClick={() => setIsModalOpen(true)} className="bg-orange-600 hover:bg-orange-500 text-white font-bold py-2 px-4 rounded-lg self-start sm:self-center">
+                    <button onClick={() => setIsModalOpen(true)} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg self-start sm:self-center">
                         Join Network
                     </button>
                 </div>
 
                 <div className="bg-slate-800 border border-slate-700 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="font-mono"><span className="text-slate-400">Node ID:</span> <span className="text-orange-300">{data.info.address}</span></div>
+                    <div className="font-mono"><span className="text-slate-400">Node ID:</span> <span className="text-[--color-primary-300]">{data.info.address}</span></div>
                     <div><span className="text-slate-400">Version:</span> <span className="text-slate-200">{data.info.version}</span></div>
                     <div><span className="text-slate-400">Online:</span> <span className={data.info.online ? 'text-green-400' : 'text-red-400'}>{data.info.online ? 'Yes' : 'No'}</span></div>
                     <div><span className="text-slate-400">Port Mapping:</span> <span className="text-slate-200">{data.info.config.settings.portMappingEnabled ? 'Enabled' : 'Disabled'}</span></div>
