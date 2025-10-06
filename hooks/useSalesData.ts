@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import type { SaleRecord } from '../types.ts';
 import { dbApi } from '../services/databaseService.ts';
@@ -12,6 +13,8 @@ export const useSalesData = () => {
         setError(null);
         try {
             const data = await dbApi.get<SaleRecord[]>('/sales');
+            // Sort by date descending
+            data.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
             setSales(data);
         } catch (err) {
             setError((err as Error).message);
@@ -20,41 +23,43 @@ export const useSalesData = () => {
             setIsLoading(false);
         }
     }, []);
-    
+
     useEffect(() => {
         fetchSales();
     }, [fetchSales]);
 
-    const addSale = useCallback(async (newSaleData: Omit<SaleRecord, 'id'>) => {
+    const addSale = async (saleData: Omit<SaleRecord, 'id'>) => {
         try {
             const newSale: SaleRecord = {
-                ...newSaleData,
+                ...saleData,
                 id: `sale_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             };
             await dbApi.post('/sales', newSale);
             await fetchSales();
         } catch (err) {
-             console.error("Failed to add sale:", err);
+            console.error("Failed to add sale:", err);
+            throw err;
         }
-    }, [fetchSales]);
-    
-    const deleteSale = useCallback(async (saleId: string) => {
+    };
+
+    const deleteSale = async (saleId: string) => {
         try {
             await dbApi.delete(`/sales/${saleId}`);
             await fetchSales();
         } catch (err) {
-             console.error("Failed to delete sale:", err);
+            console.error("Failed to delete sale:", err);
         }
-    }, [fetchSales]);
+    };
 
-    const clearSales = useCallback(async () => {
+    const clearSales = async () => {
         try {
-            await dbApi.delete('/sales/all');
+            // This assumes a custom endpoint exists on the backend to clear all sales
+            await dbApi.post('/sales/clear-all', {});
             await fetchSales();
         } catch (err) {
             console.error("Failed to clear sales:", err);
         }
-    }, [fetchSales]);
+    };
 
     return { sales, addSale, deleteSale, clearSales, isLoading, error };
 };

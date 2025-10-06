@@ -1,4 +1,20 @@
-export type View = 'dashboard' | 'scripting' | 'routers' | 'pppoe' | 'users' | 'billing' | 'updater' | 'zerotier' | 'hotspot' | 'system' | 'sales' | 'network' | 'inventory' | 'company';
+
+export type View =
+  | 'dashboard'
+  | 'scripting'
+  | 'routers'
+  | 'network'
+  | 'pppoe'
+  | 'users'
+  | 'billing'
+  | 'sales'
+  | 'inventory'
+  | 'hotspot'
+  | 'zerotier'
+  | 'company'
+  | 'system'
+  | 'updater'
+  | 'help';
 
 export interface RouterConfig {
   name: string;
@@ -22,15 +38,16 @@ export interface SystemInfo {
 }
 
 export interface Interface {
-  name:string;
+  name: string;
   type: string;
-  rxRate: number; // in bits per second
-  txRate: number; // in bits per second
+  rxRate: number;
+  txRate: number;
 }
 
 export interface TrafficHistoryPoint {
-  rx: number; // in Mbps
-  tx: number; // in Mbps
+  name: string;
+  rx: number;
+  tx: number;
 }
 
 export interface InterfaceWithHistory extends Interface {
@@ -38,14 +55,14 @@ export interface InterfaceWithHistory extends Interface {
 }
 
 export interface HotspotActiveUser {
-    id: string;
-    user: string;
-    address: string;
-    macAddress: string;
-    uptime: string;
-    bytesIn: number;
-    bytesOut: number;
-    comment?: string;
+  id: string;
+  user: string;
+  address: string;
+  macAddress: string;
+  uptime: string;
+  bytesIn: number;
+  bytesOut: number;
+  comment: string;
 }
 
 export interface HotspotHost {
@@ -68,29 +85,10 @@ export interface PppProfile {
 
 export type PppProfileData = Omit<PppProfile, 'id'>;
 
-export interface PppSecret {
-    id: string;
-    name: string;
-    // Fix: Add optional password property. The MikroTik API requires this for creating/updating
-    // secrets, but doesn't return it on GET requests for security. This fixes type errors.
-    password?: string;
-    service: string;
-    profile: string;
-    comment?: string;
-    ['remote-address']?: string; // User's static IP if assigned directly in the secret.
-}
-
-export type PppSecretData = Omit<PppSecret, 'id'>;
-
-export interface PppActiveConnection {
-    id: string;
-    name: string;
-    uptime: string;
-}
-
 export interface IpPool {
     id: string;
     name: string;
+    ranges: string;
 }
 
 export interface BillingPlan {
@@ -99,7 +97,6 @@ export interface BillingPlan {
     cycle: 'Monthly' | 'Quarterly' | 'Yearly';
     pppoeProfile: string;
     description: string;
-    // FIX: Add currency to the billing plan to resolve type errors and associate a currency with each plan.
     currency: string;
 }
 
@@ -107,100 +104,34 @@ export interface BillingPlanWithId extends BillingPlan {
     id: string;
 }
 
-// New types for Panel's ZeroTier service
-export interface ZeroTierInfo {
-    address: string;
-    clock: number;
-    config: {
-        settings: {
-            primaryPort: number;
-            secondaryPort: number;
-            tertiaryPort: number;
-            portMappingEnabled: boolean;
-            allowNonRoutable: boolean;
-        }
-    };
-    online: boolean;
-    planetWorldId: number;
-    planetWorldTimestamp: number;
-    version: string;
-    versionBuild: number;
-    versionMajor: number;
-    versionMinor: number;
-    versionRev: number;
-}
-
-export interface ZeroTierNetwork {
-    nwid: string;
+export interface PppSecret {
+    id: string;
     name: string;
-    mac: string;
-    status: string;
-    type: 'PRIVATE' | 'PUBLIC';
-    dev?: string;
-    broadcastEnabled: boolean;
-    allowManaged: boolean;
-
-    allowGlobal: boolean;
-    allowDefault: boolean;
-    allowDNS: boolean;
-    assignedAddresses: string[];
-    portDeviceName?: string;
-    portError?: number;
+    service: string;
+    profile: string;
+    comment: string;
+    disabled: string;
+    'last-logged-out'?: string;
+    password?: string;
 }
 
-export interface ZeroTierStatusResponse {
-    info: ZeroTierInfo;
-    networks: ZeroTierNetwork[];
+export type PppSecretData = Omit<PppSecret, 'id' | 'last-logged-out'>;
+
+export interface PppActiveConnection {
+    id: string;
+    name: string;
+    service: string;
+    'caller-id': string;
+    address: string;
+    uptime: string;
 }
 
-// Type for the AI Fixer feature
-export interface AIFixResponse {
-    explanation: string;
-    fixedCode: string;
-}
-
-// Type for the AI Help Chat feature
-export interface ChatMessage {
-    role: 'user' | 'model';
-    content: string;
-}
-
-// Type for System Settings page
 export interface NtpSettings {
     enabled: boolean;
     primaryNtp: string;
     secondaryNtp: string;
 }
 
-// Type for Sales Report
-export interface SaleRecord {
-  id: string;
-  date: string; // ISO string format for the payment date
-  clientName: string;
-  planName: string;
-  planPrice: number;
-  currency: string;
-  discountAmount: number;
-  finalAmount: number;
-  routerName: string;
-}
-
-// Type for Panel Host Status
-export interface PanelHostStatus {
-    cpuUsage: number;
-    memory: {
-        used: string;
-        total: string;
-        percent: number;
-    };
-    disk: {
-        used: string;
-        total: string;
-        percent: number;
-    };
-}
-
-// Type for Network Management Page
 export interface VlanInterface {
     id: string;
     name: string;
@@ -208,7 +139,18 @@ export interface VlanInterface {
     interface: string;
 }
 
-// Type for Stock & Inventory
+export interface SaleRecord {
+    id: string;
+    date: string;
+    clientName: string;
+    planName: string;
+    planPrice: number;
+    discountAmount: number;
+    finalAmount: number;
+    routerName: string;
+    currency: string;
+}
+
 export interface InventoryItem {
     id: string;
     name: string;
@@ -218,7 +160,6 @@ export interface InventoryItem {
     dateAdded: string;
 }
 
-// Type for Company Settings
 export interface CompanySettings {
     companyName?: string;
     address?: string;
@@ -227,8 +168,76 @@ export interface CompanySettings {
     logoBase64?: string;
 }
 
-// Type for Panel Localization Settings
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
+}
+
+export interface AIFixResponse {
+  explanation: string;
+  fixedCode: string;
+}
+
+export interface ZeroTierInfo {
+    address: string;
+    clock: number;
+    config: {
+        settings: {
+            portMappingEnabled: boolean;
+            primaryPort: number;
+        }
+    };
+    online: boolean;
+    version: string;
+}
+
+export interface ZeroTierNetwork {
+    allowDefault: boolean;
+    allowGlobal: boolean;
+    allowManaged: boolean;
+    assignedAddresses: string[];
+    bridge: boolean;
+    mac: string;
+    mtu: number;
+    name: string;
+    netconfRevision: number;
+    nwid: string;
+    portDeviceName: string;
+    portError: number;
+    status: string;
+    type: string;
+}
+
+export interface ZeroTierStatusResponse {
+    info: ZeroTierInfo;
+    networks: ZeroTierNetwork[];
+}
+
+export interface PanelHostStatus {
+    cpuUsage: number;
+    memory: {
+        total: string;
+        free: string;
+        used: string;
+        percent: number;
+    };
+    disk: {
+        total: string;
+        used: string;
+        free: string;
+        percent: number;
+    };
+}
+
 export interface PanelSettings {
     language: 'en' | 'fil';
     currency: 'USD' | 'PHP';
+}
+
+export interface Customer {
+    id: string;
+    name: string;
+    contact: string;
+    address: string;
+    notes: string;
 }

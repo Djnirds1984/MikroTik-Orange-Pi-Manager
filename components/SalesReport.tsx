@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import type { SaleRecord, CompanySettings } from '../types.ts';
 import { CurrencyDollarIcon, TrashIcon, PrinterIcon } from '../constants.tsx';

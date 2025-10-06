@@ -1,81 +1,87 @@
+
 import React from 'react';
 import type { SaleRecord, CompanySettings } from '../types.ts';
+import { useLocalization } from '../contexts/LocalizationContext.tsx';
 
 interface PrintableReceiptProps {
-  sale: SaleRecord | null;
-  companySettings: CompanySettings;
+    sale: SaleRecord | null;
+    companySettings: CompanySettings;
 }
 
 export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ sale, companySettings }) => {
-  if (!sale) return null;
+    const { formatCurrency } = useLocalization();
+    
+    if (!sale) return null;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: sale.currency,
-    }).format(amount);
-  };
+    return (
+        <div className="p-8 font-sans text-black bg-white">
+            <header className="flex justify-between items-start pb-4 border-b-2 border-black">
+                <div className="w-2/3">
+                    <h1 className="text-3xl font-bold">{companySettings.companyName || 'Your Company'}</h1>
+                    <p className="text-sm">{companySettings.address}</p>
+                    <p className="text-sm">{companySettings.contactNumber}</p>
+                    <p className="text-sm">{companySettings.email}</p>
+                </div>
+                {companySettings.logoBase64 && (
+                    <div className="w-1/3 flex justify-end">
+                        <img src={companySettings.logoBase64} alt="Company Logo" className="h-16 w-auto object-contain" />
+                    </div>
+                )}
+            </header>
 
-  return (
-    <div className="font-sans text-xs text-black bg-white p-2 w-[288px]"> {/* 80mm thermal paper width approx */}
-      <style>
-        {`
-          @page {
-            size: 80mm auto;
-            margin: 2mm;
-          }
-        `}
-      </style>
-      
-      <header className="text-center mb-4">
-        {companySettings.logoBase64 && (
-            <img src={companySettings.logoBase64} alt="Company Logo" className="max-h-16 mx-auto mb-2 object-contain" />
-        )}
-        <h1 className="text-lg font-bold">{companySettings.companyName || 'MikroTik ISP Services'}</h1>
-        {companySettings.address && <p className="text-xs">{companySettings.address}</p>}
-        {companySettings.contactNumber && <p className="text-xs">Tel: {companySettings.contactNumber}</p>}
-        {companySettings.email && <p className="text-xs">Email: {companySettings.email}</p>}
-      </header>
+            <section className="my-6">
+                <div className="flex justify-between">
+                    <div>
+                        <h2 className="font-bold">BILLED TO:</h2>
+                        <p>{sale.clientName}</p>
+                    </div>
+                    <div className="text-right">
+                        <h2 className="font-bold">RECEIPT #: {sale.id.slice(-6).toUpperCase()}</h2>
+                        <p>Date: {new Date(sale.date).toLocaleDateString()}</p>
+                    </div>
+                </div>
+            </section>
 
-      <h2 className="text-center font-bold mb-2">PAYMENT RECEIPT</h2>
-      
-      <div className="border-t border-b border-dashed border-black py-2 my-2">
-        <p><strong>Date:</strong> {new Date(sale.date).toLocaleString()}</p>
-        <p><strong>Receipt ID:</strong> {sale.id.split('_')[1]}</p>
-        <p><strong>Router:</strong> {sale.routerName}</p>
-        <p><strong>Client:</strong> {sale.clientName}</p>
-      </div>
+            <table className="w-full text-left border-collapse">
+                <thead className="bg-gray-200">
+                    <tr>
+                        <th className="p-2 border border-black">DESCRIPTION</th>
+                        <th className="p-2 border border-black text-right">AMOUNT</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td className="p-2 border border-black">
+                            <p className="font-semibold">{sale.planName}</p>
+                            <p className="text-xs text-gray-600">Internet Plan Subscription</p>
+                        </td>
+                        <td className="p-2 border border-black text-right">{formatCurrency(sale.planPrice)}</td>
+                    </tr>
+                </tbody>
+            </table>
 
-      <table className="w-full my-2">
-        <thead>
-          <tr>
-            <th className="text-left">Description</th>
-            <th className="text-right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td colSpan={2}><hr className="border-t border-dashed border-black my-1"/></td>
-          </tr>
-          <tr>
-            <td>{sale.planName}</td>
-            <td className="text-right">{formatCurrency(sale.planPrice)}</td>
-          </tr>
-           <tr>
-            <td>Discount</td>
-            <td className="text-right">-{formatCurrency(sale.discountAmount)}</td>
-          </tr>
-           <tr>
-            <td colSpan={2}><hr className="border-t border-solid border-black my-1"/></td>
-          </tr>
-          <tr className="font-bold text-sm">
-            <td>TOTAL</td>
-            <td className="text-right">{formatCurrency(sale.finalAmount)}</td>
-          </tr>
-        </tbody>
-      </table>
-      
-      <p className="text-center mt-4">Thank you for your payment!</p>
-    </div>
-  );
+            <section className="my-6 flex justify-end">
+                <div className="w-1/2">
+                    <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(sale.planPrice)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                        <span>Discount:</span>
+                        <span>- {formatCurrency(sale.discountAmount)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-xl mt-2 pt-2 border-t-2 border-black">
+                        <span>TOTAL:</span>
+                        <span>{formatCurrency(sale.finalAmount)}</span>
+                    </div>
+
+                </div>
+            </section>
+            
+            <footer className="mt-8 pt-4 border-t-2 border-dashed border-black text-center">
+                <p className="font-bold">Thank you for your payment!</p>
+                <p className="text-xs mt-2">This is an official receipt.</p>
+            </footer>
+        </div>
+    );
 };
