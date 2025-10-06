@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, VlanInterface, Interface } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces } from '../services/mikrotikService.ts';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import type { RouterConfigWithId, VlanInterface, Interface, IpAddress } from '../types.ts';
+import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses } from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, TrashIcon, VlanIcon, ShareIcon } from '../constants.tsx';
@@ -79,6 +79,7 @@ const VlanFormModal: React.FC<VlanFormModalProps> = ({ isOpen, onClose, onSave, 
 export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const [vlans, setVlans] = useState<VlanInterface[]>([]);
     const [interfaces, setInterfaces] = useState<Interface[]>([]);
+    const [ipAddresses, setIpAddresses] = useState<IpAddress[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -96,18 +97,22 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             setIsLoading(false);
             setVlans([]);
             setInterfaces([]);
+            setIpAddresses([]);
             return;
         }
         setIsLoading(true);
         setError(null);
 
         try {
-            const [vlanData, interfaceData] = await Promise.all([
+            const [vlanData, interfaceData, ipData] = await Promise.all([
                 getVlans(selectedRouter),
-                getInterfaces(selectedRouter)
+                getInterfaces(selectedRouter),
+                getIpAddresses(selectedRouter)
             ]);
             setVlans(vlanData);
             setInterfaces(interfaceData);
+            setIpAddresses(ipData);
+            
             // Set default LAN interface for multi-WAN form
             if (interfaceData.length > 0) {
                 const defaultLan = interfaceData.find(i => i.type === 'bridge' && i.name.toLowerCase().includes('lan'))?.name || interfaceData.find(i => i.type === 'bridge')?.name || '';
@@ -169,6 +174,18 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             setIsGenerating(false);
         }
     };
+
+    const wanIps = useMemo(() => {
+        const wanNames = wanInterfaces.split(',').map(i => i.trim().toLowerCase());
+        return ipAddresses
+            .filter(ip => wanNames.includes(ip.interface.toLowerCase()))
+            .map(ip => `${ip.interface} (${ip.address})`)
+            .join(', ');
+    }, [wanInterfaces, ipAddresses]);
+
+    const lanIp = useMemo(() => {
+        return ipAddresses.find(ip => ip.interface.toLowerCase() === lanInterface.toLowerCase())?.address || null;
+    }, [lanInterface, ipAddresses]);
     
     if (!selectedRouter) {
         return (
@@ -265,6 +282,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                             <label htmlFor="wanInterfaces" className="block text-sm font-medium text-slate-700 dark:text-slate-300">WAN Interfaces</label>
                             <input type="text" name="wanInterfaces" id="wanInterfaces" value={wanInterfaces} onChange={e => setWanInterfaces(e.target.value)} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" placeholder="e.g., ether1, ether2, pppoe-out1"/>
                             <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">Enter a comma-separated list of your WAN interfaces.</p>
+                            {wanIps && <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-mono">Detected IPs: {wanIps}</p>}
                         </div>
                          <div>
                             <label htmlFor="lanInterface" className="block text-sm font-medium text-slate-700 dark:text-slate-300">LAN Interface</label>
@@ -272,6 +290,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                  {interfaces.filter(i => i.type === 'bridge' || i.type === 'ether').map(i => <option key={i.name} value={i.name}>{i.name}</option>)}
                             </select>
                             <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">Select the interface your local users are on.</p>
+                             {lanIp && <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-mono">Detected IP: {lanIp}</p>}
                         </div>
                         <div>
                             <label htmlFor="wanType" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Configuration Type</label>

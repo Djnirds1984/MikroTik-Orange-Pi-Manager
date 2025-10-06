@@ -1,4 +1,3 @@
-
 export type View =
   | 'dashboard'
   | 'scripting'
@@ -89,6 +88,13 @@ export interface IpPool {
     id: string;
     name: string;
     ranges: string;
+}
+
+export interface IpAddress {
+    id: string;
+    address: string;
+    interface: string;
+    disabled: string;
 }
 
 export interface BillingPlan {

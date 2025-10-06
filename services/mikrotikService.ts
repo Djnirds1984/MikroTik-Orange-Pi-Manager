@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -53,7 +53,6 @@ export const testRouterConnection = async (router: RouterConfig): Promise<{ succ
 
 // PPPoE
 export const getPppProfiles = (router: RouterConfig): Promise<PppProfile[]> => mikrotikApiPost( '/api/ppp/profiles', { routerConfig: router });
-export const getIpPools = (router: RouterConfig): Promise<IpPool[]> => mikrotikApiPost('/api/ip/pools', { routerConfig: router });
 export const addPppProfile = (router: RouterConfig, profileData: PppProfileData): Promise<any> => mikrotikApiPost('/api/ppp/profiles/add', { routerConfig: router, profileData });
 export const updatePppProfile = (router: RouterConfig, profileData: PppProfile): Promise<any> => mikrotikApiPost('/api/ppp/profiles/update', { routerConfig: router, profileData });
 export const deletePppProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/ppp/profiles/delete', { routerConfig: router, profileId });
@@ -82,6 +81,8 @@ export const getHotspotHosts = (router: RouterConfig): Promise<HotspotHost[]> =>
 export const removeHotspotActiveUser = (router: RouterConfig, userId: string): Promise<any> => mikrotikApiPost( '/api/hotspot/active/remove', { routerConfig: router, userId });
 
 // Network
+export const getIpPools = (router: RouterConfig): Promise<IpPool[]> => mikrotikApiPost('/api/ip/pools', { routerConfig: router });
+export const getIpAddresses = (router: RouterConfig): Promise<IpAddress[]> => mikrotikApiPost('/api/ip/addresses', { routerConfig: router });
 export const getVlans = (router: RouterConfig): Promise<VlanInterface[]> => mikrotikApiPost('/api/network/vlans', { routerConfig: router });
 export const addVlan = (router: RouterConfig, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => mikrotikApiPost('/api/network/vlans/add', { routerConfig: router, vlanData });
 export const deleteVlan = (router: RouterConfig, vlanId: string): Promise<any> => mikrotikApiPost('/api/network/vlans/delete', { routerConfig: router, vlanId });
