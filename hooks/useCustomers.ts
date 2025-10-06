@@ -3,7 +3,8 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Customer } from '../types.ts';
 import { dbApi } from '../services/databaseService.ts';
 
-export const useCustomers = () => {
+export const useCustomers = (routerId: string | null) => {
+    const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -13,7 +14,7 @@ export const useCustomers = () => {
         setError(null);
         try {
             const data = await dbApi.get<Customer[]>('/customers');
-            setCustomers(data);
+            setAllCustomers(data);
         } catch (err) {
             setError((err as Error).message);
             console.error("Failed to fetch customers from DB", err);
@@ -26,6 +27,14 @@ export const useCustomers = () => {
         fetchCustomers();
     }, [fetchCustomers]);
 
+    useEffect(() => {
+        if (routerId) {
+            setCustomers(allCustomers.filter(c => c.routerId === routerId));
+        } else {
+            setCustomers([]);
+        }
+    }, [allCustomers, routerId]);
+
     const addCustomer = async (customerData: Omit<Customer, 'id'>) => {
         try {
             const newCustomer: Customer = {
@@ -33,7 +42,7 @@ export const useCustomers = () => {
                 id: `cust_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             };
             await dbApi.post('/customers', newCustomer);
-            await fetchCustomers();
+            await fetchCustomers(); // refetch all
             return newCustomer;
         } catch (err) {
             console.error("Failed to add customer:", err);
@@ -44,7 +53,7 @@ export const useCustomers = () => {
     const updateCustomer = async (updatedCustomer: Customer) => {
         try {
             await dbApi.patch(`/customers/${updatedCustomer.id}`, updatedCustomer);
-            await fetchCustomers();
+            await fetchCustomers(); // refetch all
         } catch (err) {
             console.error("Failed to update customer:", err);
             throw err;
@@ -54,11 +63,11 @@ export const useCustomers = () => {
     const deleteCustomer = async (customerId: string) => {
         try {
             await dbApi.delete(`/customers/${customerId}`);
-            await fetchCustomers();
+            await fetchCustomers(); // refetch all
         } catch (err) {
             console.error("Failed to delete customer:", err);
         }
     };
 
-    return { customers, addCustomer, updateCustomer, deleteCustomer, isLoading, error, fetchCustomers };
+    return { customers, addCustomer, updateCustomer, deleteCustomer, isLoading, error };
 };

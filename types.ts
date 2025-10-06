@@ -113,9 +113,10 @@ export interface PppSecret {
     disabled: string;
     'last-logged-out'?: string;
     password?: string;
+    customer?: Customer; // Link to customer data
 }
 
-export type PppSecretData = Omit<PppSecret, 'id' | 'last-logged-out'>;
+export type PppSecretData = Omit<PppSecret, 'id' | 'last-logged-out' | 'customer'>;
 
 export interface PppActiveConnection {
     id: string;
@@ -142,13 +143,17 @@ export interface VlanInterface {
 export interface SaleRecord {
     id: string;
     date: string;
-    clientName: string;
+    clientName: string; // This will be the customer's full name
     planName: string;
     planPrice: number;
     discountAmount: number;
     finalAmount: number;
     routerName: string;
     currency: string;
+    // New fields for receipt
+    clientAddress?: string;
+    clientContact?: string;
+    clientEmail?: string;
 }
 
 export interface InventoryItem {
@@ -236,8 +241,10 @@ export interface PanelSettings {
 
 export interface Customer {
     id: string;
-    name: string;
-    contact: string;
-    address: string;
-    notes: string;
+    username: string; // pppoe username
+    routerId: string; // router this customer belongs to
+    fullName?: string;
+    address?: string;
+    contactNumber?: string;
+    email?: string;
 }

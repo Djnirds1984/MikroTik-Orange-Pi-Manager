@@ -34,6 +34,8 @@ export const PrintableReceipt: React.FC<PrintableReceiptProps> = ({ sale, compan
                     <div>
                         <h2 className="font-bold">BILLED TO:</h2>
                         <p>{sale.clientName}</p>
+                        {sale.clientAddress && <p className="text-sm text-gray-700">{sale.clientAddress}</p>}
+                        {sale.clientContact && <p className="text-sm text-gray-700">{sale.clientContact}</p>}
                     </div>
                     <div className="text-right">
                         <h2 className="font-bold">RECEIPT #: {sale.id.slice(-6).toUpperCase()}</h2>
