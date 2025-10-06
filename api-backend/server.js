@@ -256,6 +256,19 @@ app.post('/api/ip/pools', (req, res, next) => {
 });
 
 // --- PPPoE Secrets ---
+
+// Helper function to sanitize secret data before sending to MikroTik
+const sanitizeSecretData = (data) => {
+    // Delete any property that is not a valid parameter for the /ppp/secret endpoint.
+    // This includes read-only properties from GET requests and client-side computed properties.
+    const invalidKeys = [
+        'id', '.id', 'last-logged-out', 'last-caller-id', 'caller-id', 'uptime',
+        'isActive', 'activeInfo', 'customer'
+    ];
+    invalidKeys.forEach(key => delete data[key]);
+    return data;
+};
+
 app.post('/api/ppp/secrets', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ppp/secret');
@@ -274,7 +287,9 @@ app.post('/api/ppp/active', (req, res, next) => {
 
 app.post('/api/ppp/secrets/add', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const { secretData } = req.body;
+        let { secretData } = req.body;
+        // Sanitize the data to remove any client-side or read-only properties
+        secretData = sanitizeSecretData(secretData);
         const response = await apiClient.put('/ppp/secret', camelToKebab(secretData));
         res.status(201).json(response.data);
     });
@@ -282,17 +297,11 @@ app.post('/api/ppp/secrets/add', (req, res, next) => {
 
 app.post('/api/ppp/secrets/update', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const { secretData } = req.body;
-        const secretId = secretData.id;
+        let { secretData } = req.body;
+        const secretId = secretData.id || secretData['.id'];
         
-        // FIX: MikroTik API rejects updates containing read-only properties.
-        // We must remove them before sending the PATCH request to prevent "Bad Request" errors.
-        delete secretData.id;
-        delete secretData['.id'];
-        delete secretData['last-logged-out'];
-        delete secretData['last-caller-id'];
-        delete secretData['caller-id'];
-        delete secretData['uptime'];
+        // Sanitize the data to remove any client-side or read-only properties
+        secretData = sanitizeSecretData(secretData);
 
         const response = await apiClient.patch(`/ppp/secret/${secretId}`, camelToKebab(secretData));
         res.status(200).json(response.data);
