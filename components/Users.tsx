@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import type {
     RouterConfigWithId,
@@ -22,7 +21,7 @@ import {
 import { useCustomers } from '../hooks/useCustomers.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, EditIcon, TrashIcon, CurrencyDollarIcon, UsersIcon, CheckCircleIcon, ExclamationTriangleIcon, SearchIcon, KeyIcon } from '../constants.tsx';
+import { RouterIcon, EditIcon, TrashIcon, CurrencyDollarIcon, SearchIcon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 
 interface UsersProps {
@@ -51,172 +50,158 @@ const parseComment = (comment: string): { plan: string; dueDate: string } | unde
 };
 
 // --- Secret Form Modal ---
-const SecretFormModal: React.FC<{
+const UserFormModal: React.FC<{
     isOpen: boolean,
     onClose: () => void,
-    onSave: (secret: PppSecret | PppSecretData) => void,
-    initialData: PppSecret | null,
+    onSave: (secret: PppSecret | PppSecretData, customer: Customer | Omit<Customer, 'id'>) => void,
+    initialData: CombinedUser | null,
     profiles: PppProfile[],
     isSubmitting: boolean
 }> = ({ isOpen, onClose, onSave, initialData, profiles, isSubmitting }) => {
+    
     const [secret, setSecret] = useState<PppSecretData>({ name: '', password: '', service: 'pppoe', profile: '', comment: '', disabled: 'false' });
+    const [customer, setCustomer] = useState<Partial<Customer>>({ fullName: '', address: '', contactNumber: '', email: '' });
 
     useEffect(() => {
-        if (initialData) {
-            setSecret({
-                name: initialData.name,
-                password: '', // Don't show existing password
-                service: initialData.service || 'pppoe',
-                profile: initialData.profile,
-                comment: initialData.comment,
-                disabled: initialData.disabled || 'false',
-            });
-        } else {
-            setSecret({ name: '', password: '', service: 'pppoe', profile: profiles[0]?.name || '', comment: '', disabled: 'false' });
+        if (isOpen) {
+            if (initialData) {
+                setSecret({
+                    name: initialData.name,
+                    password: '', // Don't show existing password
+                    service: initialData.service || 'pppoe',
+                    profile: initialData.profile,
+                    comment: initialData.comment,
+                    disabled: initialData.disabled || 'false',
+                });
+                setCustomer({
+                    fullName: initialData.customer?.fullName || '',
+                    address: initialData.customer?.address || '',
+                    contactNumber: initialData.customer?.contactNumber || '',
+                    email: initialData.customer?.email || '',
+                });
+            } else {
+                setSecret({ name: '', password: '', service: 'pppoe', profile: profiles.find(p => p.name.toLowerCase() !== 'default')?.[0]?.name || profiles[0]?.name || '', comment: '', disabled: 'false' });
+                setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
+            }
         }
     }, [initialData, profiles, isOpen]);
 
     if (!isOpen) return null;
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleSecretChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setSecret(s => ({ ...s, [name]: value }));
     };
+
+    const handleCustomerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setCustomer(c => ({...c, [name]: value }));
+    }
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const dataToSave = { ...secret };
+        
+        let finalSecretData: PppSecret | PppSecretData = { ...secret };
         if (initialData) {
-            // If password is not changed, don't send it
-            if (!dataToSave.password) delete dataToSave.password;
-            onSave({ ...initialData, ...dataToSave });
-        } else {
-            onSave(dataToSave);
+             finalSecretData = { ...initialData, ...secret };
+            // If password is not changed, don't send it to preserve it
+            if (!secret.password) {
+                 delete (finalSecretData as Partial<PppSecretData>).password;
+            }
         }
+
+        let finalCustomerData: Customer | Omit<Customer, 'id'> = {
+            ...customer,
+            username: secret.name, // Link by username
+            routerId: initialData?.customer?.routerId || '', // This will be set properly in the parent
+        };
+        if (initialData?.customer) {
+            finalCustomerData = { ...initialData.customer, ...customer };
+        }
+
+        onSave(finalSecretData, finalCustomerData);
     };
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h3 className="text-xl font-bold text-[--color-primary-500] mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
-                                    <input type="text" name="name" id="name" value={secret.name} onChange={handleChange} required disabled={!!initialData} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md disabled:opacity-50" />
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-2xl border border-slate-200 dark:border-slate-700 max-h-[90vh] flex flex-col">
+                <form onSubmit={handleSubmit} className="flex flex-col h-full">
+                    <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400]">{initialData ? 'Edit User' : 'Add New User'}</h3>
+                    </div>
+                    
+                    <div className="p-6 flex-1 overflow-y-auto">
+                        <div className="space-y-6">
+                             {/* PPPoE Credentials Section */}
+                            <fieldset className="border border-slate-300 dark:border-slate-600 rounded-lg p-4">
+                                <legend className="px-2 text-sm font-semibold text-slate-600 dark:text-slate-300">PPPoE Credentials (Required)</legend>
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
+                                            <input type="text" name="name" id="name" value={secret.name} onChange={handleSecretChange} required disabled={!!initialData} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md disabled:opacity-50" />
+                                        </div>
+                                        <div>
+                                            <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                                            <input type="password" name="password" id="password" value={secret.password} onChange={handleSecretChange} required={!initialData} placeholder={initialData ? "Leave blank to keep old" : ""} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md" />
+                                        </div>
+                                    </div>
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="service" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Service</label>
+                                            <select name="service" id="service" value={secret.service} onChange={handleSecretChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
+                                                <option value="pppoe">pppoe</option>
+                                                <option value="any">any</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="profile" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile</label>
+                                            <select name="profile" id="profile" value={secret.profile} onChange={handleSecretChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
+                                                {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                                    <input type="password" name="password" id="password" value={secret.password} onChange={handleChange} required={!initialData} placeholder={initialData ? "Leave blank to keep old" : ""} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md" />
+                            </fieldset>
+
+                            {/* Customer Information Section */}
+                             <fieldset className="border border-slate-300 dark:border-slate-600 rounded-lg p-4">
+                                <legend className="px-2 text-sm font-semibold text-slate-600 dark:text-slate-300">Customer Information (Optional)</legend>
+                                <div className="space-y-4">
+                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label htmlFor="fullName" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Full Name</label>
+                                            <input type="text" name="fullName" id="fullName" value={customer.fullName} onChange={handleCustomerChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md"/>
+                                        </div>
+                                        <div>
+                                            <label htmlFor="contactNumber" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Contact Number</label>
+                                            <input type="text" name="contactNumber" id="contactNumber" value={customer.contactNumber} onChange={handleCustomerChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md"/>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="address" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Address</label>
+                                        <input type="text" name="address" id="address" value={customer.address} onChange={handleCustomerChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md"/>
+                                    </div>
+                                    <div>
+                                        <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+                                        <input type="email" name="email" id="email" value={customer.email} onChange={handleCustomerChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md"/>
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <label htmlFor="profile" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile</label>
-                                <select name="profile" id="profile" value={secret.profile} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
-                                    {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label htmlFor="disabled" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Status</label>
-                                <select name="disabled" id="disabled" value={secret.disabled} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
-                                    <option value="false">Enabled</option>
-                                    <option value="true">Disabled</option>
-                                </select>
-                            </div>
+                            </fieldset>
                         </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
-                        <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                        <button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</button>
+
+                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg border-t border-slate-200 dark:border-slate-700">
+                        <button type="button" onClick={onClose} disabled={isSubmitting} className="px-4 py-2 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-600">Cancel</button>
+                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] disabled:opacity-50">
+                            {isSubmitting ? 'Saving...' : 'Save User'}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     );
 };
-
-// --- Payment Modal ---
-const PaymentModal: React.FC<{
-    isOpen: boolean,
-    onClose: () => void,
-    onProcessPayment: (plan: BillingPlanWithId, nonPaymentProfile: string, discount: number, paymentDate: string) => void,
-    user: CombinedUser,
-    plans: BillingPlanWithId[],
-    profiles: PppProfile[],
-    isSubmitting: boolean
-}> = ({ isOpen, onClose, onProcessPayment, user, plans, profiles, isSubmitting }) => {
-    const [selectedPlanId, setSelectedPlanId] = useState('');
-    const [nonPaymentProfile, setNonPaymentProfile] = useState('');
-    const [discount, setDiscount] = useState(0);
-    const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
-
-    useEffect(() => {
-        if(isOpen) {
-            setSelectedPlanId(plans[0]?.id || '');
-            const defaultNonPaymentProfile = profiles.find(p => p.name.toLowerCase().includes('expired') || p.name.toLowerCase().includes('cutoff'))?.name || profiles[0]?.name || '';
-            setNonPaymentProfile(defaultNonPaymentProfile);
-            setDiscount(0);
-            setPaymentDate(new Date().toISOString().split('T')[0]);
-        }
-    }, [isOpen, plans, profiles]);
-    
-    if (!isOpen) return null;
-
-    const selectedPlan = plans.find(p => p.id === selectedPlanId);
-    
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (selectedPlan) {
-            onProcessPayment(selectedPlan, nonPaymentProfile, discount, paymentDate);
-        }
-    };
-    
-    return (
-         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-md">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h3 className="text-xl font-bold text-[--color-primary-500] mb-1">Process Payment</h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm">For user: <span className="font-bold">{user.name}</span></p>
-                        <div className="space-y-4 mt-4">
-                            <div>
-                                <label className="block text-sm font-medium">Billing Plan</label>
-                                <select value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
-                                    {plans.map(p => <option key={p.id} value={p.id}>{p.name} ({p.price} {p.currency})</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium">Non-Payment Profile</label>
-                                <select value={nonPaymentProfile} onChange={e => setNonPaymentProfile(e.target.value)} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md">
-                                    {profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}
-                                </select>
-                                <p className="text-xs text-slate-500 mt-1">Profile to apply on due date.</p>
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium">Payment Date</label>
-                                <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md" />
-                            </div>
-                             <div>
-                                <label className="block text-sm font-medium">Discount</label>
-                                <input type="number" value={discount} onChange={e => setDiscount(parseFloat(e.target.value) || 0)} min="0" className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border-slate-300 dark:border-slate-600 rounded-md" />
-                            </div>
-                            <div className="text-right font-bold text-lg pt-2 border-t border-slate-200 dark:border-slate-700">
-                                Total: {selectedPlan ? (selectedPlan.price - discount).toFixed(2) : '0.00'} {selectedPlan?.currency}
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
-                        <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                        <button type="submit" disabled={isSubmitting || !selectedPlan}>{isSubmitting ? 'Processing...' : 'Process Payment'}</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
 
 // --- Main Component ---
 export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
@@ -229,14 +214,10 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const [isSecretModalOpen, setIsSecretModalOpen] = useState(false);
-    const [editingSecret, setEditingSecret] = useState<PppSecret | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<CombinedUser | null>(null);
 
-    const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-    const [payingUser, setPayingUser] = useState<CombinedUser | null>(null);
-
-    const { plans, isLoading: isLoadingPlans } = useBillingPlans();
-    const { customers, addCustomer, updateCustomer } = useCustomers(selectedRouter?.id || null);
+    const { customers, addCustomer, updateCustomer, deleteCustomer } = useCustomers(selectedRouter?.id || null);
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -269,7 +250,8 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
     }, [fetchData]);
 
     const combinedUsers = useMemo<CombinedUser[]>(() => {
-        return secrets.map(secret => {
+        const sortedSecrets = [...secrets].sort((a, b) => a.name.localeCompare(b.name));
+        return sortedSecrets.map(secret => {
             const connectionInfo = active.find(a => a.name === secret.name);
             const customer = customers.find(c => c.username === secret.name && c.routerId === selectedRouter?.id);
             const parsedComment = parseComment(secret.comment);
@@ -283,20 +265,30 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
             };
         }).filter(user => 
             user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            user.customer?.fullName?.toLowerCase().includes(searchTerm.toLowerCase())
+            (user.customer?.fullName && user.customer.fullName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (user.profile && user.profile.toLowerCase().includes(searchTerm.toLowerCase()))
         );
     }, [secrets, active, customers, selectedRouter, searchTerm]);
 
-    const handleSaveSecret = async (secret: PppSecret | PppSecretData) => {
+    const handleSaveUser = async (secretData: PppSecret | PppSecretData, customerData: Customer | Omit<Customer, 'id'>) => {
         if (!selectedRouter) return;
         setIsSubmitting(true);
         try {
-            if ('id' in secret) {
-                await updatePppSecret(selectedRouter, secret as PppSecret);
+            // Save secret to router
+            if ('id' in secretData) {
+                await updatePppSecret(selectedRouter, secretData as PppSecret);
             } else {
-                await addPppSecret(selectedRouter, secret as PppSecretData);
+                await addPppSecret(selectedRouter, secretData as PppSecretData);
             }
-            setIsSecretModalOpen(false);
+            
+            // Save customer to local DB
+            if ('id' in customerData) {
+                await updateCustomer(customerData as Customer);
+            } else {
+                await addCustomer({ ...customerData, routerId: selectedRouter.id });
+            }
+
+            setIsModalOpen(false);
             await fetchData();
         } catch (err) {
             alert(`Error: ${(err as Error).message}`);
@@ -305,11 +297,14 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
         }
     };
     
-    const handleDeleteSecret = async (secretId: string) => {
-        if (!selectedRouter || !window.confirm("Delete this user?")) return;
+    const handleDeleteUser = async (user: CombinedUser) => {
+        if (!selectedRouter || !window.confirm(`Are you sure you want to delete user "${user.name}"?`)) return;
         setIsSubmitting(true);
         try {
-            await deletePppSecret(selectedRouter, secretId);
+            await deletePppSecret(selectedRouter, user.id);
+            if (user.customer) {
+                await deleteCustomer(user.customer.id);
+            }
             await fetchData();
         } catch (err) {
             alert(`Error: ${(err as Error).message}`);
@@ -318,53 +313,46 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
         }
     };
 
-    const handleProcessPayment = async (plan: BillingPlanWithId, nonPaymentProfile: string, discount: number, paymentDate: string) => {
-        if (!selectedRouter || !payingUser) return;
-        setIsSubmitting(true);
-        try {
-            await processPppPayment(selectedRouter, payingUser, plan, nonPaymentProfile, 0, paymentDate);
-            
-            const saleRecord: Omit<SaleRecord, 'id'> = {
-                date: new Date(paymentDate).toISOString(),
-                clientName: payingUser.customer?.fullName || payingUser.name,
-                planName: plan.name,
-                planPrice: plan.price,
-                discountAmount: discount,
-                finalAmount: plan.price - discount,
-                routerName: selectedRouter.name,
-                currency: plan.currency,
-                clientAddress: payingUser.customer?.address,
-                clientContact: payingUser.customer?.contactNumber,
-                clientEmail: payingUser.customer?.email,
-            };
-            await addSale(saleRecord);
-            
-            alert('Payment processed successfully!');
-            setIsPaymentModalOpen(false);
-            await fetchData();
-        } catch (err) {
-             alert(`Payment failed: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
+    const handleDownloadCsv = () => {
+        const headers = ["Username", "Full Name", "Address", "Contact Number", "Email", "Profile", "Subscription Plan", "Due Date", "Status"];
+        const rows = combinedUsers.map(user => [
+            user.name,
+            user.customer?.fullName || '',
+            user.customer?.address || '',
+            user.customer?.contactNumber || '',
+            user.customer?.email || '',
+            user.profile,
+            user.parsedComment?.plan || '',
+            user.parsedComment?.dueDate || '',
+            user.disabled === 'true' ? 'Disabled' : (user.isActive ? 'Active' : 'Offline')
+        ].map(field => `"${field.replace(/"/g, '""')}"`).join(','));
+
+        const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows].join('\n');
+        const encodedUri = encodeURI(csvContent);
+        const link = document.createElement("a");
+        link.setAttribute("href", encodedUri);
+        link.setAttribute("download", `pppoe_users_${selectedRouter?.name}_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     const getStatusChip = (user: CombinedUser) => {
         if (user.isActive) {
-            return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span>;
+            return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Online</span>;
         }
         if (user.disabled === 'true') {
              return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Disabled</span>;
         }
         return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600/50 text-slate-600 dark:text-slate-400">Offline</span>;
     };
-
+    
     if (!selectedRouter) {
         return (
             <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg">
                 <RouterIcon className="w-16 h-16 text-slate-400 mb-4" />
-                <h2 className="text-2xl font-bold">PPPoE User Manager</h2>
-                <p className="mt-2 text-slate-500">Please select a router to manage its users.</p>
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">PPPoE User Manager</h2>
+                <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router to manage its users.</p>
             </div>
         );
     }
@@ -374,42 +362,35 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
 
     return (
         <div className="max-w-7xl mx-auto">
-            <SecretFormModal 
-                isOpen={isSecretModalOpen}
-                onClose={() => setIsSecretModalOpen(false)}
-                onSave={handleSaveSecret}
-                initialData={editingSecret}
+            <UserFormModal 
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSave={handleSaveUser}
+                initialData={editingUser}
                 profiles={profiles}
                 isSubmitting={isSubmitting}
             />
-            {payingUser && <PaymentModal 
-                isOpen={isPaymentModalOpen}
-                onClose={() => setIsPaymentModalOpen(false)}
-                onProcessPayment={handleProcessPayment}
-                user={payingUser}
-                plans={plans}
-                profiles={profiles}
-                isSubmitting={isSubmitting}
-            />}
             
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-6">
-                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">PPPoE Users</h2>
-                <div className="flex items-center gap-4">
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">PPPoE Users ({combinedUsers.length})</h2>
+                <div className="flex items-center gap-2 flex-wrap">
                      <div className="relative">
                         <span className="absolute inset-y-0 left-0 flex items-center pl-3"><SearchIcon className="h-5 w-5 text-slate-400" /></span>
-                        <input type="text" placeholder="Search users..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full md:w-64 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 pl-10 pr-4" />
+                        <input type="text" placeholder="Search user, profile, IP..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full sm:w-64 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 pl-10 pr-4" />
                     </div>
-                    <button onClick={() => { setEditingSecret(null); setIsSecretModalOpen(true); }} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg">Add User</button>
+                     <button onClick={handleDownloadCsv} className="px-4 py-2 text-sm text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 rounded-lg font-semibold">Download CSV</button>
+                    <button onClick={() => { setEditingUser(null); setIsModalOpen(true); }} className="px-4 py-2 text-sm text-white bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold">Add New User</button>
                 </div>
             </div>
 
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">NOTE: The payment system uses the 'Comment' field on the router to store subscription data. Manually editing it may cause issues.</p>
+            
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-900/50">
+                        <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
                             <tr>
                                 <th className="px-4 py-3">Username</th>
-                                <th className="px-4 py-3">Full Name</th>
                                 <th className="px-4 py-3">Profile / Plan</th>
                                 <th className="px-4 py-3">Status</th>
                                 <th className="px-4 py-3">Due Date</th>
@@ -419,18 +400,20 @@ export const Users: React.FC<UsersProps> = ({ selectedRouter, addSale }) => {
                         <tbody>
                             {combinedUsers.map(user => (
                                 <tr key={user.id} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                                    <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-200">{user.name}</td>
-                                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{user.customer?.fullName || '-'}</td>
+                                    <td className="px-4 py-3">
+                                        <p className="font-medium text-slate-900 dark:text-slate-200">{user.name}</p>
+                                        <p className="text-xs text-slate-500">{user.customer?.fullName || 'No customer info'}</p>
+                                    </td>
                                     <td className="px-4 py-3">
                                         <span className="font-mono bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-xs">{user.profile}</span>
-                                        {user.parsedComment && <span className="block text-xs mt-1">{user.parsedComment.plan}</span>}
+                                        {user.parsedComment && <span className="block text-xs mt-1 text-slate-500">{user.parsedComment.plan}</span>}
                                     </td>
                                     <td className="px-4 py-3">{getStatusChip(user)}</td>
-                                    <td className="px-4 py-3 font-mono">{user.parsedComment?.dueDate ? new Date(user.parsedComment.dueDate).toLocaleDateString() : '-'}</td>
+                                    <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">{user.parsedComment?.dueDate ? new Date(user.parsedComment.dueDate).toLocaleDateString() : 'No Info'}</td>
                                     <td className="px-4 py-3 space-x-1">
-                                        <button onClick={() => { setPayingUser(user); setIsPaymentModalOpen(true); }} className="p-2 text-slate-500 hover:text-green-500" title="Process Payment"><CurrencyDollarIcon className="h-5 w-5"/></button>
-                                        <button onClick={() => { setEditingSecret(user); setIsSecretModalOpen(true); }} className="p-2 text-slate-500 hover:text-[--color-primary-500]" title="Edit User"><EditIcon className="h-5 w-5"/></button>
-                                        <button onClick={() => handleDeleteSecret(user.id)} className="p-2 text-slate-500 hover:text-red-500" title="Delete User"><TrashIcon className="h-5 w-5"/></button>
+                                        <button onClick={() => { alert('Payment feature coming soon!'); }} className="p-2 text-slate-400 hover:text-green-500" title="Process Payment (Coming Soon)"><CurrencyDollarIcon className="h-5 w-5"/></button>
+                                        <button onClick={() => { setEditingUser(user); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-[--color-primary-500]" title="Edit User"><EditIcon className="h-5 w-5"/></button>
+                                        <button onClick={() => handleDeleteUser(user)} className="p-2 text-slate-400 hover:text-red-500" title="Delete User"><TrashIcon className="h-5 w-5"/></button>
                                     </td>
                                 </tr>
                             ))}
