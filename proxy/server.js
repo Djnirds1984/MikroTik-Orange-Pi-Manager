@@ -483,6 +483,55 @@ app.get('/api/update-app', async (req, res) => {
     }
 });
 
+app.get('/api/rollback-app', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+    const { backupFile } = req.query;
+    if (!backupFile || backupFile.includes('..') || !backupFile.endsWith('.tar.gz')) {
+        send({ status: 'error', message: 'Invalid application backup file specified.' });
+        return res.end();
+    }
+
+    const rollback = async () => {
+        try {
+            send({ log: `Starting application rollback from ${backupFile}...`});
+            const backupPath = path.join(BACKUP_DIR, backupFile);
+            if (!fs.existsSync(backupPath)) {
+                throw new Error('Backup file not found.');
+            }
+            
+            send({ log: 'Extracting backup over current application files...'});
+            await tar.x({
+                file: backupPath,
+                C: path.join(__dirname, '..'), // Project root
+            });
+
+            send({ log: 'Re-installing dependencies for restored version...'});
+            await new Promise((resolve, reject) => {
+                exec('npm install --prefix proxy && npm install --prefix api-backend', { cwd: path.join(__dirname, '..') }, (err, stdout, stderr) => {
+                    send({ log: stdout });
+                    send({ log: stderr });
+                    if (err) return reject(err);
+                    resolve();
+                });
+            });
+
+            send({ log: 'Restarting panel services...'});
+            exec('pm2 restart all', (err) => {
+                if (err) send({ status: 'error', message: err.message });
+                else send({ status: 'restarting' });
+                res.end();
+            });
+
+        } catch (e) {
+            send({ status: 'error', message: e.message });
+            res.end();
+        }
+    };
+    rollback();
+});
+
+
 // Database Backup/Restore
 app.get('/api/create-backup', async (req, res) => {
     const backupFile = `panel-db-backup-${new Date().toISOString().replace(/:/g, '-')}.sqlite`;
@@ -494,11 +543,17 @@ app.get('/api/create-backup', async (req, res) => {
 
 app.get('/api/list-backups', async (req, res) => {
     try {
-        const files = await fs.promises.readdir(BACKUP_DIR);
-        files.sort().reverse();
+        const dirents = await fs.promises.readdir(BACKUP_DIR, { withFileTypes: true });
+        // Filter out directories and hidden files, then sort
+        const files = dirents
+            .filter(dirent => dirent.isFile() && !dirent.name.startsWith('.'))
+            .map(dirent => dirent.name)
+            .sort()
+            .reverse();
         res.json(files);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
+
 
 app.post('/api/delete-backup', async (req, res) => {
     try {

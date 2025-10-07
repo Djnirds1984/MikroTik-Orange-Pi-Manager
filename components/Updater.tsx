@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
@@ -76,8 +77,8 @@ export const Updater: React.FC = () => {
         try {
             const res = await fetch('/api/list-backups');
             if (!res.ok) throw new Error('Failed to fetch backups');
-            const data = await res.json();
-            setBackups(data);
+            const data: string[] = await res.json();
+            setBackups(data.filter(file => file.endsWith('.tar.gz')));
         } catch (error) {
             console.error(error);
         }
@@ -180,7 +181,7 @@ export const Updater: React.FC = () => {
         setStatusInfo({ status: 'rollingback', message: `Restoring from ${backupFile}...` });
         setLogs([]);
         
-        const eventSource = new EventSource(`/api/rollback?backupFile=${encodeURIComponent(backupFile)}`);
+        const eventSource = new EventSource(`/api/rollback-app?backupFile=${encodeURIComponent(backupFile)}`);
         
          eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -279,7 +280,7 @@ export const Updater: React.FC = () => {
             )}
             
              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4">Available Backups</h3>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4">Application Backups</h3>
                  {backups.length > 0 ? (
                     <ul className="space-y-2">
                         {backups.map(backup => (
@@ -297,7 +298,7 @@ export const Updater: React.FC = () => {
                         ))}
                     </ul>
                  ) : (
-                    <p className="text-slate-500 dark:text-slate-500 text-center py-4">No backups found. A backup is automatically created before an update.</p>
+                    <p className="text-slate-500 dark:text-slate-500 text-center py-4">No application backups found. A backup is automatically created before an update.</p>
                  )}
             </div>
         </div>

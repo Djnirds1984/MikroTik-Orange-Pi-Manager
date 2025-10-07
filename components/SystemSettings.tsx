@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, NtpSettings, PanelSettings } from '../types.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
@@ -96,7 +97,7 @@ const DatabaseManager: React.FC = () => {
         setIsLoading(true);
         try {
             const data = await listDatabaseBackups();
-            setBackups(data);
+            setBackups(data.filter(f => f.endsWith('.sqlite')));
         } catch (error) {
             console.error("Failed to list backups:", error);
             alert(`Error: ${(error as Error).message}`);
@@ -199,7 +200,7 @@ const DatabaseManager: React.FC = () => {
                         ))}
                     </ul>
                  ) : (
-                    <p className="text-slate-500 dark:text-slate-400 text-center py-4">No backups found.</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-center py-4">No database backups found.</p>
                  )
                 }
             </div>
