@@ -15,8 +15,8 @@ const DB_PATH = path.join(__dirname, 'panel.db');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
 
-app.use(express.json());
-app.use(express.text()); // For AI fixer
+app.use(express.json({ limit: '5mb' }));
+app.use(express.text({ limit: '5mb' })); // For AI fixer
 
 // Ensure backup directory exists
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -118,6 +118,36 @@ async function initDb() {
             await fixSettingsTable('panel_settings');
             await db.exec('PRAGMA user_version = 4;');
             user_version = 4;
+        }
+        
+        if (user_version < 5) {
+            console.log('Applying migration v5 (Force-fix settings table schemas)...');
+            const forceFixSettingsTable = async (tableName) => {
+                try {
+                    const cols = await db.all(`PRAGMA table_info(${tableName});`);
+                    // If the schema is wrong (doesn't have a 'key' column), we rebuild it.
+                    if (!cols.some(c => c.name === 'key')) {
+                        console.log(`Force-rebuilding malformed table: ${tableName}`);
+                        await db.exec(`DROP TABLE IF EXISTS ${tableName};`);
+                        await db.exec(`CREATE TABLE ${tableName} (key TEXT PRIMARY KEY, value TEXT);`);
+                        console.log(`Table ${tableName} has been rebuilt successfully.`);
+                    }
+                } catch (e) {
+                    // This might fail if the table doesn't exist at all, so we create it.
+                    if (e.message.includes('no such table')) {
+                        console.log(`Table ${tableName} does not exist, creating fresh.`);
+                        await db.exec(`CREATE TABLE IF NOT EXISTS ${tableName} (key TEXT PRIMARY KEY, value TEXT);`);
+                    } else {
+                        // Re-throw other errors
+                        console.error(`Error during migration for table ${tableName}:`, e);
+                        throw e;
+                    }
+                }
+            };
+            await forceFixSettingsTable('company_settings');
+            await forceFixSettingsTable('panel_settings');
+            await db.exec('PRAGMA user_version = 5;');
+            user_version = 5;
         }
 
 
