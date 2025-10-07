@@ -1,14 +1,12 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, RouterIcon, TrashIcon } from '../constants.tsx';
+import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
 
-type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'diverged' | 'error' | 'updating' | 'restarting' | 'rollingback';
+type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'diverged' | 'ahead' | 'error' | 'updating' | 'restarting' | 'rollingback';
 type StatusInfo = {
     status: UpdateStatus;
     message: string;
-    local?: string;
-    remote?: string;
 };
 type VersionInfo = {
     title: string;
@@ -20,9 +18,12 @@ type NewVersionInfo = {
     description: string;
     changelog: string;
 };
+type LogEntry = {
+    text: string;
+    isError?: boolean;
+};
 
-
-const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
+const LogViewer: React.FC<{ logs: LogEntry[] }> = ({ logs }) => {
     const logContainerRef = React.useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (logContainerRef.current) {
@@ -33,7 +34,7 @@ const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
     return (
         <div ref={logContainerRef} className="bg-slate-100 dark:bg-slate-900 text-xs font-mono text-slate-700 dark:text-slate-300 p-4 rounded-md h-64 overflow-y-auto border border-slate-200 dark:border-slate-600">
             {logs.map((log, index) => (
-                <pre key={index} className="whitespace-pre-wrap break-words">{log}</pre>
+                <pre key={index} className={`whitespace-pre-wrap break-words ${log.isError ? 'text-red-500' : ''}`}>{log.text}</pre>
             ))}
         </div>
     );
@@ -66,7 +67,7 @@ const ChangelogDisplay: React.FC<{ info: NewVersionInfo }> = ({ info }) => (
 export const Updater: React.FC = () => {
     const [statusInfo, setStatusInfo] = useState<StatusInfo>({ status: 'idle', message: 'Check for the latest version of the panel.' });
     const [backups, setBackups] = useState<string[]>([]);
-    const [logs, setLogs] = useState<string[]>([]);
+    const [logs, setLogs] = useState<LogEntry[]>([]);
     const [currentVersionInfo, setCurrentVersionInfo] = useState<VersionInfo | null>(null);
     const [newVersionInfo, setNewVersionInfo] = useState<NewVersionInfo | null>(null);
     const [isLoadingCurrentVersion, setIsLoadingCurrentVersion] = useState(true);
@@ -89,11 +90,14 @@ export const Updater: React.FC = () => {
             setIsLoadingCurrentVersion(true);
             try {
                 const res = await fetch('/api/current-version');
-                if (!res.ok) throw new Error('Failed to fetch current version');
                 const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.message || 'Failed to fetch current version');
+                }
                 setCurrentVersionInfo(data);
             } catch (error) {
                 console.error(error);
+                setStatusInfo({ status: 'error', message: (error as Error).message });
             } finally {
                 setIsLoadingCurrentVersion(false);
             }
@@ -115,10 +119,9 @@ export const Updater: React.FC = () => {
 
             if (data.status === 'finished') {
                 eventSource.close();
-                // If we're still checking, it's an error. Otherwise, we've already set a final state like 'available'.
                 setStatusInfo(prev => {
                     if (prev.status === 'checking') {
-                        return { status: 'error', message: 'Failed to get a clear update status from the server.' };
+                        return { status: 'error', message: 'Failed to determine update status. Check logs for details.' };
                     }
                     return prev;
                 });
@@ -126,37 +129,33 @@ export const Updater: React.FC = () => {
             }
 
             if (data.log) {
-                setLogs(prev => [...prev, data.log.trim()]);
+                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
             }
             
             if (data.newVersionInfo) {
                 setNewVersionInfo(data.newVersionInfo);
             }
 
-            // This ensures that we don't accidentally overwrite a final status with an intermittent one.
-            setStatusInfo(prev => ({...prev, ...data}));
+            if (data.status) {
+                setStatusInfo(prev => ({...prev, ...data}));
+            }
         };
 
         eventSource.onerror = () => {
-            setStatusInfo(prev => {
-                if (prev.status === 'uptodate' || prev.status === 'available') {
-                    return prev;
-                }
-                return { status: 'error', message: 'Connection to server failed. Could not check for updates.' };
-            });
+            setStatusInfo({ status: 'error', message: 'Connection to server failed. Could not check for updates.' });
             eventSource.close();
         };
     };
     
     const handleUpdate = () => {
-        setStatusInfo(prev => ({ ...prev, status: 'updating' }));
+        setStatusInfo(prev => ({ ...prev, status: 'updating', message: 'Starting update process...' }));
         setLogs([]);
         const eventSource = new EventSource('/api/update-app');
         
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.log) {
-                setLogs(prev => [...prev, data.log]);
+                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
             }
             if (data.status === 'restarting') {
                 setStatusInfo({ status: 'restarting', message: 'Update complete! The server is restarting. This page will reload in a few seconds...' });
@@ -186,7 +185,7 @@ export const Updater: React.FC = () => {
          eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if(data.log) {
-                setLogs(prev => [...prev, data.log]);
+                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
             }
             if(data.status === 'restarting') {
                 setStatusInfo({ status: 'restarting', message: 'Rollback complete! Server is restarting...' });
@@ -234,13 +233,15 @@ export const Updater: React.FC = () => {
             case 'checking': return <div className="flex items-center gap-3"><Loader /><p>{message}</p></div>;
             case 'uptodate': return <div className="flex items-center gap-3 text-green-600 dark:text-green-400"><CheckCircleIcon className="w-8 h-8" /><p>{message}</p></div>;
             case 'available': return <div className="flex items-center gap-3 text-cyan-600 dark:text-cyan-400"><CloudArrowUpIcon className="w-8 h-8" /><p>{message}</p></div>;
-            case 'error': return <div className="flex items-center gap-3 text-red-600 dark:text-red-400"><ExclamationTriangleIcon className="w-8 h-8" /><p>{message}</p></div>;
-            case 'restarting': return <div className="flex items-center gap-3 text-[--color-primary-500] dark:text-[--color-primary-400]"><Loader /><p>{message}</p></div>
+            case 'error': return <div className="text-left flex items-start gap-3 text-red-600 dark:text-red-400"><ExclamationTriangleIcon className="w-8 h-8 flex-shrink-0" /><p>{message}</p></div>;
+            case 'restarting': return <div className="flex items-center gap-3 text-[--color-primary-500] dark:text-[--color-primary-400]"><Loader /><p>{message}</p></div>;
+            case 'ahead': return <div className="flex items-center gap-3 text-blue-600 dark:text-blue-400"><CloudArrowUpIcon className="w-8 h-8 rotate-180" /><p>{message}</p></div>;
+            case 'diverged': return <div className="text-left flex items-start gap-3 text-orange-600 dark:text-orange-400"><ExclamationTriangleIcon className="w-8 h-8 flex-shrink-0" /><p>{message}</p></div>;
             default: return <div className="flex items-center gap-3 text-slate-500"><UpdateIcon className="w-8 h-8" /><p>{message}</p></div>;
         }
     };
     
-    const isWorking = statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'restarting' || statusInfo.status === 'rollingback' || !!isDeleting;
+    const isWorking = ['checking', 'updating', 'restarting', 'rollingback'].includes(statusInfo.status) || !!isDeleting;
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -260,6 +261,13 @@ export const Updater: React.FC = () => {
                     )}
                 </div>
             </div>
+            
+            {(isWorking || logs.length > 0) && (
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8">
+                     <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 capitalize">{statusInfo.status} Log</h3>
+                     <LogViewer logs={logs} />
+                </div>
+            )}
 
             { (isLoadingCurrentVersion && statusInfo.status === 'idle') && <div className="flex justify-center"><Loader /></div> }
 
@@ -269,14 +277,6 @@ export const Updater: React.FC = () => {
 
             { !isWorking && !newVersionInfo && currentVersionInfo && (
                 <VersionInfoDisplay title="Current Version" info={currentVersionInfo} />
-            )}
-
-
-            {(statusInfo.status === 'checking' || statusInfo.status === 'updating' || statusInfo.status === 'rollingback') && logs.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8">
-                     <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 capitalize">{statusInfo.status} Log</h3>
-                     <LogViewer logs={logs} />
-                </div>
             )}
             
              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8">

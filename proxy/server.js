@@ -427,54 +427,104 @@ app.post('/api/generate-report', async (req, res) => {
 
 
 // --- Updater and Backups ---
-const runCommand = (command, res) => {
-    const child = exec(command, { cwd: path.join(__dirname, '..') });
-    child.stdout.on('data', log => res.write(`data: ${JSON.stringify({ log })}\n\n`));
-    child.stderr.on('data', log => res.write(`data: ${JSON.stringify({ log })}\n\n`));
-    return new Promise(resolve => child.on('close', resolve));
+const runCommandStream = (command, res, options = {}) => {
+    return new Promise((resolve, reject) => {
+        const child = exec(command, { cwd: path.join(__dirname, '..'), ...options });
+        
+        const stdoutChunks = [];
+        const stderrChunks = [];
+
+        child.stdout.on('data', data => {
+            const log = data.toString();
+            if (res) res.write(`data: ${JSON.stringify({ log })}\n\n`);
+            stdoutChunks.push(log);
+        });
+
+        child.stderr.on('data', data => {
+            const log = data.toString();
+            const isError = !log.startsWith('Receiving objects:') && !log.startsWith('Resolving deltas:');
+            if (res) res.write(`data: ${JSON.stringify({ log, isError })}\n\n`);
+            stderrChunks.push(log);
+        });
+
+        child.on('close', code => {
+            const stdout = stdoutChunks.join('').trim();
+            const stderr = stderrChunks.join('').trim();
+            if (code === 0) {
+                resolve(stdout);
+            } else {
+                reject(new Error(stderr || `Command failed with exit code ${code}`));
+            }
+        });
+
+        child.on('error', err => {
+            reject(err);
+        });
+    });
 };
 
+const runCommand = (command) => runCommandStream(command, null);
+
 app.get('/api/current-version', async (req, res) => {
-    exec("git log -1 --pretty=format:'{\"hash\": \"%h\", \"title\": \"%s\", \"description\": \"%b\"}'", { cwd: path.join(__dirname, '..') }, (err, stdout) => {
-        if (err) return res.status(500).json({ message: err.message });
-        res.json(JSON.parse(stdout.trim()));
-    });
+    try {
+        await runCommand("git rev-parse --is-inside-work-tree");
+        exec("git log -1 --pretty=format:'{\"hash\": \"%h\", \"title\": \"%s\", \"description\": \"%b\"}'", { cwd: path.join(__dirname, '..') }, (err, stdout) => {
+            if (err) return res.status(500).json({ message: err.message });
+            res.json(JSON.parse(stdout.trim()));
+        });
+    } catch(e) {
+        res.status(500).json({ message: "This does not appear to be a git repository."});
+    }
 });
 
 app.get('/api/update-status', async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
-    await runCommand('git fetch', res);
-    
-    const statusProc = exec("git status -uno", { cwd: path.join(__dirname, '..') });
-    let statusOutput = '';
-    statusProc.stdout.on('data', data => statusOutput += data);
-    statusProc.on('close', async () => {
-         if (statusOutput.includes("Your branch is up to date")) {
-            res.write(`data: ${JSON.stringify({ status: 'uptodate', message: 'Panel is up to date.' })}\n\n`);
-        } else if (statusOutput.includes("Your branch is behind")) {
-            const logProc = exec("git log ..origin/main --pretty=format:'%h - %s'", { cwd: path.join(__dirname, '..') });
-            let changelog = '';
-            logProc.stdout.on('data', data => changelog += data);
-            logProc.on('close', () => {
-                 res.write(`data: ${JSON.stringify({ 
-                     status: 'available', 
-                     message: 'New version available.',
-                     newVersionInfo: {
-                         title: "New update found",
-                         description: "A new version of the panel is available.",
-                         changelog: changelog.trim()
-                     }
-                })}\n\n`);
-                 res.write(`data: ${JSON.stringify({ status: 'finished' })}\n\n`);
-                 res.end();
-            });
-            return; // Important to not fall through
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    try {
+        send({ log: "Verifying git repository..." });
+        await runCommand('git rev-parse --is-inside-work-tree');
+        
+        send({ log: "Connecting to remote repository..." });
+        await runCommandStream('git fetch', res);
+        send({ log: "Remote repository checked." });
+
+        const [local, remote, mergeBase] = await Promise.all([
+            runCommand('git rev-parse HEAD'),
+            runCommand('git rev-parse @{u}'),
+            runCommand('git merge-base HEAD @{u}')
+        ]);
+        
+        if (local === remote) {
+            send({ status: 'uptodate', message: 'Panel is up to date.' });
+        } else if (local === mergeBase) {
+            send({ status: 'available', message: 'New version available.' });
+            const changelog = await runCommand("git log ..origin/main --pretty=format:'%h - %s (%cr)'");
+            send({ newVersionInfo: {
+                title: "New update found",
+                description: "A new version of the panel is available.",
+                changelog: changelog.trim()
+            }});
+        } else if (remote === mergeBase) {
+            send({ status: 'ahead', message: 'Your version is ahead of the official repository.' });
         } else {
-            res.write(`data: ${JSON.stringify({ status: 'diverged', message: 'Branch has diverged from origin. Manual intervention required.' })}\n\n`);
+            send({ status: 'diverged', message: 'Your version has diverged. Manual update required.' });
         }
-        res.write(`data: ${JSON.stringify({ status: 'finished' })}\n\n`);
+
+    } catch (e) {
+        let message = e.message;
+        if (message.includes('fatal: not a git repository')) {
+            message = 'This is not a git repository. The updater requires the application to be cloned from git.';
+        } else if (message.includes('Could not resolve host: github.com') || message.includes('fatal: unable to access')) {
+            message = 'Failed to connect to GitHub. Please check your server\'s internet connection and DNS settings.';
+        } else if (message.includes('fatal: no upstream configured')) {
+            message = 'Git repository has no upstream branch configured. Unable to check for updates.';
+        }
+        send({ status: 'error', message });
+    } finally {
+        send({ status: 'finished' });
         res.end();
-    });
+    }
 });
 
 app.get('/api/update-app', async (req, res) => {
@@ -483,26 +533,34 @@ app.get('/api/update-app', async (req, res) => {
 
     try {
         const backupFile = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
-        send({ log: `Creating backup: ${backupFile}...` });
+        send({ log: `Creating application backup: ${backupFile}...` });
         
         await tar.c({ gzip: true, file: path.join(BACKUP_DIR, backupFile), C: path.join(__dirname, '..') }, ['.']);
         send({ log: 'Backup complete.' });
         
-        await runCommand('git pull', res);
-        send({ log: 'Installing updated dependencies...' });
-        await Promise.all([
-             runCommand('npm install --prefix proxy', res),
-             runCommand('npm install --prefix api-backend', res)
-        ]);
+        send({ log: 'Pulling latest changes from git...' });
+        await runCommandStream('git pull', res);
+        
+        send({ log: 'Installing dependencies for UI server...' });
+        await runCommandStream('npm install --prefix proxy', res);
+
+        send({ log: 'Installing dependencies for API backend...' });
+        await runCommandStream('npm install --prefix api-backend', res);
         
         send({ log: 'Restarting panel services...' });
-        exec('pm2 restart all', (err) => {
-            if (err) send({ status: 'error', message: err.message });
-            else send({ status: 'restarting' });
+        exec('pm2 restart all', (err, stdout) => {
+            if (err) {
+                 send({ log: `PM2 restart failed: ${err.message}`, isError: true });
+                 send({ status: 'error', message: err.message });
+            } else {
+                send({ log: stdout });
+                send({ status: 'restarting' });
+            }
             res.end();
         });
 
     } catch(e) {
+        send({ log: e.message, isError: true });
         send({ status: 'error', message: e.message });
         res.end();
     }
@@ -531,24 +589,26 @@ app.get('/api/rollback-app', (req, res) => {
                 C: path.join(__dirname, '..'), // Project root
             });
 
-            send({ log: 'Re-installing dependencies for restored version...'});
-            await new Promise((resolve, reject) => {
-                exec('npm install --prefix proxy && npm install --prefix api-backend', { cwd: path.join(__dirname, '..') }, (err, stdout, stderr) => {
-                    send({ log: stdout });
-                    send({ log: stderr });
-                    if (err) return reject(err);
-                    resolve();
-                });
-            });
+            send({ log: 'Re-installing dependencies for UI server...'});
+            await runCommandStream('npm install --prefix proxy', res);
+
+            send({ log: 'Re-installing dependencies for API backend...'});
+            await runCommandStream('npm install --prefix api-backend', res);
 
             send({ log: 'Restarting panel services...'});
-            exec('pm2 restart all', (err) => {
-                if (err) send({ status: 'error', message: err.message });
-                else send({ status: 'restarting' });
+            exec('pm2 restart all', (err, stdout) => {
+                 if (err) {
+                     send({ log: `PM2 restart failed: ${err.message}`, isError: true });
+                     send({ status: 'error', message: err.message });
+                } else {
+                    send({ log: stdout });
+                    send({ status: 'restarting' });
+                }
                 res.end();
             });
 
         } catch (e) {
+            send({ log: e.message, isError: true });
             send({ status: 'error', message: e.message });
             res.end();
         }
