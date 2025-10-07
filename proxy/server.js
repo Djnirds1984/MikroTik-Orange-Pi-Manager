@@ -539,20 +539,12 @@ app.get('/api/update-app', async (req, res) => {
         const backupFile = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
         send({ log: `Creating application backup: ${backupFile}...` });
         
-        const backupFilter = (filePath) => {
-            // Exclude node_modules, .git directory, and the backup directory itself
-            // The path is relative to the CWD of the tar command (project root)
-            return !filePath.includes('node_modules') &&
-                   !filePath.startsWith('.git') &&
-                   !filePath.startsWith('proxy/backups');
-        };
-
-        await tar.c({
-            gzip: true,
-            file: path.join(BACKUP_DIR, backupFile),
-            C: path.join(__dirname, '..'), // Project root directory
-            filter: backupFilter,
-        }, ['.']); // Archive everything in the project root, subject to the filter
+        const projectRoot = path.join(__dirname, '..');
+        const archivePath = path.join(BACKUP_DIR, backupFile);
+        
+        // FIX: Use system tar command for reliability and streaming output
+        const tarCommand = `tar -czf "${archivePath}" --exclude="./proxy/backups" --exclude="./.git" --exclude="**/node_modules" -C "${projectRoot}" .`;
+        await runCommandStream(tarCommand, res);
         
         send({ log: 'Backup complete.' });
         
@@ -602,10 +594,11 @@ app.get('/api/rollback-app', (req, res) => {
             }
             
             send({ log: 'Extracting backup over current application files...'});
-            await tar.x({
-                file: backupPath,
-                C: path.join(__dirname, '..'), // Project root
-            });
+            const projectRoot = path.join(__dirname, '..');
+            // FIX: Use system tar command for reliability and streaming output
+            const tarCommand = `tar -xzf "${backupPath}" -C "${projectRoot}"`;
+            await runCommandStream(tarCommand, res);
+
 
             send({ log: 'Re-installing dependencies for UI server...'});
             await runCommandStream('npm install --prefix proxy', res);
