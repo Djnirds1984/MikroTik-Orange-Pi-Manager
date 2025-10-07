@@ -6,7 +6,7 @@ interface LocalizationContextType {
     language: PanelSettings['language'];
     currency: PanelSettings['currency'];
     setLanguage: (lang: PanelSettings['language']) => Promise<void>;
-    setCurrency: (curr: PanelSettings['currency']) => Promise<void>;
+    setCurrency: (curr: PanelSettings['currency']) => void;
     t: (key: string, replacements?: Record<string, string>) => string;
     formatCurrency: (amount: number) => string;
     isLoading: boolean;
@@ -54,12 +54,12 @@ export const LocalizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const handleSetLanguage = async (lang: PanelSettings['language']) => {
         setSettings(s => ({ ...s, language: lang }));
         await fetchTranslations(lang);
-        await savePanelSettings({ ...settings, language: lang });
+        // Saving logic is now handled by the component that calls this.
     };
 
-    const handleSetCurrency = async (curr: PanelSettings['currency']) => {
+    const handleSetCurrency = (curr: PanelSettings['currency']) => {
         setSettings(s => ({ ...s, currency: curr }));
-        await savePanelSettings({ ...settings, currency: curr });
+        // Saving logic is now handled by the component that calls this.
     };
 
     const t = (key: string, replacements?: Record<string, string>): string => {

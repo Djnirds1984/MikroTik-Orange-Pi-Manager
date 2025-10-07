@@ -344,14 +344,26 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
     const handleSavePanelSettings = async () => {
         setIsPanelSettingsSaving(true);
         try {
-            // Wait for both to complete
-            await Promise.all([
-                setLanguage(localSettings.language),
-                setCurrency(localSettings.currency)
-            ]);
+            // Fetch current settings to avoid overwriting other values (like API key)
+            const currentSettings = await getPanelSettings();
+            // FIX: Add a fallback for currentSettings to prevent spreading null or undefined.
+            const newSettings = { ...(currentSettings || {}), ...localSettings };
+
+            // 1. Save the merged settings object in a single API call
+            await savePanelSettings(newSettings);
+
+            // 2. On success, update the context state
+            if (localSettings.language !== language) {
+                await setLanguage(localSettings.language);
+            }
+            if (localSettings.currency !== currency) {
+                setCurrency(localSettings.currency);
+            }
+            
             alert('Panel settings saved!');
         } catch (err) {
-            alert('Failed to save panel settings.');
+            console.error("Failed to save panel settings:", err);
+            alert(`Failed to save panel settings: ${(err as Error).message}`);
         } finally {
             setIsPanelSettingsSaving(false);
         }
@@ -360,8 +372,9 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
     const handleSaveApiKey = async () => {
         setIsKeySaving(true);
         try {
-            const currentSettings = await getPanelSettings() as PanelSettings;
-            const newSettings: any = { ...currentSettings, geminiApiKey: apiKey };
+            const currentSettings = await getPanelSettings();
+            // FIX: Add a fallback for currentSettings to prevent spreading null or undefined.
+            const newSettings = { ...(currentSettings || {}), geminiApiKey: apiKey };
             await savePanelSettings(newSettings);
             initializeAiClient(apiKey);
             alert('Gemini API Key saved successfully!');
