@@ -539,7 +539,21 @@ app.get('/api/update-app', async (req, res) => {
         const backupFile = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
         send({ log: `Creating application backup: ${backupFile}...` });
         
-        await tar.c({ gzip: true, file: path.join(BACKUP_DIR, backupFile), C: path.join(__dirname, '..') }, ['.']);
+        const backupFilter = (filePath) => {
+            // Exclude node_modules, .git directory, and the backup directory itself
+            // The path is relative to the CWD of the tar command (project root)
+            return !filePath.includes('node_modules') &&
+                   !filePath.startsWith('.git') &&
+                   !filePath.startsWith('proxy/backups');
+        };
+
+        await tar.c({
+            gzip: true,
+            file: path.join(BACKUP_DIR, backupFile),
+            C: path.join(__dirname, '..'), // Project root directory
+            filter: backupFilter,
+        }, ['.']); // Archive everything in the project root, subject to the filter
+        
         send({ log: 'Backup complete.' });
         
         send({ log: 'Pulling latest changes from git...' });
