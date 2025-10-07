@@ -346,8 +346,8 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         try {
             // Fetch current settings to avoid overwriting other values (like API key)
             const currentSettings = await getPanelSettings();
-            // FIX: Spread types may only be created from object types.
-            const newSettings = { ...(currentSettings || {}), ...localSettings };
+            // FIX: Explicitly check that currentSettings is an object before spreading to prevent type errors.
+            const newSettings = { ...(currentSettings && typeof currentSettings === 'object' ? currentSettings : {}), ...localSettings };
 
             // 1. Save the merged settings object in a single API call
             await savePanelSettings(newSettings);
@@ -373,8 +373,8 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         setIsKeySaving(true);
         try {
             const currentSettings = await getPanelSettings();
-            // FIX: Spread types may only be created from object types.
-            const newSettings = { ...(currentSettings || {}), geminiApiKey: apiKey };
+            // FIX: Explicitly check that currentSettings is an object before spreading to prevent type errors.
+            const newSettings = { ...(currentSettings && typeof currentSettings === 'object' ? currentSettings : {}), geminiApiKey: apiKey };
             await savePanelSettings(newSettings);
             initializeAiClient(apiKey);
             alert('Gemini API Key saved successfully!');

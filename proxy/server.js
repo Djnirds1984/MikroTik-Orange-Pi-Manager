@@ -471,13 +471,40 @@ const runCommand = (command) => runCommandStream(command, null);
 
 app.get('/api/current-version', async (req, res) => {
     try {
+        // First, check if it's a git repo. This will throw if it's not.
         await runCommand("git rev-parse --is-inside-work-tree");
-        exec("git log -1 --pretty=format:'{\"hash\": \"%h\", \"title\": \"%s\", \"description\": \"%b\"}'", { cwd: path.join(__dirname, '..') }, (err, stdout) => {
-            if (err) return res.status(500).json({ message: err.message });
-            res.json(JSON.parse(stdout.trim()));
-        });
-    } catch(e) {
-        res.status(500).json({ message: "This does not appear to be a git repository."});
+        
+        // FIX: Use a null byte as a separator for robust parsing. This prevents crashes
+        // when commit messages contain special characters like newlines.
+        const stdout = await runCommand("git log -1 --pretty=format:'%h%x00%s%x00%b'");
+
+        // The stdout from `git log` can be empty if there are no commits.
+        if (!stdout.trim()) {
+            return res.json({ 
+                hash: 'N/A', 
+                title: 'No Commits Found', 
+                description: 'This repository does not have any commits yet.' 
+            });
+        }
+        
+        const parts = stdout.split('\0');
+        const versionInfo = {
+            hash: parts[0] || '',
+            title: parts[1] || '',
+            description: (parts[2] || '').trim(), // Trim trailing newlines from body
+        };
+
+        res.json(versionInfo);
+
+    } catch (e) {
+        let message = e.message;
+        // Provide more user-friendly error messages
+        if (message.includes('not a git repository')) {
+            message = 'This is not a git repository. The updater requires the application to be cloned from git.';
+        } else {
+             message = 'Failed to parse version information from git. The repository might be in a strange state.';
+        }
+        res.status(500).json({ message });
     }
 });
 
