@@ -243,8 +243,12 @@ export interface PanelHostStatus {
 }
 
 export interface PanelSettings {
-    language: 'en' | 'fil';
-    currency: 'USD' | 'PHP';
+    language: 'en' | 'fil' | 'es' | 'pt';
+    currency: 'USD' | 'PHP' | 'EUR' | 'BRL';
+}
+
+export interface PanelNtpStatus {
+    enabled: boolean;
 }
 
 export interface Customer {

@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -173,6 +172,32 @@ app.get('/api/host-status', (req, res) => {
     Promise.all([getCpuUsage(), getMemoryUsage(), getDiskUsage()]).then(([cpu, mem, disk]) => {
         res.json({ cpuUsage: cpu, memory: mem, disk });
     }).catch(err => res.status(500).json({ message: err.message }));
+});
+
+// Panel NTP Status
+app.get('/api/system/host-ntp-status', (req, res) => {
+    exec("timedatectl status | grep 'NTP service:'", (err, stdout, stderr) => {
+        if (err) {
+            console.error("Failed to get NTP status:", stderr);
+            return res.status(500).json({ message: "Could not retrieve NTP status from host. 'timedatectl' may not be available." });
+        }
+        const enabled = stdout.includes('active');
+        res.json({ enabled });
+    });
+});
+
+app.post('/api/system/host-ntp/toggle', (req, res) => {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ message: 'A boolean "enabled" property is required.' });
+    }
+    exec(`sudo timedatectl set-ntp ${enabled}`, (err, stdout, stderr) => {
+        if (err) {
+            console.error("Failed to toggle NTP:", stderr);
+            return res.status(500).json({ message: `Failed to set NTP status. Make sure the panel's user has passwordless sudo rights for 'timedatectl'. Error: ${stderr}` });
+        }
+        res.json({ message: `NTP service has been ${enabled ? 'enabled' : 'disabled'}.` });
+    });
 });
 
 
