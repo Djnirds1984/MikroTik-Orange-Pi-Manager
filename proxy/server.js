@@ -255,7 +255,7 @@ dbRouter.post('/:table/clear-all', async (req, res) => {
     } catch(e) { res.status(500).json({ message: e.message }); }
 });
 
-app.use('/api/db', dbRouter);
+// --- Database Routes ---
 
 // Special handlers for key-value settings tables
 const createSettingsHandler = (tableName) => async (req, res) => {
@@ -283,10 +283,14 @@ const createSettingsSaver = (tableName) => async (req, res) => {
     }
 };
 
+// FIX: Define specific routes BEFORE the generic `dbRouter` to ensure they are matched first.
 app.get('/api/db/panel-settings', createSettingsHandler('panel_settings'));
 app.post('/api/db/panel-settings', createSettingsSaver('panel_settings'));
 app.get('/api/db/company-settings', createSettingsHandler('company_settings'));
 app.post('/api/db/company-settings', createSettingsSaver('company_settings'));
+
+// All other /api/db routes will be handled by the generic router.
+app.use('/api/db', dbRouter);
 
 
 // --- ZeroTier CLI ---
