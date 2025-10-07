@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface } from '../types.ts';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus } from '../types.ts';
 import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
+import { getPanelHostStatus } from '../services/panelService.ts';
 import { Loader } from './Loader.tsx';
 import { Chart } from './chart.tsx';
 import { RouterIcon, ExclamationTriangleIcon } from '../constants.tsx';
@@ -18,6 +19,71 @@ const StatCard: React.FC<{ title: string; value: string | number; unit?: string;
     </div>
 );
 
+const HostStatusPanel: React.FC = () => {
+    const [status, setStatus] = useState<PanelHostStatus | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchHostStatus = useCallback(async () => {
+        try {
+            const data = await getPanelHostStatus();
+            setStatus(data);
+            if (error) setError(null);
+        } catch (err) {
+            setError('Could not load panel host status.');
+        }
+    }, [error]);
+
+    useEffect(() => {
+        fetchHostStatus();
+        const interval = setInterval(fetchHostStatus, 5000); // Poll every 5 seconds
+        return () => clearInterval(interval);
+    }, [fetchHostStatus]);
+    
+    if (error && !status) {
+        return (
+             <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700/50 text-yellow-700 dark:text-yellow-300 p-4 rounded-lg text-center">
+                <p className="font-semibold">Host Panel Error</p>
+                <p className="text-sm">{error}</p>
+            </div>
+        )
+    }
+
+    if (!status) {
+        return (
+             <div className="flex items-center justify-center h-24 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <Loader />
+                <p className="ml-4 text-slate-500">Loading Host Panel...</p>
+            </div>
+        )
+    }
+
+    return (
+        <div>
+            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Host Panel Status</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <StatCard title="CPU Usage" value={`${status.cpuUsage.toFixed(1)}%`}>
+                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
+                        <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${status.cpuUsage}%` }}></div>
+                    </div>
+                </StatCard>
+                <StatCard title="RAM Usage" value={`${status.memory.percent.toFixed(1)}%`}>
+                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
+                        <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${status.memory.percent}%` }}></div>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{status.memory.used} / {status.memory.total}</p>
+                </StatCard>
+                <StatCard title="SD Card Usage" value={`${status.disk.percent}%`}>
+                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
+                        <div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${status.disk.percent}%` }}></div>
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{status.disk.used} / {status.disk.total}</p>
+                </StatCard>
+            </div>
+        </div>
+    );
+}
+
+
 const formatBps = (bps: number): string => {
     if (bps < 1000) return `${bps.toFixed(0)} bps`;
     if (bps < 1000 * 1000) return `${(bps / 1000).toFixed(2)} Kbps`;
@@ -33,8 +99,10 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<{ message: string; details?: any } | null>(null);
     const [showFixer, setShowFixer] = useState(false);
+    const [selectedChartInterface, setSelectedChartInterface] = useState<string | null>(null);
 
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    // FIX: The type for setInterval in the browser is `number`, not `NodeJS.Timeout`.
+    const intervalRef = useRef<number | null>(null);
 
     const fetchData = useCallback(async (isInitial = false) => {
         if (!selectedRouter) {
@@ -48,7 +116,8 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             setIsLoading(true);
             setError(null);
             setShowFixer(false);
-            setInterfaces([]); // Clear old interface data on router change
+            setInterfaces([]);
+            setSelectedChartInterface(null);
         }
 
         try {
@@ -77,7 +146,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                 return newInterfaces;
             });
 
-            if (error) setError(null); // Clear error on success
+            if (error) setError(null);
         } catch (err) {
             console.error("Dashboard fetch error:", err);
             setError({
@@ -85,7 +154,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                 details: err,
             });
             if (intervalRef.current) {
-                clearInterval(intervalRef.current); // Stop polling on error
+                clearInterval(intervalRef.current);
             }
         } finally {
             if (isInitial) {
@@ -96,8 +165,8 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
 
     useEffect(() => {
         if (selectedRouter) {
-            fetchData(true); // Initial fetch
-            intervalRef.current = setInterval(() => fetchData(false), 2000); // Poll every 2 seconds
+            fetchData(true);
+            intervalRef.current = window.setInterval(() => fetchData(false), 2000);
         } else {
             setIsLoading(false);
             setSystemInfo(null);
@@ -110,13 +179,26 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             }
         };
     }, [selectedRouter, fetchData]);
+    
+    const etherInterfaces = useMemo(() => interfaces.filter(i => i.type.startsWith('ether')), [interfaces]);
+    const chartData = useMemo(() => interfaces.find(i => i.name === selectedChartInterface), [interfaces, selectedChartInterface]);
+
+    useEffect(() => {
+        if (!selectedChartInterface && etherInterfaces.length > 0) {
+            setSelectedChartInterface(etherInterfaces[0].name);
+        }
+    }, [etherInterfaces, selectedChartInterface]);
+
 
     if (!selectedRouter) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-                <RouterIcon className="w-24 h-24 text-slate-300 dark:text-slate-700 mb-4" />
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Welcome to the Dashboard</h2>
-                <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router from the top bar to view its status.</p>
+            <div className="space-y-8">
+                 <HostStatusPanel />
+                 <div className="flex flex-col items-center justify-center h-full text-center py-16">
+                    <RouterIcon className="w-24 h-24 text-slate-300 dark:text-slate-700 mb-4" />
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Welcome to the Dashboard</h2>
+                    <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router from the top bar to view its status.</p>
+                </div>
             </div>
         );
     }
@@ -154,37 +236,56 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
 
     return (
         <div className="space-y-8">
+            <HostStatusPanel />
+
+            <div className="border-t border-slate-200 dark:border-slate-700"></div>
+
             {systemInfo && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    <StatCard title="Board Name" value={systemInfo.boardName} />
-                    <StatCard title="Uptime" value={systemInfo.uptime} />
-                    <StatCard title="CPU Load" value={systemInfo.cpuLoad} unit="%">
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                            <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${systemInfo.cpuLoad}%` }}></div>
-                        </div>
-                    </StatCard>
-                     <StatCard title="Memory Usage" value={systemInfo.memoryUsage} unit={`% of ${systemInfo.totalMemory}`}>
-                        <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                            <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${systemInfo.memoryUsage}%` }}></div>
-                        </div>
-                    </StatCard>
+                <div>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Router Status: {selectedRouter.name}</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <StatCard title="Board Name" value={systemInfo.boardName} />
+                        <StatCard title="Uptime" value={systemInfo.uptime} />
+                        <StatCard title="CPU Load" value={systemInfo.cpuLoad} unit="%">
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
+                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${systemInfo.cpuLoad}%` }}></div>
+                            </div>
+                        </StatCard>
+                         <StatCard title="Memory Usage" value={systemInfo.memoryUsage} unit={`% of ${systemInfo.totalMemory}`}>
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
+                                <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${systemInfo.memoryUsage}%` }}></div>
+                            </div>
+                        </StatCard>
+                    </div>
                 </div>
             )}
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                {interfaces.map(iface => (
-                    <div key={iface.name} className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <h4 className="font-bold text-slate-800 dark:text-slate-100">{iface.name} <span className="text-xs font-mono text-slate-500 dark:text-slate-400 ml-2">{iface.type}</span></h4>
-                        <div className="flex justify-between text-sm mt-2">
-                            <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(iface.rxRate)}</span></p>
-                            <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(iface.txRate)}</span></p>
+            {selectedRouter && chartData && etherInterfaces.length > 0 && (
+                <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
+                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Live Interface Traffic</h4>
+                        <select
+                            value={selectedChartInterface || ''}
+                            onChange={(e) => setSelectedChartInterface(e.target.value)}
+                            className="mt-2 sm:mt-0 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white"
+                            aria-label="Select interface to view traffic"
+                        >
+                            {etherInterfaces.map(iface => (
+                                <option key={iface.name} value={iface.name}>{iface.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <div className="flex justify-between text-sm">
+                            <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData.rxRate)}</span></p>
+                            <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData.txRate)}</span></p>
                         </div>
-                        <div className="h-40 mt-2">
-                           <Chart trafficHistory={iface.trafficHistory} />
+                        <div className="h-64 mt-2">
+                           <Chart trafficHistory={chartData.trafficHistory} />
                         </div>
                     </div>
-                ))}
-            </div>
+                </div>
+            )}
         </div>
     );
 };
