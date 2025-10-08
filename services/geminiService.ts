@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import type { AIFixResponse, ChatMessage } from '../types.ts';
+import type { AIFixResponse, ChatMessage, HotspotSetupParams } from '../types.ts';
 
 let ai: GoogleGenAI | null = null;
 
@@ -116,6 +116,37 @@ export const generateMultiWanScript = async (wanInterfaces: string[], lanInterfa
 - Configuration Type: ${typeDescription}
 
 The script should include all necessary mangle rules for routing marks, NAT rules for masquerading, and routing table entries. Assume the WAN interfaces receive their IPs via DHCP. Add comments to explain each major step of the script.`;
+
+    return generateMikroTikScript(prompt);
+};
+
+export const generateHotspotSetupScript = async (params: HotspotSetupParams): Promise<string> => {
+    const prompt = `
+        Generate a complete MikroTik RouterOS script to set up a new Hotspot server using the WinBox "Hotspot Setup" wizard as a reference.
+
+        The script must perform the following actions based on these user-provided parameters:
+        - Hotspot Interface: ${params.hotspotInterface}
+        - Local Address of Network: ${params.localAddress} (This IP should be assigned to the hotspot interface)
+        - Address Pool of Network: ${params.addressPool} (This is the range for the DHCP server)
+        - Select Certificate: ${params.sslCertificate} (If not 'none', use this certificate for the HTTPS login)
+        - IP Address of SMTP Server: 0.0.0.0
+        - DNS Servers: ${params.dnsServers}
+        - DNS Name: ${params.dnsName}
+        - Create a user for the hotspot with these credentials:
+          - User: ${params.hotspotUser}
+          - Password: ${params.hotspotPass}
+
+        The script MUST be complete and include all necessary steps:
+        1.  Create the IP pool.
+        2.  Create the hotspot profile. Set the dns-name and http-cookie-lifetime.
+        3.  Create the hotspot server on the correct interface, linking the profile and pool.
+        4.  Add the IP address to the hotspot interface.
+        5.  Create the DHCP server configuration for the hotspot network.
+        6.  Add a NAT rule to masquerade traffic from the hotspot network's source address range.
+        7.  Create the initial hotspot user.
+
+        Add comments to explain each major step.
+    `;
 
     return generateMikroTikScript(prompt);
 };

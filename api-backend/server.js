@@ -307,9 +307,9 @@ app.post('/api/hotspot/files/list', (req, res, next) => {
 
                 const parts = remainder.split('/');
                 const childName = parts[0];
-
-                // Determine if the current file path represents a directory at this level
-                const isDirectory = (file.type === 'directory' && file.name === `${pathWithSlash}${childName}`) || parts.length > 1;
+                
+                // FIX: Check if the exact name matches `type=directory` or if there are more path parts.
+                const isDirectory = (allFiles.some(f => f.name === `${pathWithSlash}${childName}` && f.type === 'directory')) || parts.length > 1;
 
                 const existing = childrenMap.get(childName);
 
@@ -351,10 +351,10 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             return res.status(400).json({ message: 'A filePath is required.' });
         }
         
-        // FIX: Use a more robust two-step method to get file content.
-        // 1. Find the file by name to get its ID, using a standard GET request.
-        const fileResponse = await apiClient.get(`/file?name=${encodeURIComponent(filePath)}`);
-        const file = Array.isArray(fileResponse.data) ? fileResponse.data[0] : fileResponse.data;
+        // FIX: A more robust two-step method to get file content.
+        // 1. Find the file by its ID using its name.
+        const fileListResponse = await apiClient.post('/file/print', { "?name": filePath });
+        const file = Array.isArray(fileListResponse.data) ? fileListResponse.data[0] : fileListResponse.data;
 
         if (!file || !file['.id']) {
             const err = new Error(`File '${filePath}' not found on the router.`);
@@ -363,9 +363,10 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
         }
 
         // 2. Use the file's ID to get its full data, including contents.
-        const contentResponse = await apiClient.get(`/file/${file['.id']}`);
-        
-        const content = contentResponse.data?.contents || '';
+        const contentResponse = await apiClient.post(`/file/print`, { "?.id": file['.id'] });
+        const fileWithContent = Array.isArray(contentResponse.data) ? contentResponse.data[0] : contentResponse.data;
+
+        const content = fileWithContent?.contents || '';
         res.status(200).json({ content });
     });
 });
@@ -808,6 +809,21 @@ app.post('/api/system/ntp/client/set', (req, res, next) => {
         const configId = configObject['.id'];
         await apiClient.patch(`/system/ntp/client/${configId}`, payload);
         res.status(200).json({ message: 'NTP settings updated successfully.' });
+    });
+});
+
+app.post('/api/system/certificates', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/certificate');
+        const certs = Array.isArray(response.data) ? response.data : [];
+        const data = certs.map(c => ({
+            id: c['.id'],
+            name: c.name,
+            'key-usage': c['key-usage'],
+            trusted: c.trusted,
+            'expires-after': c['expires-after'],
+        }));
+        res.status(200).json(data);
     });
 });
 

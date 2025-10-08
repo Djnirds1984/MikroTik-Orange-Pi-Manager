@@ -371,3 +371,23 @@ export interface NodeMcuSettings {
     rates: NodeMcuRate[];
     portalUrl: string;
 }
+
+// --- Hotspot Setup Types ---
+export interface SslCertificate {
+    id: string;
+    name: string;
+    'key-usage': string;
+    trusted: string;
+    'expires-after': string;
+}
+
+export interface HotspotSetupParams {
+    hotspotInterface: string;
+    localAddress: string;
+    addressPool: string;
+    sslCertificate: string; // 'none' or certificate name
+    dnsServers: string;
+    dnsName: string;
+    hotspotUser: string;
+    hotspotPass: string;
+}

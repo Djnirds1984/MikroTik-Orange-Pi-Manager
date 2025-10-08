@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -121,3 +121,4 @@ export const deleteFirewallMangle = (router: RouterConfig, ruleId: string): Prom
 export const getRouterNtp = (router: RouterConfig): Promise<NtpSettings> => mikrotikApiPost( '/api/system/ntp/client', { routerConfig: router });
 export const setRouterNtp = (router: RouterConfig, settings: NtpSettings): Promise<any> => mikrotikApiPost('/api/system/ntp/client/set', { routerConfig: router, settings });
 export const rebootRouter = (router: RouterConfig): Promise<{ message: string }> => mikrotikApiPost( '/api/system/reboot', { routerConfig: router });
+export const getSslCertificates = (router: RouterConfig): Promise<SslCertificate[]> => mikrotikApiPost('/api/system/certificates', { routerConfig: router });

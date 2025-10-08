@@ -2,9 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, HotspotActiveUser, HotspotHost } from '../types.ts';
 import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon } from '../constants.tsx';
+import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon, ServerIcon } from '../constants.tsx';
 import { NodeMcuManager } from './NodeMcuManager.tsx';
 import { HotspotEditor } from './HotspotEditor.tsx';
+import { HotspotInstaller } from './HotspotInstaller.tsx';
 
 // --- Helper Functions ---
 const formatBytes = (bytes: number): string => {
@@ -37,7 +38,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor'>('activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'setup'>('activity');
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -112,7 +113,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         );
     }
 
-    if (isLoading && activeUsers.length === 0 && hosts.length === 0) {
+    if (isLoading && activeUsers.length === 0 && hosts.length === 0 && activeTab === 'activity') {
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
@@ -121,7 +122,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         );
     }
     
-    if (errors.active && errors.hosts) {
+    if (errors.active && errors.hosts && activeTab === 'activity') {
          return (
             <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 p-6 text-center">
                 <p className="text-xl font-semibold text-red-600 dark:text-red-400">Failed to load Hotspot data.</p>
@@ -154,11 +155,17 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                         isActive={activeTab === 'editor'}
                         onClick={() => setActiveTab('editor')}
                     />
+                    <TabButton
+                        label="Server Setup"
+                        icon={<ServerIcon className="w-5 h-5 mr-2" />}
+                        isActive={activeTab === 'setup'}
+                        onClick={() => setActiveTab('setup')}
+                    />
                 </nav>
             </div>
 
 
-            {Object.keys(errors).length > 0 && (
+            {Object.keys(errors).length > 0 && activeTab === 'activity' && (
                  <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
                     <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
                     <div>
@@ -262,6 +269,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             
             {activeTab === 'editor' && (
                 <HotspotEditor selectedRouter={selectedRouter} />
+            )}
+
+            {activeTab === 'setup' && (
+                <HotspotInstaller selectedRouter={selectedRouter} />
             )}
         </div>
     );
