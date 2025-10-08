@@ -150,6 +150,21 @@ async function initDb() {
             user_version = 5;
         }
 
+        if (user_version < 6) {
+            console.log('Applying migration v6 (Add expenses table)...');
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS expenses (
+                    id TEXT PRIMARY KEY,
+                    date TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    description TEXT,
+                    amount REAL NOT NULL
+                );
+            `);
+            await db.exec('PRAGMA user_version = 6;');
+            user_version = 6;
+        }
+
 
     } catch (err) {
         console.error('Failed to initialize database:', err);

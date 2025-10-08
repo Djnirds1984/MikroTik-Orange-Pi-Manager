@@ -196,6 +196,15 @@ export interface InventoryItem {
     dateAdded: string;
 }
 
+export interface ExpenseRecord {
+    id: string;
+    date: string;
+    category: string;
+    description: string;
+    amount: number;
+}
+
+
 export interface CompanySettings {
     companyName?: string;
     address?: string;

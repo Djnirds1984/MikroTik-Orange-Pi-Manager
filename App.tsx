@@ -22,6 +22,7 @@ import { Loader } from './components/Loader.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
+import { useExpensesData } from './hooks/useExpensesData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
@@ -70,13 +71,14 @@ const AppContent: React.FC = () => {
   const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
   const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
   const { items, addItem, updateItem, deleteItem, isLoading: isLoadingInventory } = useInventoryData();
+  const { expenses, addExpense, updateExpense, deleteExpense, isLoading: isLoadingExpenses } = useExpensesData();
   const { settings: companySettings, updateSettings: updateCompanySettings, isLoading: isLoadingCompany } = useCompanySettings();
   const { t, isLoading: isLoadingLocalization } = useLocalization();
 
 
   const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
 
-  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization;
+  const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization || isLoadingExpenses;
 
   // Effect to manage sidebar visibility based on screen size
   useEffect(() => {
@@ -142,7 +144,16 @@ const AppContent: React.FC = () => {
       case 'sales':
           return <SalesReport salesData={sales} deleteSale={deleteSale} clearSales={clearSales} companySettings={companySettings} />;
       case 'inventory':
-          return <Inventory items={items} addItem={addItem} updateItem={updateItem} deleteItem={deleteItem} />;
+          return <Inventory 
+                    items={items} 
+                    addItem={addItem} 
+                    updateItem={updateItem} 
+                    deleteItem={deleteItem}
+                    expenses={expenses}
+                    addExpense={addExpense}
+                    updateExpense={updateExpense}
+                    deleteExpense={deleteExpense}
+                 />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
