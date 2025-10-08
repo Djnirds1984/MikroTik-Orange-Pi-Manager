@@ -290,39 +290,48 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
 // --- Hotspot File Browser Endpoints ---
 app.post('/api/hotspot/files/list', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const { path = 'flash' } = req.body; // path is the FULL PATH of the directory to list
+        const { path = 'flash' } = req.body;
         
-        // Use POST /print instead of GET /file for potentially better compatibility.
         const response = await apiClient.post('/file/print', {});
         const allFiles = Array.isArray(response.data) ? response.data : [];
 
         const pathWithSlash = path.endsWith('/') ? path : `${path}/`;
         
-        const directChildrenNames = new Set();
+        const childrenMap = new Map();
 
-        const children = allFiles
+        allFiles
             .filter(file => file.name.startsWith(pathWithSlash))
-            .map(file => {
+            .forEach(file => {
                 const remainder = file.name.substring(pathWithSlash.length);
-                const name = remainder.split('/')[0];
-                const isDir = remainder.includes('/');
-                return { name, isDir, file };
-            })
-            .filter(({name}) => {
-                if (directChildrenNames.has(name)) {
-                    return false;
+                if (!remainder) return; // Skip the directory itself if it's in the list
+
+                const parts = remainder.split('/');
+                const childName = parts[0];
+
+                // Determine if the current file path represents a directory at this level
+                const isDirectory = (file.type === 'directory' && file.name === `${pathWithSlash}${childName}`) || parts.length > 1;
+
+                const existing = childrenMap.get(childName);
+
+                if (!existing) {
+                    // First time seeing this name, add it.
+                    childrenMap.set(childName, {
+                        id: file['.id'],
+                        name: childName,
+                        fullName: isDirectory ? `${pathWithSlash}${childName}` : file.name,
+                        type: isDirectory ? 'directory' : 'file',
+                        size: file.size,
+                        creationTime: file['creation-time'],
+                    });
+                } else if (existing.type === 'file' && isDirectory) {
+                    // We've seen this name before as a file, but this entry proves it's a directory.
+                    // Let's "promote" it to a directory.
+                    existing.type = 'directory';
+                    existing.fullName = `${pathWithSlash}${childName}`;
                 }
-                directChildrenNames.add(name);
-                return true;
-            })
-            .map(({ name, isDir, file }) => ({
-                id: file['.id'],
-                name: name,
-                fullName: isDir ? `${pathWithSlash}${name}` : file.name,
-                type: isDir ? 'directory' : 'file',
-                size: file.size,
-                creationTime: file['creation-time'],
-            }));
+            });
+
+        const children = Array.from(childrenMap.values());
             
         children.sort((a,b) => {
             if (a.type === 'directory' && b.type !== 'directory') return -1;
