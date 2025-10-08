@@ -333,7 +333,7 @@ app.post('/api/ppp/profiles/delete', (req, res, next) => {
     });
 });
 
-// --- IP Pools & Addresses ---
+// --- IP Pools, Addresses, & Routes ---
 app.post('/api/ip/pools', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ip/pool');
@@ -351,6 +351,23 @@ app.post('/api/ip/addresses', (req, res, next) => {
             address: a.address,
             interface: a.interface,
             disabled: a.disabled
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/ip/routes', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/route');
+        const routes = Array.isArray(response.data) ? response.data : [];
+        const data = routes.map(r => ({
+            ...r,
+            id: r['.id'],
+            active: r.active === 'true',
+            disabled: r.disabled === 'true',
+            static: r.static === 'true',
+            dynamic: r.dynamic === 'true',
+            connected: r.connected === 'true',
         }));
         res.status(200).json(data);
     });

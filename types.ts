@@ -100,6 +100,19 @@ export interface IpAddress {
     disabled: string;
 }
 
+export interface IpRoute {
+    id: string;
+    'dst-address': string;
+    gateway?: string;
+    distance: string;
+    active: boolean;
+    disabled: boolean;
+    comment?: string;
+    static: boolean;
+    dynamic: boolean;
+    connected: boolean;
+}
+
 export interface BillingPlan {
     name: string;
     price: number;

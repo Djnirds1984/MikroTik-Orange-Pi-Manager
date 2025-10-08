@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute, IpRoute } from '../types.ts';
+import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getIpRoutes, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, TrashIcon, VlanIcon, ShareIcon } from '../constants.tsx';
@@ -224,6 +224,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [vlans, setVlans] = useState<VlanInterface[]>([]);
     const [interfaces, setInterfaces] = useState<Interface[]>([]);
     const [ipAddresses, setIpAddresses] = useState<IpAddress[]>([]);
+    const [routes, setRoutes] = useState<IpRoute[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -242,20 +243,23 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             setVlans([]);
             setInterfaces([]);
             setIpAddresses([]);
+            setRoutes([]);
             return;
         }
         setIsLoading(true);
         setError(null);
 
         try {
-            const [vlanData, interfaceData, ipData] = await Promise.all([
+            const [vlanData, interfaceData, ipData, routeData] = await Promise.all([
                 getVlans(selectedRouter),
                 getInterfaces(selectedRouter),
-                getIpAddresses(selectedRouter)
+                getIpAddresses(selectedRouter),
+                getIpRoutes(selectedRouter)
             ]);
             setVlans(vlanData);
             setInterfaces(interfaceData);
             setIpAddresses(ipData);
+            setRoutes(routeData);
             
             // Set default LAN interface for multi-WAN form
             if (interfaceData.length > 0) {
@@ -273,6 +277,14 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
+    const sortedRoutes = useMemo(() => {
+        return [...routes].sort((a, b) => {
+            if (a['dst-address'] === '0.0.0.0/0') return -1;
+            if (b['dst-address'] === '0.0.0.0/0') return 1;
+            return a['dst-address'].localeCompare(b['dst-address']);
+        });
+    }, [routes]);
 
     const handleAddVlan = async (vlanData: Omit<VlanInterface, 'id'>) => {
         if (!selectedRouter) return;
@@ -377,6 +389,54 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 </div>
                 <AutomatedFailoverManager selectedRouter={selectedRouter} />
             </div>
+
+            {/* IP Routes Card */}
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                    <ShareIcon className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
+                    <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400">IP Routes</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
+                            <tr>
+                                <th className="px-6 py-3">Destination</th>
+                                <th className="px-6 py-3">Gateway</th>
+                                <th className="px-6 py-3">Distance</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3">Comment</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {sortedRoutes.length > 0 ? sortedRoutes.map(route => (
+                                <tr key={route.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                    <td className="px-6 py-4 font-mono text-slate-800 dark:text-slate-200">{route['dst-address']}</td>
+                                    <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{route.gateway}</td>
+                                    <td className="px-6 py-4 font-mono">{route.distance}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center flex-wrap gap-1">
+                                            {route.active && !route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span>}
+                                            {!route.active && !route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-400">Inactive</span>}
+                                            {route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Disabled</span>}
+                                            {route.static && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400">Static</span>}
+                                            {route.dynamic && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400">Dynamic</span>}
+                                            {route.connected && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-orange-100 dark:bg-orange-500/20 text-orange-700 dark:text-orange-400">Connected</span>}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-500 italic">{route.comment}</td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={5} className="text-center py-8 text-slate-500">
+                                        No IP routes found on this router.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
 
             {/* VLAN Management Card */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
