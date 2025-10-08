@@ -31,7 +31,8 @@ const getPoolFromNetwork = (network: string): string => {
         (broadcastAddress & 255) - 1 // One less than broadcast
     ];
 
-    return `${startIp.join('.')} - ${endIpParts.join('.')}`;
+    // FIX: Removed spaces around the hyphen to match MikroTik API requirements.
+    return `${startIp.join('.')}-${endIpParts.join('.')}`;
 };
 
 
