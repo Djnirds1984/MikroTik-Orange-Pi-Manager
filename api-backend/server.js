@@ -287,6 +287,65 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
+// --- NodeMCU Proxy Endpoints ---
+app.post('/api/nodemcu/proxy-get', async (req, res, next) => {
+    try {
+        const { deviceIp, path } = req.body;
+        if (!deviceIp || !path) {
+            return res.status(400).json({ message: "deviceIp and path are required." });
+        }
+        // Basic validation to prevent abuse
+        if (!path.startsWith('/')) {
+            return res.status(400).json({ message: "Path must start with /" });
+        }
+
+        const url = `http://${deviceIp}${path}`;
+        const response = await axios.get(url, { timeout: 5000 });
+        res.status(response.status).json(response.data);
+
+    } catch (error) {
+        console.error('NodeMCU Proxy GET Error:', error.message);
+        const status = error.response?.status || 500;
+        const message = error.code === 'ECONNABORTED' ? 'Request timed out. Device may be offline or unresponsive.' : (error.response?.data?.message || error.message);
+        const err = new Error(`NodeMCU Proxy Error: ${message}`);
+        err.status = status;
+        next(err);
+    }
+});
+
+app.post('/api/nodemcu/proxy-post', async (req, res, next) => {
+    try {
+        const { deviceIp, path, data } = req.body;
+        if (!deviceIp || !path || !data) {
+            return res.status(400).json({ message: "deviceIp, path, and data are required." });
+        }
+        // Basic validation
+        if (!path.startsWith('/')) {
+            return res.status(400).json({ message: "Path must start with /" });
+        }
+
+        const url = `http://${deviceIp}${path}`;
+        // The data from frontend will be JSON, but many firmwares expect x-www-form-urlencoded
+        const urlEncodedData = new URLSearchParams(data).toString();
+
+        const response = await axios.post(url, urlEncodedData, {
+            timeout: 5000,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+        res.status(response.status).send(response.data); // Often returns HTML or plain text
+
+    } catch (error) {
+        console.error('NodeMCU Proxy POST Error:', error.message);
+        const status = error.response?.status || 500;
+        const message = error.code === 'ECONNABORTED' ? 'Request timed out. Device may be offline or unresponsive.' : (error.response?.data?.message || error.message);
+        const err = new Error(`NodeMCU Proxy Error: ${message}`);
+        err.status = status;
+        next(err);
+    }
+});
+
 
 // --- PPPoE Profiles ---
 app.post('/api/ppp/profiles', (req, res, next) => {

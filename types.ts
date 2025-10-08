@@ -359,3 +359,15 @@ export type FirewallFilterRuleData = Partial<Omit<FirewallFilterRule, 'id' | '.i
 export type FirewallNatRuleData = Partial<Omit<FirewallNatRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
 export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
 export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
+
+// --- NodeMCU Types ---
+export interface NodeMcuRate {
+    credit: number;
+    time: number; // in minutes
+}
+
+export interface NodeMcuSettings {
+    deviceName: string;
+    rates: NodeMcuRate[];
+    portalUrl: string;
+}
