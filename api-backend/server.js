@@ -287,6 +287,65 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
+app.post('/api/hotspot/run-setup', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { params } = req.body;
+        const profileName = `hsprof_${params.hotspotInterface}`;
+        const serverName = `hs-server_${params.hotspotInterface}`;
+        const poolName = `hs-pool_${params.hotspotInterface}`;
+        
+        // Step 1: Add IP Pool
+        await apiClient.put('/ip/pool', {
+            name: poolName,
+            ranges: params.addressPool,
+        });
+        
+        // Step 2: Add Hotspot Profile
+        await apiClient.put('/ip/hotspot/profile', {
+            name: profileName,
+            'hotspot-address': params.localAddress.split('/')[0],
+            'dns-name': params.dnsName,
+            'html-directory': 'hotspot',
+            'login-by': 'cookie,http-chap',
+            'http-cookie-lifetime': '3d',
+        });
+
+        // Step 3: Add IP Address to Interface
+        await apiClient.put('/ip/address', {
+            address: params.localAddress,
+            interface: params.hotspotInterface,
+            comment: 'hotspot network',
+        });
+        
+        // Step 4: Add Hotspot Server
+        await apiClient.put('/ip/hotspot', {
+            name: serverName,
+            interface: params.hotspotInterface,
+            'address-pool': poolName,
+            profile: profileName,
+            disabled: 'no',
+        });
+        
+        // Step 5: Add Hotspot User
+        await apiClient.put('/ip/hotspot/user', {
+            name: params.hotspotUser,
+            password: params.hotspotPass,
+            server: serverName,
+        });
+        
+        // Step 6: Add NAT Rule
+        await apiClient.put('/ip/firewall/nat', {
+            chain: 'srcnat',
+            action: 'masquerade',
+            'src-address': params.localAddress,
+            comment: 'masquerade hotspot network',
+        });
+
+        res.status(200).json({ message: 'Hotspot server setup completed successfully!' });
+    });
+});
+
+
 // --- Hotspot File Browser Endpoints ---
 app.post('/api/hotspot/files/list', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {

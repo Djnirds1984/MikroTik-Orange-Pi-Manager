@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -84,6 +84,11 @@ export const removeHotspotActiveUser = (router: RouterConfig, userId: string): P
 export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => mikrotikApiPost('/api/hotspot/files/list', { routerConfig: router, path });
 export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => mikrotikApiPost('/api/hotspot/files/get-content', { routerConfig: router, filePath });
 export const saveHotspotFileContent = (router: RouterConfigWithId, filePath: string, content: string): Promise<{ message: string }> => mikrotikApiPost('/api/hotspot/files/save-content', { routerConfig: router, filePath, content });
+
+// Hotspot Setup
+export const runHotspotSetup = (router: RouterConfigWithId, params: HotspotSetupParams): Promise<{ message: string }> => {
+    return mikrotikApiPost('/api/hotspot/run-setup', { routerConfig: router, params });
+};
 
 
 // Network
