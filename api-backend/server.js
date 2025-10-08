@@ -373,6 +373,40 @@ app.post('/api/ip/routes', (req, res, next) => {
     });
 });
 
+app.post('/api/ip/routes/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { routeData } = req.body;
+        if (!routeData || !routeData['dst-address']) {
+            return res.status(400).json({ message: 'Destination address is required.' });
+        }
+        const response = await apiClient.put('/ip/route', routeData);
+        res.status(201).json(response.data);
+    });
+});
+
+app.post('/api/ip/routes/update', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { routeId, routeData } = req.body;
+        if (!routeId || !routeData) {
+            return res.status(400).json({ message: 'Route ID and data are required.' });
+        }
+        const response = await apiClient.patch(`/ip/route/${routeId}`, routeData);
+        res.status(200).json(response.data);
+    });
+});
+
+app.post('/api/ip/routes/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { routeId } = req.body;
+        if (!routeId) {
+            return res.status(400).json({ message: 'Route ID is required.' });
+        }
+        await apiClient.delete(`/ip/route/${routeId}`);
+        res.status(204).send();
+    });
+});
+
+
 // --- PPPoE Secrets ---
 
 // Helper function to sanitize secret data before sending to MikroTik

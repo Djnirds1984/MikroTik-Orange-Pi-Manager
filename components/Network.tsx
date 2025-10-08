@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute, IpRoute } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getIpRoutes, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute, IpRoute, IpRouteData } from '../types.ts';
+import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getIpRoutes, addIpRoute, updateIpRoute, deleteIpRoute, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, TrashIcon, VlanIcon, ShareIcon } from '../constants.tsx';
+import { RouterIcon, TrashIcon, VlanIcon, ShareIcon, EditIcon } from '../constants.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
 
 // --- VLAN Add/Edit Modal ---
@@ -67,6 +67,84 @@ const VlanFormModal: React.FC<VlanFormModalProps> = ({ isOpen, onClose, onSave, 
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
                         <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
                             {isLoading ? 'Saving...' : 'Save VLAN'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+// --- Route Add/Edit Modal ---
+interface RouteFormModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onSave: (routeData: IpRouteData | (Partial<IpRouteData> & { id: string })) => void;
+    initialData: IpRoute | null;
+    isLoading: boolean;
+}
+
+const RouteFormModal: React.FC<RouteFormModalProps> = ({ isOpen, onClose, onSave, initialData, isLoading }) => {
+    const [route, setRoute] = useState<Partial<IpRouteData>>({ 'dst-address': '0.0.0.0/0', gateway: '', distance: '1', comment: '' });
+
+    useEffect(() => {
+        if (isOpen) {
+            if (initialData) {
+                setRoute({
+                    'dst-address': initialData['dst-address'],
+                    gateway: initialData.gateway || '',
+                    distance: initialData.distance || '1',
+                    comment: initialData.comment || ''
+                });
+            } else {
+                setRoute({ 'dst-address': '0.0.0.0/0', gateway: '', distance: '1', comment: '' });
+            }
+        }
+    }, [initialData, isOpen]);
+    
+    if (!isOpen) return null;
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setRoute(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave(initialData ? { ...route, id: initialData.id } : route as IpRouteData);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg border border-slate-200 dark:border-slate-700">
+                <form onSubmit={handleSubmit}>
+                    <div className="p-6">
+                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit IP Route' : 'Add New IP Route'}</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="dst-address" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Destination Address</label>
+                                <input type="text" name="dst-address" id="dst-address" value={route['dst-address']} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" placeholder="e.g., 0.0.0.0/0 or 192.168.10.0/24" />
+                            </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label htmlFor="gateway" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Gateway</label>
+                                    <input type="text" name="gateway" id="gateway" value={route.gateway} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" placeholder="e.g., 192.168.88.1" />
+                                </div>
+                                <div>
+                                    <label htmlFor="distance" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Distance</label>
+                                    <input type="number" name="distance" id="distance" value={route.distance} onChange={handleChange} min="1" className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
+                                </div>
+                            </div>
+                            <div>
+                                <label htmlFor="comment" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Comment</label>
+                                <input type="text" name="comment" id="comment" value={route.comment} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700">Cancel</button>
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-medium rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
+                            {isLoading ? 'Saving...' : 'Save Route'}
                         </button>
                     </div>
                 </form>
@@ -228,8 +306,10 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    
+    const [isVlanModalOpen, setIsVlanModalOpen] = useState(false);
+    const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+    const [editingRoute, setEditingRoute] = useState<IpRoute | null>(null);
+
     // Multi-WAN state
     const [wanInterfaces, setWanInterfaces] = useState('ether1, ether2');
     const [lanInterface, setLanInterface] = useState('');
@@ -291,7 +371,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         setIsSubmitting(true);
         try {
             await addVlan(selectedRouter, vlanData);
-            setIsModalOpen(false);
+            setIsVlanModalOpen(false);
             await fetchData();
         } catch (err) {
             alert(`Error adding VLAN: ${(err as Error).message}`);
@@ -310,6 +390,40 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             alert(`Error deleting VLAN: ${(err as Error).message}`);
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleSaveRoute = async (routeData: IpRouteData | (Partial<IpRouteData> & { id: string })) => {
+        if (!selectedRouter) return;
+        setIsSubmitting(true);
+        try {
+            if ('id' in routeData) {
+                const { id, ...dataToUpdate } = routeData;
+                await updateIpRoute(selectedRouter, id, dataToUpdate);
+            } else {
+                await addIpRoute(selectedRouter, routeData as IpRouteData);
+            }
+            setIsRouteModalOpen(false);
+            await fetchData();
+        } catch (err) {
+            alert(`Error saving route: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDeleteRoute = async (route: IpRoute) => {
+        if (!selectedRouter || route.dynamic || route.connected) return;
+        if (window.confirm(`Are you sure you want to delete the route to "${route['dst-address']}"?`)) {
+            setIsSubmitting(true);
+            try {
+                await deleteIpRoute(selectedRouter, route.id);
+                await fetchData();
+            } catch (err) {
+                alert(`Error deleting route: ${(err as Error).message}`);
+            } finally {
+                setIsSubmitting(false);
+            }
         }
     };
 
@@ -374,10 +488,17 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     return (
         <div className="max-w-7xl mx-auto space-y-8">
             <VlanFormModal 
-                isOpen={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
+                isOpen={isVlanModalOpen}
+                onClose={() => setIsVlanModalOpen(false)}
                 onSave={handleAddVlan}
                 interfaces={interfaces}
+                isLoading={isSubmitting}
+            />
+            <RouteFormModal
+                isOpen={isRouteModalOpen}
+                onClose={() => setIsRouteModalOpen(false)}
+                onSave={handleSaveRoute}
+                initialData={editingRoute}
                 isLoading={isSubmitting}
             />
 
@@ -392,9 +513,14 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
             {/* IP Routes Card */}
             <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3">
-                    <ShareIcon className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
-                    <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400">IP Routes</h3>
+                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <ShareIcon className="w-6 h-6 text-indigo-500 dark:text-indigo-400" />
+                        <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400">IP Routes</h3>
+                    </div>
+                    <button onClick={() => { setEditingRoute(null); setIsRouteModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2 px-3 rounded-lg text-sm">
+                        Add Route
+                    </button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left">
@@ -405,6 +531,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                 <th className="px-6 py-3">Distance</th>
                                 <th className="px-6 py-3">Status</th>
                                 <th className="px-6 py-3">Comment</th>
+                                <th className="px-6 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -424,10 +551,18 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-slate-500 italic">{route.comment}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button onClick={() => { setEditingRoute(route); setIsRouteModalOpen(true); }} className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 rounded-md" title="Edit Route">
+                                            <EditIcon className="h-5 w-5" />
+                                        </button>
+                                        <button onClick={() => handleDeleteRoute(route)} disabled={isSubmitting || route.dynamic || route.connected} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50 disabled:cursor-not-allowed" title={route.dynamic || route.connected ? "Cannot delete dynamic/connected routes" : "Delete Route"}>
+                                            <TrashIcon className="h-5 w-5" />
+                                        </button>
+                                    </td>
                                 </tr>
                             )) : (
                                 <tr>
-                                    <td colSpan={5} className="text-center py-8 text-slate-500">
+                                    <td colSpan={6} className="text-center py-8 text-slate-500">
                                         No IP routes found on this router.
                                     </td>
                                 </tr>
@@ -445,7 +580,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                         <VlanIcon className="w-6 h-6 text-[--color-primary-500] dark:text-[--color-primary-400]" />
                         <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400]">VLAN Interfaces</h3>
                     </div>
-                    <button onClick={() => setIsModalOpen(true)} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-3 rounded-lg text-sm">
+                    <button onClick={() => setIsVlanModalOpen(true)} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-3 rounded-lg text-sm">
                         Add VLAN
                     </button>
                 </div>

@@ -113,6 +113,15 @@ export interface IpRoute {
     connected: boolean;
 }
 
+export type IpRouteData = {
+    'dst-address': string;
+    gateway?: string;
+    distance?: string;
+    comment?: string;
+    disabled?: 'true' | 'false';
+};
+
+
 export interface BillingPlan {
     name: string;
     price: number;
