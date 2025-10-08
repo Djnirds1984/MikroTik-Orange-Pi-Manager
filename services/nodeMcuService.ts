@@ -26,10 +26,10 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-export const loginToDevice = (deviceIp: string, password: string): Promise<{ cookie: string }> => {
+export const loginToDevice = (deviceIp: string, username: string, password: string): Promise<{ cookie: string }> => {
     return fetchData<{ cookie: string }>('/api/nodemcu/login', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, password, user: 'admin' }),
+        body: JSON.stringify({ deviceIp, username, password }),
     });
 };
 

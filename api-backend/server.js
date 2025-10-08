@@ -290,14 +290,14 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
 // --- NodeMCU Proxy Endpoints ---
 app.post('/api/nodemcu/login', async (req, res, next) => {
     try {
-        const { deviceIp, password, user } = req.body;
-        if (!deviceIp || password === undefined) {
-            return res.status(400).json({ message: "deviceIp and password are required." });
+        const { deviceIp, username, password } = req.body;
+        if (!deviceIp || !username || password === undefined) {
+            return res.status(400).json({ message: "deviceIp, username, and password are required." });
         }
         
         const url = `http://${deviceIp}/login`;
         const loginData = new URLSearchParams({
-            user: user || 'admin',
+            user: username,
             pass: password
         }).toString();
 
@@ -305,28 +305,28 @@ app.post('/api/nodemcu/login', async (req, res, next) => {
             timeout: 5000,
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
-            }
+            },
+            maxRedirects: 0, // Stop redirects to capture the cookie
+            validateStatus: status => status >= 200 && status < 400, // Accept 200-399
         });
 
-        const cookies = response.headers['set-cookie'];
-        if (!cookies || cookies.length === 0) {
-            if (response.data && typeof response.data === 'string' && response.data.toLowerCase().includes('wrong password')) {
-                 throw new Error('Invalid credentials.');
+        // A successful login on JuanFi redirects (302) and sets a cookie.
+        if (response.status === 302 && response.headers['set-cookie']) {
+            const cookies = response.headers['set-cookie'];
+            const sessionCookie = cookies[0].split(';')[0];
+            res.status(200).json({ cookie: sessionCookie });
+        } else {
+            // If it's not a redirect, it's a failed login. The page re-renders.
+            if (response.data && typeof response.data === 'string' && (response.data.toLowerCase().includes('wrong password') || response.data.toLowerCase().includes('invalid credentials'))) {
+                 throw new Error('Invalid username or password.');
             }
-            throw new Error('Login failed: No session cookie received from device.');
+            throw new Error('Login failed: No session cookie received from device. Please check credentials.');
         }
-
-        const sessionCookie = cookies[0].split(';')[0];
-        
-        res.status(200).json({ cookie: sessionCookie });
 
     } catch (error) {
         console.error('NodeMCU Login Error:', error.message);
         const status = error.response?.status || 500;
         let message = error.code === 'ECONNABORTED' ? 'Request timed out. Device may be offline or unresponsive.' : (error.response?.data?.message || error.message);
-        if (message.includes('Invalid credentials')) {
-            message = 'Incorrect password.';
-        }
         
         const err = new Error(`NodeMCU Login Error: ${message}`);
         err.status = status;

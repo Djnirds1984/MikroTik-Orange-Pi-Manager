@@ -139,12 +139,17 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
             let sessionCookie = sessions[device.address];
 
             if (!sessionCookie) {
+                const username = window.prompt(`Enter admin username for ${device.name}:`, 'admin');
+                if (username === null) {
+                    setLoadingAction(null);
+                    return;
+                }
                 const password = window.prompt(`Enter admin password for ${device.name}:`);
                 if (password === null) {
                     setLoadingAction(null);
                     return;
                 }
-                const loginResult = await loginToDevice(device.address, password);
+                const loginResult = await loginToDevice(device.address, username, password);
                 if (!loginResult.cookie) throw new Error("Login failed, no cookie returned.");
                 
                 sessionCookie = loginResult.cookie;
@@ -166,8 +171,8 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
         } catch (error) {
             const err = error as Error & { status?: number };
             const errorMessage = err.message.toLowerCase();
-            if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('incorrect password')) {
-                setDeviceError(`Session expired or password was incorrect. Please try again.`);
+            if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('invalid username or password')) {
+                setDeviceError(`Session expired or credentials were incorrect. Please try again.`);
                 setSessions(prev => ({ ...prev, [device.address]: null }));
             } else {
                 setDeviceError(err.message);
