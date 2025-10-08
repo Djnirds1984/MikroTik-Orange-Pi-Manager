@@ -227,3 +227,9 @@ export const ReceiptPercentIcon: React.FC<{ className?: string }> = ({ className
         <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-12v.75m0 3v.75m0 3v.75m0 3V18m-3.75-9h15A2.25 2.25 0 0121 11.25v6.5A2.25 2.25 0 0118.75 20h-15A2.25 2.25 0 011.5 17.75v-6.5A2.25 2.25 0 013.75 9h15z" />
     </svg>
 );
+
+export const CodeBracketIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 9.75L16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M6 20.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0017.25 3.75H6.75A2.25 2.25 0 004.5 6v12a2.25 2.25 0 001.5 2.25z" />
+    </svg>
+);

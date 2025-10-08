@@ -2,8 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, HotspotActiveUser, HotspotHost } from '../types.ts';
 import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon } from '../constants.tsx';
+import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon } from '../constants.tsx';
 import { NodeMcuManager } from './NodeMcuManager.tsx';
+import { HotspotEditor } from './HotspotEditor.tsx';
 
 // --- Helper Functions ---
 const formatBytes = (bytes: number): string => {
@@ -36,7 +37,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu'>('activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor'>('activity');
 
     const fetchData = useCallback(async () => {
         if (!selectedRouter) {
@@ -76,14 +77,17 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     }, [selectedRouter]);
 
     useEffect(() => {
-        fetchData();
-        const interval = setInterval(() => {
-            if (selectedRouter) {
-                fetchData();
-            }
-        }, 5000); // Refresh every 5 seconds
-        return () => clearInterval(interval);
-    }, [fetchData, selectedRouter]);
+        // Only fetch activity data if on the activity tab to avoid unnecessary polling
+        if (activeTab === 'activity') {
+            fetchData();
+            const interval = setInterval(() => {
+                if (selectedRouter) {
+                    fetchData();
+                }
+            }, 5000); // Refresh every 5 seconds
+            return () => clearInterval(interval);
+        }
+    }, [fetchData, selectedRouter, activeTab]);
 
     const handleKickUser = async (userId: string) => {
         if (!selectedRouter || !window.confirm("Are you sure you want to kick this user?")) return;
@@ -143,6 +147,12 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                         icon={<ChipIcon className="w-5 h-5 mr-2" />}
                         isActive={activeTab === 'nodemcu'}
                         onClick={() => setActiveTab('nodemcu')}
+                    />
+                     <TabButton
+                        label="Login Page Editor"
+                        icon={<CodeBracketIcon className="w-5 h-5 mr-2" />}
+                        isActive={activeTab === 'editor'}
+                        onClick={() => setActiveTab('editor')}
                     />
                 </nav>
             </div>
@@ -248,6 +258,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
             {activeTab === 'nodemcu' && (
                 <NodeMcuManager hosts={hosts} selectedRouter={selectedRouter} />
+            )}
+            
+            {activeTab === 'editor' && (
+                <HotspotEditor selectedRouter={selectedRouter} />
             )}
         </div>
     );

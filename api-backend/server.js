@@ -287,6 +287,42 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
+// Helper to find a file by name and path
+const findHotspotFile = async (apiClient, filename = 'login.html') => {
+    const response = await apiClient.get(`/file?path=hotspot`);
+    const files = Array.isArray(response.data) ? response.data : [];
+    const file = files.find(f => f.name === filename);
+    if (!file || !file['.id']) {
+        const err = new Error(`File 'hotspot/${filename}' not found on the router.`);
+        err.status = 404;
+        throw err;
+    }
+    return file;
+};
+
+app.post('/api/hotspot/login-page', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const file = await findHotspotFile(apiClient, 'login.html');
+        const printResponse = await apiClient.post('/file/print', { '.id': file['.id'] });
+        // The response is an array with one object like { content: "..." }
+        const content = printResponse.data?.[0]?.content || '';
+        res.status(200).json({ content });
+    });
+});
+
+app.post('/api/hotspot/login-page/save', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { content } = req.body;
+        if (typeof content !== 'string') {
+            return res.status(400).json({ message: 'A "content" string is required.' });
+        }
+        const file = await findHotspotFile(apiClient, 'login.html');
+        await apiClient.patch(`/file/${file['.id']}`, { contents: content });
+        res.status(200).json({ message: 'Login page saved successfully.' });
+    });
+});
+
+
 // --- NodeMCU Proxy Endpoints ---
 app.post('/api/nodemcu/login', async (req, res, next) => {
     try {
