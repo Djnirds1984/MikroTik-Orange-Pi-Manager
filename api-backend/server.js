@@ -410,9 +410,9 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             return res.status(400).json({ message: 'A filePath is required.' });
         }
         
-        // FIX: A more robust two-step method to get file content.
-        // 1. Find the file by its ID using its name.
-        const fileListResponse = await apiClient.post('/file/print', { "?name": filePath });
+        // Step 1: Find the file by its name using a GET request.
+        // This is more standard and less prone to parameter interpretation errors.
+        const fileListResponse = await apiClient.get(`/file?name=${encodeURIComponent(filePath)}`);
         const file = Array.isArray(fileListResponse.data) ? fileListResponse.data[0] : fileListResponse.data;
 
         if (!file || !file['.id']) {
@@ -421,7 +421,8 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             throw err;
         }
 
-        // 2. Use the file's ID to get its full data, including contents.
+        // Step 2: Use the file's ID to get its full data, including contents, via a POST request.
+        // This is the correct way to retrieve the 'contents' property.
         const contentResponse = await apiClient.post(`/file/print`, { "?.id": file['.id'] });
         const fileWithContent = Array.isArray(contentResponse.data) ? contentResponse.data[0] : contentResponse.data;
 
