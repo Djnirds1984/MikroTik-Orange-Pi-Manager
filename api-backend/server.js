@@ -287,18 +287,24 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
-// Helper to find a file by name and path
-const findHotspotFile = async (apiClient, filePath, filename = 'login.html') => {
-    const response = await apiClient.get(`/file?path=${filePath}`);
+// Helper to find a file by its full path name
+const findHotspotFile = async (apiClient, fullPath) => {
+    // The 'name' property in MikroTik's file list is the full path.
+    // We query for the exact file name (which is the full path).
+    const response = await apiClient.get(`/file?name=${fullPath}`);
     const files = Array.isArray(response.data) ? response.data : [];
-    const file = files.find(f => f.name === filename);
+    
+    // The API should return an array with 0 or 1 item.
+    const file = files[0];
+    
     if (!file || !file['.id']) {
-        const err = new Error(`File '${filePath}/${filename}' not found on the router.`);
+        const err = new Error(`File '${fullPath}' not found on the router.`);
         err.status = 404;
         throw err;
     }
     return file;
 };
+
 
 app.post('/api/hotspot/login-page', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
@@ -306,7 +312,8 @@ app.post('/api/hotspot/login-page', (req, res, next) => {
         if (!filePath || !['hotspot', 'flash/hotspot'].includes(filePath)) {
             return res.status(400).json({ message: 'A valid filePath is required.' });
         }
-        const file = await findHotspotFile(apiClient, filePath, 'login.html');
+        const fullPath = `${filePath}/login.html`;
+        const file = await findHotspotFile(apiClient, fullPath);
         const printResponse = await apiClient.post('/file/print', { '.id': file['.id'] });
         // The response is an array with one object like { content: "..." }
         const content = printResponse.data?.[0]?.content || '';
@@ -323,7 +330,8 @@ app.post('/api/hotspot/login-page/save', (req, res, next) => {
         if (!filePath || !['hotspot', 'flash/hotspot'].includes(filePath)) {
             return res.status(400).json({ message: 'A valid filePath is required.' });
         }
-        const file = await findHotspotFile(apiClient, filePath, 'login.html');
+        const fullPath = `${filePath}/login.html`;
+        const file = await findHotspotFile(apiClient, fullPath);
         await apiClient.patch(`/file/${file['.id']}`, { contents: content });
         res.status(200).json({ message: 'Login page saved successfully.' });
     });
