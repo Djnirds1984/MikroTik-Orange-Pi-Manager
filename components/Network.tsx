@@ -105,24 +105,34 @@ const AutomatedFailoverManager: React.FC<{ selectedRouter: RouterConfigWithId }>
         return () => clearInterval(interval);
     }, [fetchData]);
     
-    const handleToggleRoute = async (routeId: string, isDisabled: boolean) => {
-        try {
-            setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, disabled: !isDisabled } : r));
-            await setRouteProperty(selectedRouter, routeId, { disabled: !isDisabled ? 'true' : 'false' });
-            await fetchData();
-        } catch (err) {
-            alert(`Failed to update route: ${(err as Error).message}`);
-            await fetchData();
-        }
+    const handleToggleRoute = (routeId: string, currentDisabledState: boolean) => {
+        const newDisabledState = !currentDisabledState;
+        
+        // Optimistic UI Update
+        setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, disabled: newDisabledState } : r));
+
+        // Fire and forget API call
+        setRouteProperty(selectedRouter, routeId, { disabled: newDisabledState ? 'true' : 'false' })
+            .catch(err => {
+                // On error, alert user and trigger a refetch to get the true state back.
+                alert(`Failed to update route: ${(err as Error).message}`);
+                fetchData(); // This will revert the optimistic change.
+            });
     };
 
     const handleToggleAutomatedFailover = async () => {
+        const newEnabledState = !isFailoverEnabled;
         setIsConfiguring(true);
+        // Optimistic update for instant UI feedback
+        setIsFailoverEnabled(newEnabledState);
+
         try {
-            await configureWanFailover(selectedRouter, !isFailoverEnabled);
-            await fetchData(); // Refresh state from router
+            await configureWanFailover(selectedRouter, newEnabledState);
+            // The polling will confirm the state, no need to fetch here.
         } catch (err) {
             alert(`Failed to configure failover: ${(err as Error).message}`);
+            // Revert optimistic update on failure
+            setIsFailoverEnabled(!newEnabledState);
         } finally {
             setIsConfiguring(false);
         }
@@ -187,7 +197,7 @@ const AutomatedFailoverManager: React.FC<{ selectedRouter: RouterConfigWithId }>
                                         <input
                                             type="checkbox"
                                             checked={!route.disabled}
-                                            onChange={() => handleToggleRoute(route.id, !route.disabled)}
+                                            onChange={() => handleToggleRoute(route.id, route.disabled)}
                                             className="sr-only peer"
                                         />
                                         <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[--color-primary-600]"></div>
