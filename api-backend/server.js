@@ -420,10 +420,9 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             throw err;
         }
 
-        // Step 2: Use the file's ID to get its full data, including contents.
-        // FIX: The query parameter must be ".id", not "?.id". The '?' is for URL params, not JSON bodies.
-        const contentResponse = await apiClient.post(`/file/print`, { ".id": file['.id'] });
-        const fileWithContent = Array.isArray(contentResponse.data) ? contentResponse.data[0] : contentResponse.data;
+        // Step 2: Use the ID to get the file resource directly, which includes its content.
+        const contentResponse = await apiClient.get(`/file/${file['.id']}`);
+        const fileWithContent = contentResponse.data;
 
         const content = fileWithContent?.contents || '';
         res.status(200).json({ content });
