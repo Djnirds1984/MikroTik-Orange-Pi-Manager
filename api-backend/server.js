@@ -410,8 +410,7 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             return res.status(400).json({ message: 'A filePath is required.' });
         }
         
-        // Step 1: Find the file by its name using a GET request.
-        // This is more standard and less prone to parameter interpretation errors.
+        // Step 1: Find the file by its name to get its ID.
         const fileListResponse = await apiClient.get(`/file?name=${encodeURIComponent(filePath)}`);
         const file = Array.isArray(fileListResponse.data) ? fileListResponse.data[0] : fileListResponse.data;
 
@@ -421,9 +420,9 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             throw err;
         }
 
-        // Step 2: Use the file's ID to get its full data, including contents, via a POST request.
-        // This is the correct way to retrieve the 'contents' property.
-        const contentResponse = await apiClient.post(`/file/print`, { "?.id": file['.id'] });
+        // Step 2: Use the file's ID to get its full data, including contents.
+        // FIX: The query parameter must be ".id", not "?.id". The '?' is for URL params, not JSON bodies.
+        const contentResponse = await apiClient.post(`/file/print`, { ".id": file['.id'] });
         const fileWithContent = Array.isArray(contentResponse.data) ? contentResponse.data[0] : contentResponse.data;
 
         const content = fileWithContent?.contents || '';
