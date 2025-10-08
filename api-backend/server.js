@@ -359,7 +359,15 @@ app.post('/api/ip/addresses', (req, res, next) => {
 app.post('/api/ip/routes', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const response = await apiClient.get('/ip/route');
-        const routes = Array.isArray(response.data) ? response.data : [];
+        let routes = Array.isArray(response.data) ? response.data : [];
+
+        // Filter out dynamic PPPoE client routes.
+        // These routes typically have a gateway that looks like "<pppoe-username>".
+        routes = routes.filter(route => {
+            const gateway = route.gateway || '';
+            return !(gateway.startsWith('<pppoe-') && gateway.endsWith('>'));
+        });
+
         const data = routes.map(r => ({
             ...r,
             id: r['.id'],
