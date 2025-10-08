@@ -292,7 +292,8 @@ app.post('/api/hotspot/files/list', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { path = 'flash' } = req.body; // path is the FULL PATH of the directory to list
         
-        const response = await apiClient.get('/file');
+        // Use POST /print instead of GET /file for potentially better compatibility.
+        const response = await apiClient.post('/file/print', {});
         const allFiles = Array.isArray(response.data) ? response.data : [];
 
         const pathWithSlash = path.endsWith('/') ? path : `${path}/`;
@@ -341,18 +342,21 @@ app.post('/api/hotspot/files/get-content', (req, res, next) => {
             return res.status(400).json({ message: 'A filePath is required.' });
         }
         
-        // FIX: The parameter should be 'name', not '?name'. This was the cause of the "Bad Request" error.
-        const printResponse = await apiClient.post('/file/print', {
-            'name': filePath
-        });
+        // FIX: Use a more robust two-step method to get file content.
+        // 1. Find the file by name to get its ID, using a standard GET request.
+        const fileResponse = await apiClient.get(`/file?name=${encodeURIComponent(filePath)}`);
+        const file = Array.isArray(fileResponse.data) ? fileResponse.data[0] : fileResponse.data;
 
-        if (!printResponse.data || printResponse.data.length === 0) {
-            const err = new Error(`File '${filePath}' not found or is empty.`);
+        if (!file || !file['.id']) {
+            const err = new Error(`File '${filePath}' not found on the router.`);
             err.status = 404;
             throw err;
         }
 
-        const content = printResponse.data[0]?.contents || '';
+        // 2. Use the file's ID to get its full data, including contents.
+        const contentResponse = await apiClient.get(`/file/${file['.id']}`);
+        
+        const content = contentResponse.data?.contents || '';
         res.status(200).json({ content });
     });
 });
