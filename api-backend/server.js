@@ -295,10 +295,13 @@ app.post('/api/nodemcu/login', async (req, res, next) => {
             return res.status(400).json({ message: "deviceIp, username, and password are required." });
         }
         
-        const url = `http://${deviceIp}/login`;
+        // Use the root path for the login form POST, as this is common.
+        const url = `http://${deviceIp}/`;
+        
+        // Use standard 'username' and 'password' field names.
         const loginData = new URLSearchParams({
-            user: username,
-            pass: password
+            username: username,
+            password: password
         }).toString();
 
         const response = await axios.post(url, loginData, {
@@ -306,22 +309,27 @@ app.post('/api/nodemcu/login', async (req, res, next) => {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded'
             },
-            maxRedirects: 0, // Stop redirects to capture the cookie
-            validateStatus: status => status >= 200 && status < 400, // Accept 200-399
+            maxRedirects: 0, 
+            validateStatus: status => status >= 200 && status < 400, // Accept 2xx and 3xx
         });
 
-        // A successful login on JuanFi redirects (302) and sets a cookie.
-        if (response.status === 302 && response.headers['set-cookie']) {
+        // A successful login should set a cookie, regardless of 200 OK or 302 Redirect status.
+        if (response.headers && response.headers['set-cookie']) {
             const cookies = response.headers['set-cookie'];
-            const sessionCookie = cookies[0].split(';')[0];
-            res.status(200).json({ cookie: sessionCookie });
-        } else {
-            // If it's not a redirect, it's a failed login. The page re-renders.
-            if (response.data && typeof response.data === 'string' && (response.data.toLowerCase().includes('wrong password') || response.data.toLowerCase().includes('invalid credentials'))) {
-                 throw new Error('Invalid username or password.');
+            if (cookies.length > 0) {
+                // The first cookie is typically the session cookie.
+                const sessionCookie = cookies[0].split(';')[0];
+                res.status(200).json({ cookie: sessionCookie });
+                return;
             }
-            throw new Error('Login failed: No session cookie received from device. Please check credentials.');
         }
+        
+        // If no cookie was found, the login failed.
+        if (response.data && typeof response.data === 'string' && (response.data.toLowerCase().includes('wrong password') || response.data.toLowerCase().includes('invalid credentials'))) {
+             throw new Error('Invalid username or password.');
+        }
+
+        throw new Error('Login failed: No session cookie received from device. Please check credentials.');
 
     } catch (error) {
         console.error('NodeMCU Login Error:', error.message);
