@@ -5,6 +5,7 @@
     "sidebar": {
         "dashboard": "Painel",
         "ai_scripting": "AI Scripting",
+        "terminal": "Terminal",
         "routers": "Roteadores",
         "network": "Rede",
         "pppoe_profiles": "Perfis PPPoE",
@@ -21,6 +22,7 @@
     "titles": {
         "dashboard": "Painel",
         "scripting": "Gerador de Scripts de IA",
+        "terminal": "Terminal do Roteador",
         "routers": "Gerenciamento de Roteadores",
         "network": "Gerenciamento de Rede",
         "pppoe": "Perfis PPPoE",

@@ -2,12 +2,18 @@ const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
 const https = require('https');
+const http = require('http');
+const { WebSocketServer } = require('ws');
+const { Client } = require('ssh2');
 
 const app = express();
 const port = 3002;
 
 app.use(cors());
 app.use(express.json());
+
+// Create an HTTP server from the Express app to attach the WebSocket server to
+const server = http.createServer(app);
 
 // Diagnostic endpoint to confirm the server is running
 app.get('/', (req, res) => {
@@ -68,6 +74,87 @@ const handleApiRequest = async (req, res, next, callback) => {
         next(err);
     }
 };
+
+// --- WebSocket to SSH Proxy ---
+const wss = new WebSocketServer({ server, path: '/ws/ssh' });
+
+wss.on('connection', (ws) => {
+    let sshConn = null;
+    let stream = null;
+
+    console.log('WebSocket client connected');
+
+    const closeAll = () => {
+        if (stream) stream.end();
+        if (sshConn) sshConn.end();
+        if (ws.readyState === ws.OPEN) ws.close();
+    };
+    
+    ws.on('message', (message) => {
+        try {
+            const msg = JSON.parse(message);
+
+            if (msg.type === 'auth' && !sshConn) {
+                const { host, user, password, port, term_cols, term_rows } = msg.data;
+                
+                sshConn = new Client();
+                
+                sshConn.on('ready', () => {
+                    ws.send('\r\n*** SSH Connection Established ***\r\n\r\n');
+                    
+                    sshConn.shell({ term: 'xterm-color', cols: term_cols, rows: term_rows }, (err, sshStream) => {
+                        if (err) {
+                            ws.send(`\r\n*** SSH Shell Error: ${err.message} ***\r\n`);
+                            closeAll();
+                            return;
+                        }
+                        stream = sshStream;
+
+                        stream.on('data', (data) => {
+                            if (ws.readyState === ws.OPEN) {
+                                ws.send(data.toString('utf8'));
+                            }
+                        });
+
+                        stream.on('close', () => {
+                            console.log('SSH stream closed');
+                            closeAll();
+                        });
+                    });
+                }).on('error', (err) => {
+                    console.error('SSH Connection Error:', err);
+                    if (ws.readyState === ws.OPEN) {
+                        ws.send(`\r\n*** SSH Connection Error: ${err.message} ***\r\n`);
+                    }
+                    closeAll();
+                }).connect({ host, port: 22, username: user, password }); // MikroTik SSH is typically port 22
+
+            } else if (msg.type === 'data' && stream) {
+                stream.write(msg.data);
+            } else if (msg.type === 'resize' && stream) {
+                stream.setWindow(msg.rows, msg.cols);
+            }
+
+        } catch (e) {
+            console.error('WebSocket message error:', e);
+            if(ws.readyState === ws.OPEN) {
+                ws.send(`\r\n*** Internal Error: ${e.message} ***\r\n`);
+            }
+            closeAll();
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('WebSocket client disconnected');
+        closeAll();
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        closeAll();
+    });
+});
+
 
 // --- API Endpoints ---
 
@@ -550,6 +637,6 @@ app.use((err, req, res, next) => {
 });
 
 
-app.listen(port, () => {
+server.listen(port, () => {
     console.log(`MikroTik Manager API backend running. Listening on port ${port}`);
 });

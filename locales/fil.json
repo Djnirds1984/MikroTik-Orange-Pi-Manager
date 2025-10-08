@@ -5,6 +5,7 @@
     "sidebar": {
         "dashboard": "Dashboard",
         "ai_scripting": "AI Scripting",
+        "terminal": "Terminal",
         "routers": "Mga Router",
         "network": "Network",
         "pppoe_profiles": "Mga PPPoE Profile",
@@ -21,6 +22,7 @@
     "titles": {
         "dashboard": "Dashboard",
         "scripting": "AI Script Generator",
+        "terminal": "Terminal ng Router",
         "routers": "Pamamahala ng Router",
         "network": "Pamamahala ng Network",
         "pppoe": "Mga PPPoE Profile",

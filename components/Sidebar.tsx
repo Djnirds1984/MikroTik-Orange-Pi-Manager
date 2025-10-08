@@ -40,6 +40,13 @@ const CloseIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
+const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+);
+
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
   const { t } = useLocalization();
@@ -47,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
   const navItems = [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: <EthernetIcon className="w-6 h-6" /> },
     { id: 'scripting', label: t('sidebar.ai_scripting'), icon: <EditIcon className="w-6 h-6" /> },
+    { id: 'terminal', label: t('sidebar.terminal'), icon: <TerminalIcon className="w-6 h-6" /> },
     { id: 'routers', label: t('sidebar.routers'), icon: <RouterIcon className="w-6 h-6" /> },
     { id: 'network', label: t('sidebar.network'), icon: <ShareIcon className="w-6 h-6" /> },
     { id: 'pppoe', label: t('sidebar.pppoe_profiles'), icon: <VlanIcon className="w-6 h-6" /> },

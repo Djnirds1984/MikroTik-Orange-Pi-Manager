@@ -5,6 +5,7 @@
     "sidebar": {
         "dashboard": "Dashboard",
         "ai_scripting": "AI Scripting",
+        "terminal": "Terminal",
         "routers": "Routers",
         "network": "Network",
         "pppoe_profiles": "PPPoE Profiles",
@@ -21,6 +22,7 @@
     "titles": {
         "dashboard": "Dashboard",
         "scripting": "AI Script Generator",
+        "terminal": "Router Terminal",
         "routers": "Router Management",
         "network": "Network Management",
         "pppoe": "PPPoE Profiles",

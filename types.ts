@@ -5,6 +5,7 @@ export type View =
   | 'scripting'
   | 'routers'
   | 'network'
+  | 'terminal'
   | 'pppoe'
   | 'users'
   | 'billing'

@@ -17,6 +17,7 @@ import { SalesReport } from './components/SalesReport.tsx';
 import { Network } from './components/Network.tsx';
 import { Inventory } from './components/Inventory.tsx';
 import { Company } from './components/Company.tsx';
+import { Terminal } from './components/Terminal.tsx';
 import { Loader } from './components/Loader.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
@@ -130,6 +131,8 @@ const AppContent: React.FC = () => {
         return <Routers routers={routers} onAddRouter={addRouter} onUpdateRouter={updateRouter} onDeleteRouter={deleteRouter} />;
       case 'network':
           return <Network selectedRouter={selectedRouter} />;
+      case 'terminal':
+          return <Terminal selectedRouter={selectedRouter} />;
       case 'pppoe':
           return <Pppoe selectedRouter={selectedRouter} />;
       case 'users':
@@ -181,8 +184,10 @@ const AppContent: React.FC = () => {
           setCurrentView={setCurrentView}
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
-        <div className="p-4 sm:p-8 overflow-auto">
-          {renderView()}
+        <div className="p-4 sm:p-8 overflow-auto h-full flex flex-col">
+          <div className="flex-grow">
+             {renderView()}
+          </div>
         </div>
       </main>
       <Help currentView={currentView} selectedRouter={selectedRouter} />
