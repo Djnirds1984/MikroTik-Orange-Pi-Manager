@@ -287,64 +287,95 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
-// Helper to find a file by its full path name
-const findHotspotFile = async (apiClient, fullPath) => {
-    // The 'name' property in MikroTik's file list is the full path.
-    // We query for the exact file name (which is the full path).
-    const response = await apiClient.get(`/file?name=${fullPath}`);
-    const files = Array.isArray(response.data) ? response.data : [];
-    
-    // The API should return an array with 0 or 1 item.
-    const file = files[0];
-    
-    if (!file || !file['.id']) {
-        const err = new Error(`File '${fullPath}' not found on the router.`);
-        err.status = 404;
-        throw err;
-    }
-    return file;
-};
-
-
-app.post('/api/hotspot/login-page', (req, res, next) => {
+// --- Hotspot File Browser Endpoints ---
+app.post('/api/hotspot/files/list', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const { filePath } = req.body;
-        if (!filePath || !['hotspot', 'flash/hotspot'].includes(filePath)) {
-            return res.status(400).json({ message: 'A valid filePath is required.' });
-        }
-        const fullPath = `${filePath}/login.html`;
+        const { path = 'flash' } = req.body; // path is the FULL PATH of the directory to list
+        
+        const response = await apiClient.get('/file');
+        const allFiles = Array.isArray(response.data) ? response.data : [];
 
-        // Use a single POST to /file/print with a query in the body to get file contents.
-        const printResponse = await apiClient.post('/file/print', {
-            '?name': fullPath
+        const pathWithSlash = path.endsWith('/') ? path : `${path}/`;
+        
+        const directChildrenNames = new Set();
+
+        const children = allFiles
+            .filter(file => file.name.startsWith(pathWithSlash))
+            .map(file => {
+                const remainder = file.name.substring(pathWithSlash.length);
+                const name = remainder.split('/')[0];
+                const isDir = remainder.includes('/');
+                return { name, isDir, file };
+            })
+            .filter(({name}) => {
+                if (directChildrenNames.has(name)) {
+                    return false;
+                }
+                directChildrenNames.add(name);
+                return true;
+            })
+            .map(({ name, isDir, file }) => ({
+                id: file['.id'],
+                name: name,
+                fullName: isDir ? `${pathWithSlash}${name}` : file.name,
+                type: isDir ? 'directory' : 'file',
+                size: file.size,
+                creationTime: file['creation-time'],
+            }));
+            
+        children.sort((a,b) => {
+            if (a.type === 'directory' && b.type !== 'directory') return -1;
+            if (a.type !== 'directory' && b.type === 'directory') return 1;
+            return a.name.localeCompare(b.name);
         });
 
-        // The response is an array. If the file is not found, the array will be empty.
+        res.status(200).json(children);
+    });
+});
+
+
+app.post('/api/hotspot/files/get-content', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { filePath } = req.body;
+        if (!filePath) {
+            return res.status(400).json({ message: 'A filePath is required.' });
+        }
+        
+        // FIX: The parameter should be 'name', not '?name'. This was the cause of the "Bad Request" error.
+        const printResponse = await apiClient.post('/file/print', {
+            'name': filePath
+        });
+
         if (!printResponse.data || printResponse.data.length === 0) {
-            const err = new Error(`File '${fullPath}' not found on the router.`);
+            const err = new Error(`File '${filePath}' not found or is empty.`);
             err.status = 404;
             throw err;
         }
 
-        // The property for file content from the API is 'contents'.
         const content = printResponse.data[0]?.contents || '';
         res.status(200).json({ content });
     });
 });
 
-app.post('/api/hotspot/login-page/save', (req, res, next) => {
+app.post('/api/hotspot/files/save-content', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const { content, filePath } = req.body;
-        if (typeof content !== 'string') {
-            return res.status(400).json({ message: 'A "content" string is required.' });
+        const { filePath, content } = req.body;
+        if (typeof content !== 'string' || !filePath) {
+            return res.status(400).json({ message: 'A "content" string and "filePath" are required.' });
         }
-        if (!filePath || !['hotspot', 'flash/hotspot'].includes(filePath)) {
-            return res.status(400).json({ message: 'A valid filePath is required.' });
+        
+        // Find file by name to get its ID
+        const fileResponse = await apiClient.get(`/file?name=${encodeURIComponent(filePath)}`);
+        const file = Array.isArray(fileResponse.data) ? fileResponse.data[0] : fileResponse.data;
+
+        if (!file || !file['.id']) {
+             const err = new Error(`File '${filePath}' not found on the router.`);
+             err.status = 404;
+             throw err;
         }
-        const fullPath = `${filePath}/login.html`;
-        const file = await findHotspotFile(apiClient, fullPath);
+
         await apiClient.patch(`/file/${file['.id']}`, { contents: content });
-        res.status(200).json({ message: 'Login page saved successfully.' });
+        res.status(200).json({ message: 'File saved successfully.' });
     });
 });
 

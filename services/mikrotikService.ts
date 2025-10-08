@@ -79,8 +79,11 @@ export const processPppPayment = (router: RouterConfig, paymentData: PaymentData
 export const getHotspotActiveUsers = (router: RouterConfig): Promise<HotspotActiveUser[]> => mikrotikApiPost( '/api/hotspot/active', { routerConfig: router });
 export const getHotspotHosts = (router: RouterConfig): Promise<HotspotHost[]> => mikrotikApiPost( '/api/hotspot/hosts', { routerConfig: router });
 export const removeHotspotActiveUser = (router: RouterConfig, userId: string): Promise<any> => mikrotikApiPost( '/api/hotspot/active/remove', { routerConfig: router, userId });
-export const getHotspotLoginPage = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => mikrotikApiPost('/api/hotspot/login-page', { routerConfig: router, filePath });
-export const saveHotspotLoginPage = (router: RouterConfigWithId, content: string, filePath: string): Promise<{ message: string }> => mikrotikApiPost('/api/hotspot/login-page/save', { routerConfig: router, content, filePath });
+
+// Hotspot File Editor
+export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => mikrotikApiPost('/api/hotspot/files/list', { routerConfig: router, path });
+export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => mikrotikApiPost('/api/hotspot/files/get-content', { routerConfig: router, filePath });
+export const saveHotspotFileContent = (router: RouterConfigWithId, filePath: string, content: string): Promise<{ message: string }> => mikrotikApiPost('/api/hotspot/files/save-content', { routerConfig: router, filePath, content });
 
 
 // Network
