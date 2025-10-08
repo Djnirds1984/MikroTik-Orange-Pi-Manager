@@ -295,8 +295,8 @@ app.post('/api/nodemcu/login', async (req, res, next) => {
             return res.status(400).json({ message: "deviceIp, username, and password are required." });
         }
         
-        // Use the root path for the login form POST, as this is common.
-        const url = `http://${deviceIp}/`;
+        // Use the /login path for the form POST, as this is a common endpoint.
+        const url = `http://${deviceIp}/login`;
         
         // Use standard 'username' and 'password' field names.
         const loginData = new URLSearchParams({

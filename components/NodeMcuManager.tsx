@@ -8,6 +8,68 @@ import { getSettings, saveSettings, rebootDevice, loginToDevice } from '../servi
 // FIX: Define a type for the device object that includes the dynamically added `name` property.
 type NodeMcuDevice = HotspotHost & { name: string };
 
+interface LoginModalProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onLogin: (username, password) => void;
+    deviceName: string;
+    isLoading: boolean;
+    error: string | null;
+}
+
+const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin, deviceName, isLoading, error }) => {
+    const [username, setUsername] = useState('admin');
+    const [password, setPassword] = useState('');
+
+    useEffect(() => {
+        if (isOpen) {
+            setUsername('admin');
+            setPassword('');
+        }
+    }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onLogin(username, password);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700">
+                <form onSubmit={handleSubmit}>
+                    <div className="p-6">
+                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">Login to {deviceName}</h3>
+                        {error && (
+                            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-md text-sm">
+                                {error}
+                            </div>
+                        )}
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="username" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
+                                <input type="text" name="username" id="username" value={username} onChange={e => setUsername(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" />
+                            </div>
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
+                                <input type="password" name="password" id="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
+                        <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm rounded-md">Cancel</button>
+                        <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
+                            {isLoading ? 'Logging in...' : 'Login'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
 interface NodeMcuSettingsModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -116,6 +178,12 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
     const [deviceError, setDeviceError] = useState<string | null>(null);
     const [sessions, setSessions] = useState<Record<string, string | null>>({});
 
+    // Login Modal State
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<'reboot' | 'settings' | null>(null);
+    const [loginError, setLoginError] = useState<string | null>(null);
+    const [isLoggingIn, setIsLoggingIn] = useState(false);
+
 
     const nodeMcuDevices: NodeMcuDevice[] = useMemo(() => {
         return hosts
@@ -126,36 +194,10 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
             }));
     }, [hosts]);
 
-    const handleAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings') => {
+    const executeAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings', sessionCookie: string) => {
         setLoadingAction({ deviceId: device.id, action });
         setDeviceError(null);
-
-        if (action === 'reboot' && !window.confirm(`Are you sure you want to reboot ${device.name}?`)) {
-            setLoadingAction(null);
-            return;
-        }
-
         try {
-            let sessionCookie = sessions[device.address];
-
-            if (!sessionCookie) {
-                const username = window.prompt(`Enter admin username for ${device.name}:`, 'admin');
-                if (username === null) {
-                    setLoadingAction(null);
-                    return;
-                }
-                const password = window.prompt(`Enter admin password for ${device.name}:`);
-                if (password === null) {
-                    setLoadingAction(null);
-                    return;
-                }
-                const loginResult = await loginToDevice(device.address, username, password);
-                if (!loginResult.cookie) throw new Error("Login failed, no cookie returned.");
-                
-                sessionCookie = loginResult.cookie;
-                setSessions(prev => ({ ...prev, [device.address]: sessionCookie }));
-            }
-
             if (action === 'reboot') {
                 await rebootDevice(device.address, sessionCookie);
                 alert(`${device.name} reboot command sent.`);
@@ -167,11 +209,10 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
                 setSelectedDevice(device);
                 setIsSettingsModalOpen(true);
             }
-
         } catch (error) {
             const err = error as Error & { status?: number };
             const errorMessage = err.message.toLowerCase();
-            if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('invalid username or password')) {
+            if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('invalid credentials')) {
                 setDeviceError(`Session expired or credentials were incorrect. Please try again.`);
                 setSessions(prev => ({ ...prev, [device.address]: null }));
             } else {
@@ -181,6 +222,51 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
             setLoadingAction(null);
         }
     };
+    
+    const handleAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings') => {
+        setDeviceError(null);
+        setLoginError(null);
+
+        if (action === 'reboot' && !window.confirm(`Are you sure you want to reboot ${device.name}?`)) {
+            return;
+        }
+
+        const sessionCookie = sessions[device.address];
+
+        if (!sessionCookie) {
+            setSelectedDevice(device);
+            setPendingAction(action);
+            setIsLoginModalOpen(true);
+            return;
+        }
+        
+        await executeAction(device, action, sessionCookie);
+    };
+
+    const handleLogin = async (username, password) => {
+        if (!selectedDevice) return;
+        setIsLoggingIn(true);
+        setLoginError(null);
+        try {
+            const loginResult = await loginToDevice(selectedDevice.address, username, password);
+            if (!loginResult.cookie) throw new Error("Login failed, no cookie returned.");
+            
+            const newCookie = loginResult.cookie;
+            setSessions(prev => ({ ...prev, [selectedDevice.address]: newCookie }));
+            
+            setIsLoginModalOpen(false);
+
+            if (pendingAction) {
+                await executeAction(selectedDevice, pendingAction, newCookie);
+                setPendingAction(null);
+            }
+        } catch (error) {
+            setLoginError((error as Error).message);
+        } finally {
+            setIsLoggingIn(false);
+        }
+    };
+
 
     const handleSaveSettings = async (newSettings: NodeMcuSettings) => {
         if (!selectedDevice) return;
@@ -214,6 +300,14 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
 
     return (
         <div className="space-y-6">
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => setIsLoginModalOpen(false)}
+                onLogin={handleLogin}
+                deviceName={selectedDevice?.name || ''}
+                isLoading={isLoggingIn}
+                error={loginError}
+            />
             <NodeMcuSettingsModal
                 isOpen={isSettingsModalOpen}
                 onClose={() => setIsSettingsModalOpen(false)}
