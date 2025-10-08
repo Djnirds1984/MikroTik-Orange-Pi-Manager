@@ -313,10 +313,21 @@ app.post('/api/hotspot/login-page', (req, res, next) => {
             return res.status(400).json({ message: 'A valid filePath is required.' });
         }
         const fullPath = `${filePath}/login.html`;
-        const file = await findHotspotFile(apiClient, fullPath);
-        const printResponse = await apiClient.post('/file/print', { '.id': file['.id'] });
-        // The response is an array with one object like { content: "..." }
-        const content = printResponse.data?.[0]?.content || '';
+
+        // Use a single POST to /file/print with a query in the body to get file contents.
+        const printResponse = await apiClient.post('/file/print', {
+            '?name': fullPath
+        });
+
+        // The response is an array. If the file is not found, the array will be empty.
+        if (!printResponse.data || printResponse.data.length === 0) {
+            const err = new Error(`File '${fullPath}' not found on the router.`);
+            err.status = 404;
+            throw err;
+        }
+
+        // The property for file content from the API is 'contents'.
+        const content = printResponse.data[0]?.contents || '';
         res.status(200).json({ content });
     });
 });
