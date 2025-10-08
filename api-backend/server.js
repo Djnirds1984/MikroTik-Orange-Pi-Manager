@@ -681,6 +681,45 @@ app.post('/api/network/wan-failover/configure', (req, res, next) => {
     });
 });
 
+// --- Firewall Generic CRUD ---
+const firewallCrud = (basePath) => {
+    app.post(`/api/firewall${basePath}`, (req, res, next) => { // GET rules
+        handleApiRequest(req, res, next, async (apiClient) => {
+            const response = await apiClient.get(`/ip/firewall${basePath}`);
+            const rules = Array.isArray(response.data) ? response.data : [];
+            const data = rules.map(r => ({ ...r, id: r['.id'] }));
+            res.status(200).json(data);
+        });
+    });
+    
+    app.post(`/api/firewall${basePath}/add`, (req, res, next) => { // ADD a rule
+        handleApiRequest(req, res, next, async (apiClient) => {
+            const { ruleData } = req.body;
+            const response = await apiClient.put(`/ip/firewall${basePath}`, ruleData);
+            res.status(201).json(response.data);
+        });
+    });
+    
+    app.post(`/api/firewall${basePath}/update`, (req, res, next) => { // UPDATE a rule
+        handleApiRequest(req, res, next, async (apiClient) => {
+            const { ruleId, ruleData } = req.body;
+            const response = await apiClient.patch(`/ip/firewall${basePath}/${ruleId}`, ruleData);
+            res.status(200).json(response.data);
+        });
+    });
+    
+    app.post(`/api/firewall${basePath}/delete`, (req, res, next) => { // DELETE a rule
+        handleApiRequest(req, res, next, async (apiClient) => {
+            const { ruleId } = req.body;
+            await apiClient.delete(`/ip/firewall${basePath}/${ruleId}`);
+            res.status(204).send();
+        });
+    });
+};
+
+firewallCrud('/filter');
+firewallCrud('/nat');
+firewallCrud('/mangle');
 
 // --- Global Error Handling Middleware (must be the last app.use call) ---
 // This acts as a safety net to catch any unhandled errors from the API routes

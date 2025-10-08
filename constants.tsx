@@ -215,3 +215,9 @@ export const BuildingOffice2Icon: React.FC<{ className?: string }> = ({ classNam
         <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-4.688 4.688a1.875 1.875 0 01-2.652 0l-4.688-4.688" />
     </svg>
 );
+
+export const ShieldCheckIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75l1.5 1.5 3-3.75M12 21.75c2.43 0 4.62-.66 6.346-1.802.756-.502 1.154-1.378 1.154-2.275V9.416a2.25 2.25 0 00-1.303-2.083l-5.42-2.58a2.25 2.25 0 00-1.55 0l-5.42 2.58A2.25 2.25 0 003 9.416v8.259c0 .897.398 1.773 1.154 2.275C5.88 21.09 8.07 21.75 10.5 21.75h1.5z" />
+    </svg>
+);

@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -95,6 +95,21 @@ export const setRouteProperty = (router: RouterConfig, routeId: string, properti
 export const getWanFailoverStatus = (router: RouterConfig): Promise<FailoverStatus> => mikrotikApiPost('/api/network/wan-failover/status', { routerConfig: router });
 export const configureWanFailover = (router: RouterConfig, enabled: boolean): Promise<{ message: string }> => mikrotikApiPost('/api/network/wan-failover/configure', { routerConfig: router, enabled });
 
+// Firewall
+export const getFirewallFilter = (router: RouterConfig): Promise<FirewallFilterRule[]> => mikrotikApiPost('/api/firewall/filter', { routerConfig: router });
+export const addFirewallFilter = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/filter/add', { routerConfig: router, ruleData });
+export const updateFirewallFilter = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/filter/update', { routerConfig: router, ruleId, ruleData });
+export const deleteFirewallFilter = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/filter/delete', { routerConfig: router, ruleId });
+
+export const getFirewallNat = (router: RouterConfig): Promise<FirewallNatRule[]> => mikrotikApiPost('/api/firewall/nat', { routerConfig: router });
+export const addFirewallNat = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/nat/add', { routerConfig: router, ruleData });
+export const updateFirewallNat = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/nat/update', { routerConfig: router, ruleId, ruleData });
+export const deleteFirewallNat = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/nat/delete', { routerConfig: router, ruleId });
+
+export const getFirewallMangle = (router: RouterConfig): Promise<FirewallMangleRule[]> => mikrotikApiPost('/api/firewall/mangle', { routerConfig: router });
+export const addFirewallMangle = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/mangle/add', { routerConfig: router, ruleData });
+export const updateFirewallMangle = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/mangle/update', { routerConfig: router, ruleId, ruleData });
+export const deleteFirewallMangle = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/mangle/delete', { routerConfig: router, ruleId });
 
 // System
 export const getRouterNtp = (router: RouterConfig): Promise<NtpSettings> => mikrotikApiPost( '/api/system/ntp/client', { routerConfig: router });

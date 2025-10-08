@@ -297,3 +297,56 @@ export interface WanRoute {
 export interface FailoverStatus {
     enabled: boolean;
 }
+
+// --- Firewall Types ---
+export interface FirewallRuleBase {
+    '.id': string; // MikroTik API uses .id
+    id: string; // We map .id to id for easier use
+    chain: string;
+    action: string;
+    comment?: string;
+    disabled: string; // 'true' or 'false'
+    invalid: string;
+    dynamic: string;
+    bytes: number;
+    packets: number;
+}
+
+export interface FirewallFilterRule extends FirewallRuleBase {
+    'src-address'?: string;
+    'dst-address'?: string;
+    protocol?: string;
+    'src-port'?: string;
+    'dst-port'?: string;
+    'in-interface'?: string;
+    'out-interface'?: string;
+    'connection-state'?: string;
+}
+
+export interface FirewallNatRule extends FirewallRuleBase {
+    'src-address'?: string;
+    'dst-address'?: string;
+    protocol?: string;
+    'src-port'?: string;
+    'dst-port'?: string;
+    'in-interface'?: string;
+    'out-interface'?: string;
+    'to-addresses'?: string;
+    'to-ports'?: string;
+}
+
+export interface FirewallMangleRule extends FirewallRuleBase {
+    'src-address'?: string;
+    'dst-address'?: string;
+    'new-routing-mark'?: string;
+    passthrough: string; // 'true' or 'false'
+    protocol?: string;
+}
+
+export type FirewallRule = FirewallFilterRule | FirewallNatRule | FirewallMangleRule;
+
+// Data types for POST/PATCH requests
+export type FirewallFilterRuleData = Partial<Omit<FirewallFilterRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
+export type FirewallNatRuleData = Partial<Omit<FirewallNatRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
+export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
+export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
