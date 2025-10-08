@@ -614,11 +614,31 @@ app.get('/api/update-app', async (req, res) => {
         const projectRoot = path.join(__dirname, '..');
         const archivePath = path.join(BACKUP_DIR, backupFile);
         
-        // FIX: Use system tar command for reliability and streaming output
-        const tarCommand = `tar -czf "${archivePath}" --exclude="./proxy/backups" --exclude="./.git" --exclude="**/node_modules" -C "${projectRoot}" .`;
-        await runCommandStream(tarCommand, res);
-        
-        send({ log: 'Backup complete.' });
+        await new Promise((resolve, reject) => {
+            const output = fs.createWriteStream(archivePath);
+            const archive = archiver('tar', { gzip: true });
+
+            output.on('close', () => {
+                send({ log: `Backup complete. Size: ${(archive.pointer() / 1024).toFixed(2)} KB` });
+                resolve();
+            });
+
+            archive.on('warning', (err) => {
+                send({ log: `Archive warning: ${err.message}`, isError: true });
+            });
+
+            archive.on('error', (err) => {
+                reject(new Error(`Failed to create backup archive: ${err.message}`));
+            });
+
+            archive.pipe(output);
+            archive.glob('**/*', {
+                cwd: projectRoot,
+                ignore: ['proxy/backups/**', '.git/**', '**/node_modules/**'],
+                dot: true
+            });
+            archive.finalize();
+        });
         
         send({ log: 'Pulling latest changes from git...' });
         await runCommandStream('git pull', res);
@@ -667,10 +687,13 @@ app.get('/api/rollback-app', (req, res) => {
             
             send({ log: 'Extracting backup over current application files...'});
             const projectRoot = path.join(__dirname, '..');
-            // FIX: Use system tar command for reliability and streaming output
-            const tarCommand = `tar -xzf "${backupPath}" -C "${projectRoot}"`;
-            await runCommandStream(tarCommand, res);
 
+            await tar.x({ // 'x' is for extract
+                file: backupPath,
+                cwd: projectRoot,
+                onentry: (entry) => send({ log: `Restoring: ${entry.path}` })
+            });
+            send({ log: 'Extraction complete.' });
 
             send({ log: 'Re-installing dependencies for UI server...'});
             await runCommandStream('npm install --prefix proxy', res);
