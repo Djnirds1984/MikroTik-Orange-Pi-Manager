@@ -1,4 +1,4 @@
-import type { NodeMcuSettings } from '../types.ts';
+import type { NodeMcuSettings, NodeMcuRate } from '../types.ts';
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
     // API backend is on port 3002
@@ -13,7 +13,9 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
   
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
-        throw new Error(errorData.message);
+        const error = new Error(errorData.message);
+        (error as any).status = response.status;
+        throw error;
     }
 
     // Reboot might return text/html, settings should return json
@@ -24,15 +26,47 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-
-export const getSettings = (deviceIp: string): Promise<NodeMcuSettings> => {
-    return fetchData<NodeMcuSettings>('/api/nodemcu/proxy-get', {
+export const loginToDevice = (deviceIp: string, password: string): Promise<{ cookie: string }> => {
+    return fetchData<{ cookie: string }>('/api/nodemcu/login', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/admin/config.json' }),
+        body: JSON.stringify({ deviceIp, password, user: 'admin' }),
     });
 };
 
-export const saveSettings = (deviceIp: string, settings: Partial<NodeMcuSettings>): Promise<string> => {
+
+export const getSettings = async (deviceIp: string, cookie: string): Promise<NodeMcuSettings> => {
+    const rawSettings = await fetchData<any>('/api/nodemcu/proxy-get', {
+        method: 'POST',
+        body: JSON.stringify({ deviceIp, path: '/get_config', cookie }),
+    });
+
+    // Transform the flat rate structure into an array of objects
+    const rates: NodeMcuRate[] = [];
+    if (rawSettings) {
+        for (const key in rawSettings) {
+            if (key.startsWith('rate')) {
+                const credit = parseInt(key.substring(4), 10);
+                const time = parseInt(rawSettings[key], 10);
+                if (!isNaN(credit) && credit > 0 && !isNaN(time)) {
+                    rates.push({ credit, time });
+                }
+            }
+        }
+    }
+    
+    // Sort rates by credit for consistent display
+    rates.sort((a, b) => a.credit - b.credit);
+
+    const settings: NodeMcuSettings = {
+        deviceName: rawSettings.deviceName || '',
+        portalUrl: rawSettings.portalUrl || '',
+        rates: rates,
+    };
+
+    return settings;
+};
+
+export const saveSettings = (deviceIp: string, cookie: string, settings: Partial<NodeMcuSettings>): Promise<string> => {
     // Transform settings into the flat structure the firmware likely expects
     const formData: Record<string, any> = {
         deviceName: settings.deviceName,
@@ -48,14 +82,14 @@ export const saveSettings = (deviceIp: string, settings: Partial<NodeMcuSettings
 
     return fetchData<string>('/api/nodemcu/proxy-post', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/admin/save', data: formData }),
+        body: JSON.stringify({ deviceIp, path: '/save_config', data: formData, cookie }),
     });
 };
 
 
-export const rebootDevice = (deviceIp: string): Promise<string> => {
+export const rebootDevice = (deviceIp: string, cookie: string): Promise<string> => {
     return fetchData<string>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/admin/reboot' }),
+        body: JSON.stringify({ deviceIp, path: '/reboot_device', cookie }),
     });
 };

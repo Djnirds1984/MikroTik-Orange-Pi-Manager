@@ -3,7 +3,7 @@ import type { RouterConfigWithId, HotspotHost, NodeMcuSettings, NodeMcuRate } fr
 // FIX: The `Loader` component is in its own file and not exported from `constants`.
 import { ChipIcon, ExclamationTriangleIcon, EditIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
-import { getSettings, saveSettings, rebootDevice } from '../services/nodeMcuService.ts';
+import { getSettings, saveSettings, rebootDevice, loginToDevice } from '../services/nodeMcuService.ts';
 
 // FIX: Define a type for the device object that includes the dynamically added `name` property.
 type NodeMcuDevice = HotspotHost & { name: string };
@@ -114,6 +114,7 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
     const [currentSettings, setCurrentSettings] = useState<NodeMcuSettings | null>(null);
     const [loadingAction, setLoadingAction] = useState<{deviceId: string, action: 'reboot' | 'settings'} | null>(null);
     const [deviceError, setDeviceError] = useState<string | null>(null);
+    const [sessions, setSessions] = useState<Record<string, string | null>>({});
 
 
     const nodeMcuDevices: NodeMcuDevice[] = useMemo(() => {
@@ -125,46 +126,81 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
             }));
     }, [hosts]);
 
-    // FIX: Use the extended device type in the function signature.
     const handleAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings') => {
         setLoadingAction({ deviceId: device.id, action });
         setDeviceError(null);
 
-        if (action === 'reboot') {
-            if (window.confirm(`Are you sure you want to reboot ${device.name}?`)) {
-                try {
-                    await rebootDevice(device.address);
-                    alert(`${device.name} reboot command sent.`);
-                } catch (error) {
-                    setDeviceError((error as Error).message);
-                }
-            }
+        if (action === 'reboot' && !window.confirm(`Are you sure you want to reboot ${device.name}?`)) {
+            setLoadingAction(null);
+            return;
         }
 
-        if (action === 'settings') {
-            try {
-                const settings = await getSettings(device.address);
+        try {
+            let sessionCookie = sessions[device.address];
+
+            if (!sessionCookie) {
+                const password = window.prompt(`Enter admin password for ${device.name}:`);
+                if (password === null) {
+                    setLoadingAction(null);
+                    return;
+                }
+                const loginResult = await loginToDevice(device.address, password);
+                if (!loginResult.cookie) throw new Error("Login failed, no cookie returned.");
+                
+                sessionCookie = loginResult.cookie;
+                setSessions(prev => ({ ...prev, [device.address]: sessionCookie }));
+            }
+
+            if (action === 'reboot') {
+                await rebootDevice(device.address, sessionCookie);
+                alert(`${device.name} reboot command sent.`);
+            }
+
+            if (action === 'settings') {
+                const settings = await getSettings(device.address, sessionCookie);
                 setCurrentSettings(settings);
                 setSelectedDevice(device);
                 setIsSettingsModalOpen(true);
-            } catch (error) {
-                setDeviceError((error as Error).message);
             }
+
+        } catch (error) {
+            const err = error as Error & { status?: number };
+            const errorMessage = err.message.toLowerCase();
+            if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('incorrect password')) {
+                setDeviceError(`Session expired or password was incorrect. Please try again.`);
+                setSessions(prev => ({ ...prev, [device.address]: null }));
+            } else {
+                setDeviceError(err.message);
+            }
+        } finally {
+            setLoadingAction(null);
         }
-        setLoadingAction(null);
     };
 
     const handleSaveSettings = async (newSettings: NodeMcuSettings) => {
         if (!selectedDevice) return;
+
+        const sessionCookie = sessions[selectedDevice.address];
+        if (!sessionCookie) {
+            setDeviceError("Session not found. Please close this modal and try opening settings again.");
+            return;
+        }
+
         setLoadingAction({ deviceId: selectedDevice.id, action: 'settings' });
         setDeviceError(null);
         try {
-            await saveSettings(selectedDevice.address, newSettings);
+            await saveSettings(selectedDevice.address, sessionCookie, newSettings);
             setIsSettingsModalOpen(false);
             alert('Settings saved successfully!');
         } catch(error) {
-            setDeviceError((error as Error).message);
-            // Don't close the modal on error
+            const err = error as Error & { status?: number };
+            const errorMessage = err.message.toLowerCase();
+            if (err.status === 401 || errorMessage.includes('unauthorized')) {
+                setDeviceError(`Session expired. Please close this modal and try again.`);
+                setSessions(prev => ({ ...prev, [selectedDevice.address]: null }));
+            } else {
+                setDeviceError(err.message);
+            }
         } finally {
             setLoadingAction(null);
         }
