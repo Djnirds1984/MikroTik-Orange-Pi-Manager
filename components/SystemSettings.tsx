@@ -62,63 +62,97 @@ const ThemeSwitcher = () => {
     );
 };
 
-const PanelNtpManager: React.FC = () => {
-    const [status, setStatus] = useState<PanelNtpStatus | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchData = useCallback(() => {
-        setIsLoading(true);
-        setError(null);
+const TimeSyncManager: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+    // State for Panel NTP
+    const [panelNtpStatus, setPanelNtpStatus] = useState<PanelNtpStatus | null>(null);
+    const [isNtpLoading, setIsNtpLoading] = useState(true);
+    const [isNtpSaving, setIsNtpSaving] = useState(false);
+    const [ntpError, setNtpError] = useState<string | null>(null);
+    
+    // State for Router Sync
+    const [isSyncing, setIsSyncing] = useState(false);
+    
+    // Fetch Panel NTP logic
+    const fetchNtpData = useCallback(() => {
+        setIsNtpLoading(true);
+        setNtpError(null);
         getPanelNtpStatus()
-            .then(setStatus)
-            .catch(err => {
-                setError(`Could not fetch panel NTP status. Error: ${(err as Error).message}`);
-            })
-            .finally(() => setIsLoading(false));
+            .then(setPanelNtpStatus)
+            .catch(err => setNtpError(`Could not fetch panel NTP status: ${(err as Error).message}`))
+            .finally(() => setIsNtpLoading(false));
     }, []);
+    
+    useEffect(() => { fetchNtpData() }, [fetchNtpData]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    const handleToggle = async () => {
-        if (status === null) return;
-        setIsSaving(true);
+    // handle toggle Panel NTP
+    const handleTogglePanelNtp = async () => {
+        if (panelNtpStatus === null) return;
+        setIsNtpSaving(true);
         try {
-            const result = await togglePanelNtp(!status.enabled);
+            const result = await togglePanelNtp(!panelNtpStatus.enabled);
             alert(result.message);
-            await fetchData();
+            await fetchNtpData();
         } catch (err) {
             alert(`Failed to toggle panel NTP: ${(err as Error).message}`);
         } finally {
-            setIsSaving(false);
+            setIsNtpSaving(false);
         }
     };
-    
-    if (isLoading) return <div className="flex justify-center"><Loader /></div>;
-    
+
+    // handle sync to router
+    const handleSyncTimeToRouter = async () => {
+        if (!selectedRouter) return;
+        if (window.confirm(`Are you sure you want to set the time on "${selectedRouter.name}" to the panel's current time? This will set the router's system clock.`)) {
+            setIsSyncing(true);
+            try {
+                const res = await syncTimeToRouter(selectedRouter);
+                alert(res.message);
+            } catch (err) {
+                alert(`Failed to sync time: ${(err as Error).message}`);
+            } finally {
+                setIsSyncing(false);
+            }
+        }
+    };
+
     return (
-        <div>
-            <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Panel Host NTP</h4>
-             {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
-            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                <div>
-                    <p className="font-medium text-slate-700 dark:text-slate-300">Sync Panel Host Time</p>
-                    <p className="text-xs text-slate-500">Keep the panel server's time accurate using timedatectl.</p>
-                </div>
-                <button
-                    onClick={handleToggle}
-                    disabled={isSaving || !status}
-                    className={`px-4 py-2 text-sm font-semibold rounded-lg w-28 text-white ${status?.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}
-                >
-                    {isSaving ? <Loader /> : status?.enabled ? 'Disable' : 'Enable'}
-                </button>
+        <div className="space-y-6">
+            {/* Panel Section */}
+            <div>
+                <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Panel Host NTP</h4>
+                {isNtpLoading ? <div className="flex justify-center"><Loader /></div> : ntpError ? <p className="text-red-500 text-sm mb-2">{ntpError}</p> :
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div>
+                            <p className="font-medium text-slate-700 dark:text-slate-300">Automatic Time Sync (timedatectl)</p>
+                            <p className="text-xs text-slate-500">Keep the panel server's time accurate.</p>
+                        </div>
+                        <button onClick={handleTogglePanelNtp} disabled={isNtpSaving || panelNtpStatus === null} className={`px-4 py-2 text-sm font-semibold rounded-lg w-28 text-white ${panelNtpStatus?.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
+                            {isNtpSaving ? <Loader /> : panelNtpStatus?.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                    </div>
+                }
             </div>
+            
+            {/* Router Section */}
+            {selectedRouter && (
+                <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
+                    <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Router Time Sync</h4>
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div>
+                            <p className="font-medium text-slate-700 dark:text-slate-300">Sync Time to {selectedRouter.name}</p>
+                            <p className="text-sm text-slate-500">Set the router's clock to match this panel's server time.</p>
+                        </div>
+                        <button onClick={handleSyncTimeToRouter} disabled={isSyncing} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50">
+                            {isSyncing ? <Loader /> : <ClockIcon className="w-5 h-5" />}
+                            {isSyncing ? 'Syncing...' : 'Sync Now'}
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
+
 
 const DatabaseManager: React.FC = () => {
     const [backups, setBackups] = useState<string[]>([]);
@@ -258,7 +292,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
     
     const [apiKey, setApiKey] = useState('');
     const [isKeySaving, setIsKeySaving] = useState(false);
-    const [isSyncing, setIsSyncing] = useState(false);
     
     useEffect(() => {
         setLocalSettings({ language, currency });
@@ -333,21 +366,6 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
             }
         }
     };
-    
-    const handleSyncTime = async () => {
-        if (!selectedRouter) return;
-        if (window.confirm(`Are you sure you want to set the time on "${selectedRouter.name}" to the panel's current time? This will set the router's system clock.`)) {
-            setIsSyncing(true);
-            try {
-                const res = await syncTimeToRouter(selectedRouter);
-                alert(res.message);
-            } catch (err) {
-                alert(`Failed to sync time: ${(err as Error).message}`);
-            } finally {
-                setIsSyncing(false);
-            }
-        }
-    };
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
@@ -399,27 +417,13 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Panel Time Synchronization" icon={<ClockIcon className="w-6 h-6" />}>
-                <PanelNtpManager />
+            <SettingsCard title="Time Synchronization" icon={<ClockIcon className="w-6 h-6" />}>
+                <TimeSyncManager selectedRouter={selectedRouter} />
             </SettingsCard>
 
             {selectedRouter && (
                  <SettingsCard title={`Router Management (${selectedRouter.name})`} icon={<RouterIcon className="w-6 h-6" />}>
                     <div className="space-y-6">
-                        <div>
-                            <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Time Synchronization</h4>
-                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                                <div>
-                                    <p className="font-medium text-slate-700 dark:text-slate-300">Sync Time from Panel</p>
-                                    <p className="text-sm text-slate-500">Set the router's clock to match this panel's server time.</p>
-                                </div>
-                                <button onClick={handleSyncTime} disabled={isSyncing} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50">
-                                    {isSyncing ? <Loader /> : <ClockIcon className="w-5 h-5" />}
-                                    {isSyncing ? 'Syncing...' : 'Sync Now'}
-                                </button>
-                            </div>
-                        </div>
-
                          <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
                              <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Power Actions</h4>
                             <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">

@@ -310,7 +310,8 @@ app.post('/mt-api/:routerId/system/clock/sync', getRouterConfig, async (req, res
         const year = now.getFullYear();
         const date = `${month}/${day}/${year}`; // Mmm/dd/yyyy
 
-        await req.routerInstance.patch('/system/clock', { time, date });
+        // FIX: Use `POST` to the `/system/clock/set` endpoint, which is the correct way to set the clock.
+        await req.routerInstance.post('/system/clock/set', { time, date });
 
         return { message: `Router time successfully synced to ${date} ${time}.` };
     });
