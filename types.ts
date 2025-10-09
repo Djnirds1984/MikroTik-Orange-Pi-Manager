@@ -104,9 +104,9 @@ export type HotspotUserProfileData = Omit<HotspotUserProfile, 'id'>;
 export interface PppProfile {
     id: string;
     name: string;
-    localAddress?: string;
-    remoteAddress?: string;
-    rateLimit?: string;
+    'local-address'?: string;
+    'remote-address'?: string;
+    'rate-limit'?: string;
 }
 
 export type PppProfileData = Omit<PppProfile, 'id'>;
