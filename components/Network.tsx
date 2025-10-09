@@ -1,11 +1,30 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, WanRoute, IpRoute, IpRouteData } from '../types.ts';
-import { getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getIpRoutes, addIpRoute, updateIpRoute, deleteIpRoute, getWanRoutes, setRouteProperty, getWanFailoverStatus, configureWanFailover } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, VlanInterface, Interface, IpAddress, IpRoute, IpRouteData, WanRoute, FailoverStatus } from '../types.ts';
+import { 
+    getVlans, addVlan, deleteVlan, getInterfaces, getIpAddresses, getIpRoutes, 
+    addIpRoute, updateIpRoute, deleteIpRoute, getWanRoutes, getWanFailoverStatus,
+    setRouteProperty, configureWanFailover
+} from '../services/mikrotikService.ts';
 import { generateMultiWanScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, TrashIcon, VlanIcon, ShareIcon, EditIcon, ShieldCheckIcon } from '../constants.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
 import { Firewall } from './Firewall.tsx';
+
+// Reusable ToggleSwitch component
+const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?: boolean; }> = ({ checked, onChange, disabled }) => (
+    <label className="relative inline-flex items-center cursor-pointer">
+        <input
+            type="checkbox"
+            checked={checked}
+            onChange={onChange}
+            disabled={disabled}
+            className="sr-only peer"
+        />
+        <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[--color-primary-600] disabled:opacity-50"></div>
+    </label>
+);
+
 
 // --- VLAN Add/Edit Modal ---
 interface VlanFormModalProps {
@@ -154,149 +173,6 @@ const RouteFormModal: React.FC<RouteFormModalProps> = ({ isOpen, onClose, onSave
     );
 };
 
-// --- Automated Failover Manager Sub-component ---
-const AutomatedFailoverManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [routes, setRoutes] = useState<WanRoute[]>([]);
-    const [isFailoverEnabled, setIsFailoverEnabled] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isConfiguring, setIsConfiguring] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchData = useCallback(async () => {
-        try {
-            const [wanRoutes, failoverStatus] = await Promise.all([
-                getWanRoutes(selectedRouter),
-                getWanFailoverStatus(selectedRouter)
-            ]);
-            setRoutes(wanRoutes);
-            setIsFailoverEnabled(failoverStatus.enabled);
-        } catch (err) {
-            console.error("Failed to fetch WAN data:", err);
-            setError(`Could not fetch WAN data: ${(err as Error).message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedRouter]);
-
-    useEffect(() => {
-        fetchData();
-        const interval = setInterval(fetchData, 5000); // Poll every 5 seconds
-        return () => clearInterval(interval);
-    }, [fetchData]);
-    
-    const handleToggleRoute = (routeId: string, currentDisabledState: boolean) => {
-        const newDisabledState = !currentDisabledState;
-        
-        // Optimistic UI Update
-        setRoutes(prev => prev.map(r => r.id === routeId ? { ...r, disabled: newDisabledState } : r));
-
-        // Fire and forget API call
-        setRouteProperty(selectedRouter, routeId, { disabled: newDisabledState ? 'true' : 'false' })
-            .catch(err => {
-                // On error, alert user and trigger a refetch to get the true state back.
-                alert(`Failed to update route: ${(err as Error).message}`);
-                fetchData(); // This will revert the optimistic change.
-            });
-    };
-
-    const handleToggleAutomatedFailover = async () => {
-        const newEnabledState = !isFailoverEnabled;
-        setIsConfiguring(true);
-        // Optimistic update for instant UI feedback
-        setIsFailoverEnabled(newEnabledState);
-
-        try {
-            await configureWanFailover(selectedRouter, newEnabledState);
-            // The polling will confirm the state, no need to fetch here.
-        } catch (err) {
-            alert(`Failed to configure failover: ${(err as Error).message}`);
-            // Revert optimistic update on failure
-            setIsFailoverEnabled(!newEnabledState);
-        } finally {
-            setIsConfiguring(false);
-        }
-    };
-
-    if (isLoading) {
-        return <div className="p-6 text-center text-slate-500 dark:text-slate-400">Loading WAN routes...</div>;
-    }
-
-    if (error) {
-        return <div className="p-6 text-center text-red-600 dark:text-red-400">{error}</div>;
-    }
-
-    return (
-        <div className="p-6 space-y-4">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                 <div>
-                    <h4 className="font-semibold text-slate-800 dark:text-slate-200">Enable Automated Failover</h4>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        This enables the router's built-in gateway check. It will automatically disable routes if their gateway becomes unreachable via ping.
-                    </p>
-                </div>
-                <div className="flex-shrink-0">
-                    <label className="relative inline-flex items-center cursor-pointer">
-                        <input
-                            type="checkbox"
-                            checked={isFailoverEnabled}
-                            onChange={handleToggleAutomatedFailover}
-                            disabled={isConfiguring}
-                            className="sr-only peer"
-                        />
-                        <div className="w-14 h-8 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-1 after:left-[4px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-[--color-primary-600] disabled:opacity-50"></div>
-                    </label>
-                </div>
-            </div>
-            
-            <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
-                        <tr>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Gateway</th>
-                            <th className="px-4 py-3">Distance</th>
-                            <th className="px-4 py-3">Comment</th>
-                            <th className="px-4 py-3 text-center">Manual Override</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {routes.length > 0 ? routes.map(route => (
-                            <tr key={route.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0">
-                                <td className="px-4 py-4">
-                                    {route.active ? 
-                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span> :
-                                        <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Inactive</span>
-                                    }
-                                </td>
-                                <td className="px-4 py-4 font-mono text-cyan-600 dark:text-cyan-400">{route.gateway}</td>
-                                <td className="px-4 py-4 font-mono">{route.distance}</td>
-                                <td className="px-4 py-4 text-slate-500 dark:text-slate-400 italic">{route.comment}</td>
-                                <td className="px-4 py-4 text-center">
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            checked={!route.disabled}
-                                            onChange={() => handleToggleRoute(route.id, route.disabled)}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-11 h-6 bg-slate-200 dark:bg-slate-700 rounded-full peer peer-focus:ring-2 peer-focus:ring-[--color-primary-500] peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[--color-primary-600]"></div>
-                                    </label>
-                                </td>
-                            </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan={5} className="text-center py-8 text-slate-500">
-                                    No default WAN routes found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
-};
-
 const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: boolean, onClick: () => void }> = ({ label, icon, isActive, onClick }) => (
     <button
         onClick={onClick}
@@ -310,6 +186,122 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
         <span className="ml-2">{label}</span>
     </button>
 );
+
+// --- WAN Failover Sub-component ---
+const WanFailoverManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [wanRoutes, setWanRoutes] = useState<WanRoute[]>([]);
+    const [failoverStatus, setFailoverStatus] = useState<FailoverStatus | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isToggling, setIsToggling] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchData = useCallback(async () => {
+        // Don't set loading to true on refetch, only on initial load
+        if (!wanRoutes.length) setIsLoading(true);
+        setError(null);
+        try {
+            const [routes, status] = await Promise.all([
+                getWanRoutes(selectedRouter),
+                getWanFailoverStatus(selectedRouter)
+            ]);
+            setWanRoutes(routes);
+            setFailoverStatus(status);
+        } catch (err) {
+            setError((err as Error).message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter, wanRoutes.length]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const handleToggleRoute = async (routeId: string, isDisabled: boolean) => {
+        try {
+            await setRouteProperty(selectedRouter, routeId, { disabled: isDisabled ? 'false' : 'true' });
+            await fetchData();
+        } catch (err) {
+            alert(`Failed to toggle route: ${(err as Error).message}`);
+        }
+    };
+
+    const handleToggleFailover = async () => {
+        if (!failoverStatus) return;
+        const confirmAction = window.confirm(`Are you sure you want to ${failoverStatus.enabled ? 'DISABLE' : 'ENABLE'} all WAN routes?`);
+        if (!confirmAction) return;
+        
+        setIsToggling(true);
+        try {
+            await configureWanFailover(selectedRouter, !failoverStatus.enabled);
+            await fetchData();
+        } catch (err) {
+            alert(`Failed to configure failover: ${(err as Error).message}`);
+        } finally {
+            setIsToggling(false);
+        }
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg">{error}</div>;
+
+    return (
+        <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-800 p-4 rounded-lg border border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <div>
+                    <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200">Master Failover Switch</h4>
+                    <p className="text-sm text-slate-500">Enable or disable all WAN routes that have `check-gateway` configured.</p>
+                </div>
+                <button 
+                    onClick={handleToggleFailover} 
+                    disabled={isToggling} 
+                    className={`px-4 py-2 rounded-lg font-semibold text-white w-32 ${failoverStatus?.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}
+                >
+                    {isToggling ? 'Working...' : (failoverStatus?.enabled ? 'Disable All' : 'Enable All')}
+                </button>
+            </div>
+            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
+                 <div className="p-4 border-b border-slate-200 dark:border-slate-700">
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Monitored WAN Routes</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                        <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
+                            <tr>
+                                <th className="px-6 py-3">Gateway</th>
+                                <th className="px-6 py-3">Check Method</th>
+                                <th className="px-6 py-3">Distance</th>
+                                <th className="px-6 py-3">Status</th>
+                                <th className="px-6 py-3 text-center">Enabled</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {wanRoutes.map(route => (
+                                <tr key={route.id} className="border-b dark:border-slate-700 last:border-0">
+                                    <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{route.gateway}</td>
+                                    <td className="px-6 py-4 font-mono">{route['check-gateway']}</td>
+                                    <td className="px-6 py-4 font-mono">{route.distance}</td>
+                                    <td className="px-6 py-4">
+                                        {/* FIX: Changed boolean check to string comparison for 'active' property. */}
+                                        {route.active === 'true'
+                                            ? <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">Active</span>
+                                            : <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 text-slate-600">Inactive</span>
+                                        }
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        {/* FIX: Comparisons will now be correct as the underlying type is changed to string. */}
+                                        <ToggleSwitch checked={route.disabled === 'false'} onChange={() => handleToggleRoute(route.id, route.disabled === 'true')} />
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 // --- Main Component ---
 export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
@@ -428,7 +420,8 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     };
 
     const handleDeleteRoute = async (route: IpRoute) => {
-        if (!selectedRouter || route.dynamic || route.connected) return;
+        // FIX: Changed boolean checks to string comparisons for 'dynamic' and 'connected' properties.
+        if (!selectedRouter || route.dynamic === 'true' || route.connected === 'true') return;
         if (window.confirm(`Are you sure you want to delete the route to "${route['dst-address']}"?`)) {
             setIsSubmitting(true);
             try {
@@ -491,7 +484,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         );
     }
     
-    if (error) {
+    if (error && (activeTab !== 'wan')) { // Let WAN tab handle its own errors
          return (
             <div className="flex flex-col items-center justify-center h-64 bg-white dark:bg-slate-800 rounded-lg border border-red-300 dark:border-red-700 p-6 text-center">
                 <p className="text-xl font-semibold text-red-600 dark:text-red-400">Failed to load data.</p>
@@ -503,11 +496,7 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const renderActiveTab = () => {
         switch(activeTab) {
             case 'wan':
-                return (
-                     <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
-                        <AutomatedFailoverManager selectedRouter={selectedRouter} />
-                    </div>
-                );
+                return <WanFailoverManager selectedRouter={selectedRouter} />;
             case 'routes':
                  return (
                     <div className="space-y-8">
@@ -532,15 +521,17 @@ export const Network: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                                                 <td className="px-6 py-4 font-mono text-slate-800 dark:text-slate-200">{route['dst-address']}</td>
                                                 <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{route.gateway}</td>
                                                 <td className="px-6 py-4 font-mono">{route.distance}</td>
+                                                {/* FIX: Changed boolean checks to string comparisons for 'active' and 'disabled' properties. */}
                                                 <td className="px-6 py-4"><div className="flex items-center flex-wrap gap-1">
-                                                    {route.active && !route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span>}
-                                                    {!route.active && !route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-400">Inactive</span>}
-                                                    {route.disabled && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Disabled</span>}
+                                                    {route.active === 'true' && route.disabled === 'false' && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Active</span>}
+                                                    {route.active === 'false' && route.disabled === 'false' && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600 text-slate-600 dark:text-slate-400">Inactive</span>}
+                                                    {route.disabled === 'true' && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400">Disabled</span>}
                                                 </div></td>
                                                 <td className="px-6 py-4 text-slate-500 italic">{route.comment}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button onClick={() => { setEditingRoute(route); setIsRouteModalOpen(true); }} disabled={route.dynamic || route.connected} className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 rounded-md disabled:opacity-50"><EditIcon className="h-5 w-5" /></button>
-                                                    <button onClick={() => handleDeleteRoute(route)} disabled={isSubmitting || route.dynamic || route.connected} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50"><TrashIcon className="h-5 w-5" /></button>
+                                                    {/* FIX: Changed boolean checks to string comparisons for 'dynamic' and 'connected' properties. */}
+                                                    <button onClick={() => { setEditingRoute(route); setIsRouteModalOpen(true); }} disabled={route.dynamic === 'true' || route.connected === 'true'} className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 rounded-md disabled:opacity-50"><EditIcon className="h-5 w-5" /></button>
+                                                    <button onClick={() => handleDeleteRoute(route)} disabled={isSubmitting || route.dynamic === 'true' || route.connected === 'true'} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50"><TrashIcon className="h-5 w-5" /></button>
                                                 </td>
                                             </tr>
                                         ))}

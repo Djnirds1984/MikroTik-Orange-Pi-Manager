@@ -147,12 +147,13 @@ export interface IpRoute {
     'dst-address': string;
     gateway?: string;
     distance: string;
-    active: boolean;
-    disabled: boolean;
+    // FIX: Changed boolean types to string to match MikroTik API response format.
+    active: string;
+    disabled: string;
     comment?: string;
-    static: boolean;
-    dynamic: boolean;
-    connected: boolean;
+    static: string;
+    dynamic: string;
+    connected: string;
 }
 
 export type IpRouteData = {
@@ -342,8 +343,9 @@ export interface WanRoute {
     gateway: string;
     distance: string;
     checkGateway: string;
-    active: boolean;
-    disabled: boolean;
+    // FIX: Changed boolean types to string to match MikroTik API response format.
+    active: string;
+    disabled: string;
     comment?: string;
 }
 

@@ -145,6 +145,56 @@ app.post('/mt-api/test-connection', async (req, res) => {
     });
 });
 
+// --- Custom Handlers for WAN Failover Feature ---
+
+// Custom handler for WAN routes
+app.get('/mt-api/:routerId/ip/wan-routes', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const response = await req.routerInstance.get('/ip/route');
+        const allRoutes = Array.isArray(response.data) ? response.data : [];
+        // A WAN route for failover is identified by having 'check-gateway' enabled.
+        const wanRoutes = allRoutes.filter(route => route['check-gateway']);
+        return wanRoutes;
+    });
+});
+
+// Custom handler for failover status
+app.get('/mt-api/:routerId/ip/wan-failover-status', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const response = await req.routerInstance.get('/ip/route');
+        const allRoutes = Array.isArray(response.data) ? response.data : [];
+        const failoverRoutesCount = allRoutes.filter(route => route['check-gateway'] && route.disabled === 'false').length;
+        // Consider failover "enabled" if there's at least one active WAN route being checked.
+        return { enabled: failoverRoutesCount > 0 };
+    });
+});
+
+// Custom handler for master-enabling/disabling failover
+app.post('/mt-api/:routerId/ip/wan-failover', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { enabled } = req.body;
+        
+        const { data: allRoutes } = await req.routerInstance.get('/ip/route');
+        const wanRoutes = Array.isArray(allRoutes) ? allRoutes.filter(route => route['check-gateway']) : [];
+        
+        if (wanRoutes.length === 0) {
+            return { message: 'No WAN/Failover routes with check-gateway found to configure.' };
+        }
+        
+        // Use Promise.all to update all routes concurrently
+        const updatePromises = wanRoutes.map(route => {
+            return req.routerInstance.patch(`/ip/route/${route['.id']}`, {
+                disabled: enabled ? 'false' : 'true'
+            });
+        });
+        
+        await Promise.all(updatePromises);
+        
+        return { message: `All WAN Failover routes have been ${enabled ? 'enabled' : 'disabled'}.` };
+    });
+});
+
+
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
     await handleApiRequest(req, res, async () => {

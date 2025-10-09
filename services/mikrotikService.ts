@@ -182,6 +182,7 @@ export const configureWanFailover = (router: RouterConfigWithId, enabled: boolea
 };
 
 
+
 // --- PPP ---
 export const getPppProfiles = (router: RouterConfigWithId): Promise<PppProfile[]> => {
     return fetchMikrotikData<PppProfile[]>(router, '/ppp/profile');
@@ -192,7 +193,9 @@ export const addPppProfile = (router: RouterConfigWithId, profileData: PppProfil
 };
 
 export const updatePppProfile = (router: RouterConfigWithId, profileData: PppProfile): Promise<any> => {
-    return fetchMikrotikData(router, `/ppp/profile/${encodeURIComponent(profileData.id)}`, { method: 'PATCH', body: JSON.stringify(profileData) });
+    // FIX: Remove 'id' and '.id' from the body as it's not a valid parameter for MikroTik's API on update.
+    const { id, '.id': dotId, ...dataToSend } = profileData as any;
+    return fetchMikrotikData(router, `/ppp/profile/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 
 export const deletePppProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
@@ -212,7 +215,9 @@ export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretDa
 };
 
 export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
-    return fetchMikrotikData(router, `/ppp/secret/${encodeURIComponent(secretData.id)}`, { method: 'PATCH', body: JSON.stringify(secretData) });
+    // FIX: Remove 'id' and '.id' from the body.
+    const { id, '.id': dotId, ...dataToSend } = secretData as any;
+    return fetchMikrotikData(router, `/ppp/secret/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 
 export const deletePppSecret = (router: RouterConfigWithId, secretId: string): Promise<any> => {
@@ -263,7 +268,9 @@ export const addHotspotProfile = (router: RouterConfigWithId, profileData: Hotsp
     return fetchMikrotikData(router, '/ip/hotspot/profile', { method: 'POST', body: JSON.stringify(profileData) });
 };
 export const updateHotspotProfile = (router: RouterConfigWithId, profile: HotspotProfile): Promise<any> => {
-    return fetchMikrotikData(router, `/ip/hotspot/profile/${encodeURIComponent(profile.id)}`, { method: 'PATCH', body: JSON.stringify(profile) });
+    // FIX: Remove 'id' and '.id' from the body.
+    const { id, '.id': dotId, ...dataToSend } = profile as any;
+    return fetchMikrotikData(router, `/ip/hotspot/profile/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 export const deleteHotspotProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
     return fetchMikrotikData(router, `/ip/hotspot/profile/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
@@ -276,7 +283,9 @@ export const addHotspotUserProfile = (router: RouterConfigWithId, profileData: H
     return fetchMikrotikData(router, '/ip/hotspot/user/profile', { method: 'POST', body: JSON.stringify(profileData) });
 };
 export const updateHotspotUserProfile = (router: RouterConfigWithId, profile: HotspotUserProfile): Promise<any> => {
-    return fetchMikrotikData(router, `/ip/hotspot/user/profile/${encodeURIComponent(profile.id)}`, { method: 'PATCH', body: JSON.stringify(profile) });
+    // FIX: Remove 'id' and '.id' from the body.
+    const { id, '.id': dotId, ...dataToSend } = profile as any;
+    return fetchMikrotikData(router, `/ip/hotspot/user/profile/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 export const deleteHotspotUserProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
     return fetchMikrotikData(router, `/ip/hotspot/user/profile/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
