@@ -2,7 +2,7 @@ import type { PanelHostStatus, PanelNtpStatus } from '../types.ts';
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
     // The panel API is on port 3001
-    const apiBaseUrl = `http://${window.location.hostname}:3001`;
+    const apiBaseUrl = ``;
     const response = await fetch(`${apiBaseUrl}${path}`, {
         headers: {
             'Content-Type': 'application/json',

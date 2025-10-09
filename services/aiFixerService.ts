@@ -1,5 +1,5 @@
 export const getFileContent = async (): Promise<string> => {
-    const apiBaseUrl = `http://${window.location.hostname}:3001`;
+    const apiBaseUrl = ``;
     const response = await fetch(`${apiBaseUrl}/api/fixer/file-content`);
     if (!response.ok) {
         throw new Error('Failed to fetch backend file content.');
@@ -8,7 +8,7 @@ export const getFileContent = async (): Promise<string> => {
 };
 
 export const applyFix = (newCode: string): Promise<Response> => {
-    const apiBaseUrl = `http://${window.location.hostname}:3001`;
+    const apiBaseUrl = ``;
     return fetch(`${apiBaseUrl}/api/fixer/apply-fix`, {
         method: 'POST',
         headers: {

@@ -1,7 +1,7 @@
 import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams, HotspotProfile, HotspotProfileData, HotspotUserProfile, HotspotUserProfileData, PppServer } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
-const API_BASE_URL = `http://${window.location.hostname}:3002`;
+const API_BASE_URL = ``;
 
 // A generic fetcher for MikroTik API POST calls
 const mikrotikApiPost = async <T>(path: string, body: Record<string, any>): Promise<T> => {

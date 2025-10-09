@@ -69,7 +69,7 @@ export const Terminal: React.FC<{ selectedRouter: RouterConfigWithId | null }> =
         term.write(`Attempting to connect to ${selectedRouter.name} (${selectedRouter.host})...\r\n`);
         setStatus('connecting');
 
-        const ws = new WebSocket(`ws://${window.location.hostname}:3002/ws/ssh`);
+        const ws = new WebSocket(`ws://${window.location.host}/ws/ssh`);
         wsRef.current = ws;
 
         ws.onopen = () => {
