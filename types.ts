@@ -361,6 +361,14 @@ export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.i
 export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
 
 // --- NodeMCU Types ---
+export interface NodeMcuDevice {
+  id: string;
+  name: string;
+  ip: string;
+  username: string;
+  password?: string;
+}
+
 export interface NodeMcuSettings {
   api_key: string;
   auto_restart_minutes: number;

@@ -25,28 +25,35 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-export const getNodeMcuSettings = (deviceIp: string, apiKey: string): Promise<NodeMcuSettings> => {
-    return fetchData<NodeMcuSettings>('/api/nodemcu/proxy-get', {
+export const loginToDevice = (deviceIp: string, username: string, password?: string): Promise<{ success: boolean; cookie: string; }> => {
+    return fetchData<{ success: boolean; cookie: string; }>('/api/nodemcu/login', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/get_config', apiKey }),
+        body: JSON.stringify({ deviceIp, username, password }),
     });
 };
 
-export const saveNodeMcuSettings = (deviceIp: string, apiKey: string, settings: Partial<NodeMcuSettings>): Promise<{ message: string }> => {
+export const getNodeMcuSettings = (deviceIp: string, cookie: string): Promise<NodeMcuSettings> => {
+    return fetchData<NodeMcuSettings>('/api/nodemcu/proxy-get', {
+        method: 'POST',
+        body: JSON.stringify({ deviceIp, path: '/get_config', cookie }),
+    });
+};
+
+export const saveNodeMcuSettings = (deviceIp: string, cookie: string, settings: Partial<NodeMcuSettings>): Promise<{ message: string }> => {
     return fetchData<{ message: string }>('/api/nodemcu/proxy-post', {
         method: 'POST',
         body: JSON.stringify({
             deviceIp,
             path: '/save_config',
-            apiKey,
+            cookie,
             data: settings
         }),
     });
 };
 
-export const generateNodeMcuApiKey = (deviceIp: string, apiKey: string): Promise<{ new_api_key: string }> => {
-    return fetchData<{ new_api_key: string }>('/api/nodemcu/proxy-get', {
+export const rebootNodeMcu = (deviceIp: string, cookie: string): Promise<{ message: string }> => {
+    return fetchData<{ message: string }>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/generate_api_key', apiKey }),
+        body: JSON.stringify({ deviceIp, path: '/reboot', cookie }),
     });
 };

@@ -453,19 +453,59 @@ app.post('/api/hotspot/files/save-content', (req, res, next) => {
 
 
 // --- NodeMCU Proxy Endpoints ---
+app.post('/api/nodemcu/login', async (req, res, next) => {
+    try {
+        const { deviceIp, username, password } = req.body;
+        if (!deviceIp || !username) {
+            return res.status(400).json({ message: "deviceIp and username are required." });
+        }
+
+        const loginData = new URLSearchParams();
+        loginData.append('user', username);
+        loginData.append('pass', password || '');
+
+        const response = await axios.post(`http://${deviceIp}/login`, loginData, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            timeout: 5000,
+        });
+
+        const setCookieHeader = response.headers['set-cookie'];
+        if (!setCookieHeader || setCookieHeader.length === 0) {
+            // Check body for specific error messages from some firmwares
+            if (response.data && typeof response.data === 'string' && response.data.toLowerCase().includes('invalid')) {
+                throw new Error('Login failed: Invalid credentials.');
+            }
+            throw new Error('Login failed: No session cookie received from device. Please check credentials.');
+        }
+
+        const sessionCookie = setCookieHeader[0].split(';')[0];
+        res.status(200).json({ success: true, cookie: sessionCookie });
+
+    } catch (error) {
+        console.error('NodeMCU Login Error:', error.message);
+        const status = error.response?.status || 500;
+        const message = error.code === 'ECONNABORTED' ? 'Request timed out. Device may be offline or unresponsive.' : (error.message || "An unknown error occurred.");
+        const err = new Error(`NodeMCU Login Error: ${message}`);
+        err.status = status;
+        next(err);
+    }
+});
+
+
 app.post('/api/nodemcu/proxy-get', async (req, res, next) => {
     try {
-        const { deviceIp, path, apiKey } = req.body;
-        if (!deviceIp || !path || !apiKey) {
-            return res.status(400).json({ message: "deviceIp, path, and apiKey are required." });
+        const { deviceIp, path, cookie } = req.body;
+        if (!deviceIp || !path || !cookie) {
+            return res.status(400).json({ message: "deviceIp, path, and cookie are required." });
         }
         if (!path.startsWith('/')) {
             return res.status(400).json({ message: "Path must start with /" });
         }
 
-        const url = `http://${deviceIp}${path}?api_key=${encodeURIComponent(apiKey)}`;
+        const url = `http://${deviceIp}${path}`;
+        const headers = { 'Cookie': cookie };
 
-        const response = await axios.get(url, { timeout: 5000 });
+        const response = await axios.get(url, { headers, timeout: 5000 });
         res.status(response.status).json(response.data);
 
     } catch (error) {
@@ -480,17 +520,20 @@ app.post('/api/nodemcu/proxy-get', async (req, res, next) => {
 
 app.post('/api/nodemcu/proxy-post', async (req, res, next) => {
     try {
-        const { deviceIp, path, data, apiKey } = req.body;
-        if (!deviceIp || !path || !data || !apiKey) {
-            return res.status(400).json({ message: "deviceIp, path, data, and apiKey are required." });
+        const { deviceIp, path, data, cookie } = req.body;
+        if (!deviceIp || !path || !data || !cookie) {
+            return res.status(400).json({ message: "deviceIp, path, data, and cookie are required." });
         }
         if (!path.startsWith('/')) {
             return res.status(400).json({ message: "Path must start with /" });
         }
 
-        const url = `http://${deviceIp}${path}?api_key=${encodeURIComponent(apiKey)}`;
+        const url = `http://${deviceIp}${path}`;
         const urlEncodedData = new URLSearchParams(data).toString();
-        const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+        const headers = {
+            'Cookie': cookie,
+            'Content-Type': 'application/x-www-form-urlencoded'
+        };
 
         const response = await axios.post(url, urlEncodedData, {
             timeout: 5000,
