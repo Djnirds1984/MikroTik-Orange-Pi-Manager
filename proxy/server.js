@@ -181,6 +181,25 @@ async function initDb() {
             await db.exec('PRAGMA user_version = 7;');
             user_version = 7;
         }
+        
+        if (user_version < 8) {
+            console.log('Applying migration v8 (Verifying routerId columns)...');
+            
+            const salesCols = await db.all("PRAGMA table_info(sales_records);");
+            if (!salesCols.some(c => c.name === 'routerId')) {
+                console.log('Adding missing routerId column to sales_records.');
+                await db.exec('ALTER TABLE sales_records ADD COLUMN routerId TEXT;');
+            }
+
+            const billingCols = await db.all("PRAGMA table_info(billing_plans);");
+            if (!billingCols.some(c => c.name === 'routerId')) {
+                console.log('Adding missing routerId column to billing_plans.');
+                await db.exec('ALTER TABLE billing_plans ADD COLUMN routerId TEXT;');
+            }
+            
+            await db.exec('PRAGMA user_version = 8;');
+            user_version = 8;
+        }
 
 
     } catch (err) {
