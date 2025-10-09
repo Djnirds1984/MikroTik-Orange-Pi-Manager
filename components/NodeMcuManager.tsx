@@ -3,28 +3,26 @@ import type { RouterConfigWithId, HotspotHost, NodeMcuSettings, NodeMcuRate } fr
 // FIX: The `Loader` component is in its own file and not exported from `constants`.
 import { ChipIcon, ExclamationTriangleIcon, EditIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
-import { getSettings, saveSettings, rebootDevice, loginToDevice } from '../services/nodeMcuService.ts';
+import { getSettings, saveSettings, rebootDevice } from '../services/nodeMcuService.ts';
 
 // FIX: Define a type for the device object that includes the dynamically added `name` property.
 type NodeMcuDevice = HotspotHost & { name: string };
 
-interface LoginModalProps {
+interface ApiKeyModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onLogin: (username, password) => void;
+    onSave: (apiKey: string) => void;
     deviceName: string;
     isLoading: boolean;
     error: string | null;
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin, deviceName, isLoading, error }) => {
-    const [username, setUsername] = useState('admin');
-    const [password, setPassword] = useState('');
+const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, onSave, deviceName, isLoading, error }) => {
+    const [apiKey, setApiKey] = useState('');
 
     useEffect(() => {
         if (isOpen) {
-            setUsername('admin');
-            setPassword('');
+            setApiKey('');
         }
     }, [isOpen]);
 
@@ -32,7 +30,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin, devic
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onLogin(username, password);
+        onSave(apiKey);
     };
 
     return (
@@ -40,7 +38,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin, devic
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-sm border border-slate-200 dark:border-slate-700">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">Login to {deviceName}</h3>
+                        <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">API Key for {deviceName}</h3>
                         {error && (
                             <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-md text-sm">
                                 {error}
@@ -48,19 +46,16 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin, devic
                         )}
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor="username" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Username</label>
-                                <input type="text" name="username" id="username" value={username} onChange={e => setUsername(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" />
-                            </div>
-                            <div>
-                                <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label>
-                                <input type="password" name="password" id="password" value={password} onChange={e => setPassword(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" />
+                                <label htmlFor="apiKey" className="block text-sm font-medium text-slate-700 dark:text-slate-300">API Key</label>
+                                <input type="password" name="apiKey" id="apiKey" value={apiKey} onChange={e => setApiKey(e.target.value)} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" />
+                                <p className="text-xs text-slate-500 mt-1">Find this in your vendo machine's admin panel.</p>
                             </div>
                         </div>
                     </div>
                     <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end space-x-3 rounded-b-lg">
                         <button type="button" onClick={onClose} disabled={isLoading} className="px-4 py-2 text-sm rounded-md">Cancel</button>
                         <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm rounded-md text-white bg-[--color-primary-600] hover:bg-[--color-primary-500]">
-                            {isLoading ? 'Logging in...' : 'Login'}
+                            {isLoading ? 'Saving...' : 'Save & Continue'}
                         </button>
                     </div>
                 </form>
@@ -178,11 +173,10 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
     const [deviceError, setDeviceError] = useState<string | null>(null);
     const [sessions, setSessions] = useState<Record<string, string | null>>({});
 
-    // Login Modal State
-    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+    // API Key Modal State
+    const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<'reboot' | 'settings' | null>(null);
-    const [loginError, setLoginError] = useState<string | null>(null);
-    const [isLoggingIn, setIsLoggingIn] = useState(false);
+    const [isSavingKey, setIsSavingKey] = useState(false);
 
 
     const nodeMcuDevices: NodeMcuDevice[] = useMemo(() => {
@@ -194,17 +188,17 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
             }));
     }, [hosts]);
 
-    const executeAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings', sessionCookie: string) => {
+    const executeAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings', apiKey: string) => {
         setLoadingAction({ deviceId: device.id, action });
         setDeviceError(null);
         try {
             if (action === 'reboot') {
-                await rebootDevice(device.address, sessionCookie);
+                await rebootDevice(device.address, apiKey);
                 alert(`${device.name} reboot command sent.`);
             }
 
             if (action === 'settings') {
-                const settings = await getSettings(device.address, sessionCookie);
+                const settings = await getSettings(device.address, apiKey);
                 setCurrentSettings(settings);
                 setSelectedDevice(device);
                 setIsSettingsModalOpen(true);
@@ -212,9 +206,10 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
         } catch (error) {
             const err = error as Error & { status?: number };
             const errorMessage = err.message.toLowerCase();
+            // 401 Unauthorized usually means a bad API key
             if (err.status === 401 || errorMessage.includes('unauthorized') || errorMessage.includes('invalid credentials')) {
-                setDeviceError(`Session expired or credentials were incorrect. Please try again.`);
-                setSessions(prev => ({ ...prev, [device.address]: null }));
+                setDeviceError(`Invalid or expired API Key for ${device.name}. Please enter it again.`);
+                setSessions(prev => ({ ...prev, [device.address]: null })); // Clear the bad key
             } else {
                 setDeviceError(err.message);
             }
@@ -225,54 +220,42 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
     
     const handleAction = async (device: NodeMcuDevice, action: 'reboot' | 'settings') => {
         setDeviceError(null);
-        setLoginError(null);
 
         if (action === 'reboot' && !window.confirm(`Are you sure you want to reboot ${device.name}?`)) {
             return;
         }
 
-        const sessionCookie = sessions[device.address];
+        const apiKey = sessions[device.address];
 
-        if (!sessionCookie) {
+        if (!apiKey) {
             setSelectedDevice(device);
             setPendingAction(action);
-            setIsLoginModalOpen(true);
+            setIsApiKeyModalOpen(true);
             return;
         }
         
-        await executeAction(device, action, sessionCookie);
+        await executeAction(device, action, apiKey);
     };
 
-    const handleLogin = async (username, password) => {
-        if (!selectedDevice) return;
-        setIsLoggingIn(true);
-        setLoginError(null);
-        try {
-            const loginResult = await loginToDevice(selectedDevice.address, username, password);
-            if (!loginResult.cookie) throw new Error("Login failed, no cookie returned.");
-            
-            const newCookie = loginResult.cookie;
-            setSessions(prev => ({ ...prev, [selectedDevice.address]: newCookie }));
-            
-            setIsLoginModalOpen(false);
+    const handleSaveApiKey = async (apiKey: string) => {
+        if (!selectedDevice || !pendingAction) return;
 
-            if (pendingAction) {
-                await executeAction(selectedDevice, pendingAction, newCookie);
-                setPendingAction(null);
-            }
-        } catch (error) {
-            setLoginError((error as Error).message);
-        } finally {
-            setIsLoggingIn(false);
-        }
+        setIsSavingKey(true);
+        setSessions(prev => ({ ...prev, [selectedDevice.address]: apiKey }));
+        setIsApiKeyModalOpen(false);
+        
+        await executeAction(selectedDevice, pendingAction, apiKey);
+        
+        setPendingAction(null);
+        setIsSavingKey(false);
     };
 
 
     const handleSaveSettings = async (newSettings: NodeMcuSettings) => {
         if (!selectedDevice) return;
 
-        const sessionCookie = sessions[selectedDevice.address];
-        if (!sessionCookie) {
+        const apiKey = sessions[selectedDevice.address];
+        if (!apiKey) {
             setDeviceError("Session not found. Please close this modal and try opening settings again.");
             return;
         }
@@ -280,14 +263,14 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
         setLoadingAction({ deviceId: selectedDevice.id, action: 'settings' });
         setDeviceError(null);
         try {
-            await saveSettings(selectedDevice.address, sessionCookie, newSettings);
+            await saveSettings(selectedDevice.address, apiKey, newSettings);
             setIsSettingsModalOpen(false);
             alert('Settings saved successfully!');
         } catch(error) {
             const err = error as Error & { status?: number };
             const errorMessage = err.message.toLowerCase();
             if (err.status === 401 || errorMessage.includes('unauthorized')) {
-                setDeviceError(`Session expired. Please close this modal and try again.`);
+                setDeviceError(`API Key was rejected. Please close this modal and try again.`);
                 setSessions(prev => ({ ...prev, [selectedDevice.address]: null }));
             } else {
                 setDeviceError(err.message);
@@ -300,13 +283,13 @@ export const NodeMcuManager: React.FC<NodeMcuManagerProps> = ({ hosts, selectedR
 
     return (
         <div className="space-y-6">
-            <LoginModal
-                isOpen={isLoginModalOpen}
-                onClose={() => setIsLoginModalOpen(false)}
-                onLogin={handleLogin}
+            <ApiKeyModal
+                isOpen={isApiKeyModalOpen}
+                onClose={() => setIsApiKeyModalOpen(false)}
+                onSave={handleSaveApiKey}
                 deviceName={selectedDevice?.name || ''}
-                isLoading={isLoggingIn}
-                error={loginError}
+                isLoading={isSavingKey}
+                error={null}
             />
             <NodeMcuSettingsModal
                 isOpen={isSettingsModalOpen}

@@ -26,18 +26,10 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-export const loginToDevice = (deviceIp: string, username: string, password: string): Promise<{ cookie: string }> => {
-    return fetchData<{ cookie: string }>('/api/nodemcu/login', {
-        method: 'POST',
-        body: JSON.stringify({ deviceIp, username, password }),
-    });
-};
-
-
-export const getSettings = async (deviceIp: string, cookie: string): Promise<NodeMcuSettings> => {
+export const getSettings = async (deviceIp: string, apiKey: string): Promise<NodeMcuSettings> => {
     const rawSettings = await fetchData<any>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/get_config', cookie }),
+        body: JSON.stringify({ deviceIp, path: '/get_config', apiKey }),
     });
 
     // Transform the flat rate structure into an array of objects
@@ -66,7 +58,7 @@ export const getSettings = async (deviceIp: string, cookie: string): Promise<Nod
     return settings;
 };
 
-export const saveSettings = (deviceIp: string, cookie: string, settings: Partial<NodeMcuSettings>): Promise<string> => {
+export const saveSettings = (deviceIp: string, apiKey: string, settings: Partial<NodeMcuSettings>): Promise<string> => {
     // Transform settings into the flat structure the firmware likely expects
     const formData: Record<string, any> = {
         deviceName: settings.deviceName,
@@ -82,14 +74,14 @@ export const saveSettings = (deviceIp: string, cookie: string, settings: Partial
 
     return fetchData<string>('/api/nodemcu/proxy-post', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/save_config', data: formData, cookie }),
+        body: JSON.stringify({ deviceIp, path: '/save_config', data: formData, apiKey }),
     });
 };
 
 
-export const rebootDevice = (deviceIp: string, cookie: string): Promise<string> => {
+export const rebootDevice = (deviceIp: string, apiKey: string): Promise<string> => {
     return fetchData<string>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/reboot_device', cookie }),
+        body: JSON.stringify({ deviceIp, path: '/reboot_device', apiKey }),
     });
 };

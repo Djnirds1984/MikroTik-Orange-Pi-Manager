@@ -453,78 +453,19 @@ app.post('/api/hotspot/files/save-content', (req, res, next) => {
 
 
 // --- NodeMCU Proxy Endpoints ---
-app.post('/api/nodemcu/login', async (req, res, next) => {
-    try {
-        const { deviceIp, username, password } = req.body;
-        if (!deviceIp || !username || password === undefined) {
-            return res.status(400).json({ message: "deviceIp, username, and password are required." });
-        }
-        
-        // Use the /login path for the form POST, as this is a common endpoint.
-        const url = `http://${deviceIp}/login`;
-        
-        // Use standard 'username' and 'password' field names.
-        const loginData = new URLSearchParams({
-            username: username,
-            password: password
-        }).toString();
-
-        const response = await axios.post(url, loginData, {
-            timeout: 5000,
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            maxRedirects: 0, 
-            validateStatus: status => status >= 200 && status < 400, // Accept 2xx and 3xx
-        });
-
-        // A successful login should set a cookie, regardless of 200 OK or 302 Redirect status.
-        if (response.headers && response.headers['set-cookie']) {
-            const cookies = response.headers['set-cookie'];
-            if (cookies.length > 0) {
-                // The first cookie is typically the session cookie.
-                const sessionCookie = cookies[0].split(';')[0];
-                res.status(200).json({ cookie: sessionCookie });
-                return;
-            }
-        }
-        
-        // If no cookie was found, the login failed.
-        if (response.data && typeof response.data === 'string' && (response.data.toLowerCase().includes('wrong password') || response.data.toLowerCase().includes('invalid credentials'))) {
-             throw new Error('Invalid username or password.');
-        }
-
-        throw new Error('Login failed: No session cookie received from device. Please check credentials.');
-
-    } catch (error) {
-        console.error('NodeMCU Login Error:', error.message);
-        const status = error.response?.status || 500;
-        let message = error.code === 'ECONNABORTED' ? 'Request timed out. Device may be offline or unresponsive.' : (error.response?.data?.message || error.message);
-        
-        const err = new Error(`NodeMCU Login Error: ${message}`);
-        err.status = status;
-        next(err);
-    }
-});
-
-
 app.post('/api/nodemcu/proxy-get', async (req, res, next) => {
     try {
-        const { deviceIp, path, cookie } = req.body;
-        if (!deviceIp || !path) {
-            return res.status(400).json({ message: "deviceIp and path are required." });
+        const { deviceIp, path, apiKey } = req.body;
+        if (!deviceIp || !path || !apiKey) {
+            return res.status(400).json({ message: "deviceIp, path, and apiKey are required." });
         }
         if (!path.startsWith('/')) {
             return res.status(400).json({ message: "Path must start with /" });
         }
 
-        const url = `http://${deviceIp}${path}`;
-        const headers = {};
-        if (cookie) {
-            headers['Cookie'] = cookie;
-        }
+        const url = `http://${deviceIp}${path}?api_key=${encodeURIComponent(apiKey)}`;
 
-        const response = await axios.get(url, { timeout: 5000, headers });
+        const response = await axios.get(url, { timeout: 5000 });
         res.status(response.status).json(response.data);
 
     } catch (error) {
@@ -539,20 +480,17 @@ app.post('/api/nodemcu/proxy-get', async (req, res, next) => {
 
 app.post('/api/nodemcu/proxy-post', async (req, res, next) => {
     try {
-        const { deviceIp, path, data, cookie } = req.body;
-        if (!deviceIp || !path || !data) {
-            return res.status(400).json({ message: "deviceIp, path, and data are required." });
+        const { deviceIp, path, data, apiKey } = req.body;
+        if (!deviceIp || !path || !data || !apiKey) {
+            return res.status(400).json({ message: "deviceIp, path, data, and apiKey are required." });
         }
         if (!path.startsWith('/')) {
             return res.status(400).json({ message: "Path must start with /" });
         }
 
-        const url = `http://${deviceIp}${path}`;
+        const url = `http://${deviceIp}${path}?api_key=${encodeURIComponent(apiKey)}`;
         const urlEncodedData = new URLSearchParams(data).toString();
         const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
-        if (cookie) {
-            headers['Cookie'] = cookie;
-        }
 
         const response = await axios.post(url, urlEncodedData, {
             timeout: 5000,
