@@ -672,7 +672,7 @@ const sanitizeSecretData = (data) => {
     // This includes read-only properties from GET requests and client-side computed properties.
     const invalidKeys = [
         'id', '.id', 'last-logged-out', 'last-caller-id', 'caller-id', 'uptime',
-        'isActive', 'activeInfo', 'customer', 'subscription'
+        'isActive', 'activeInfo', 'customer', 'subscription', 'last-disconnect-reason'
     ];
     invalidKeys.forEach(key => delete data[key]);
     return data;

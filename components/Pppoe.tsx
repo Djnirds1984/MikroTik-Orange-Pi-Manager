@@ -202,9 +202,11 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
         setIsSubmitting(true);
         try {
             if (selectedSecret) { // Editing
-                const customer = customers.find(c => c.username === secretData.name);
-                if (customer) await updateCustomer({ ...customer, ...customerData });
-                else await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
+                if (selectedSecret.customer) {
+                    await updateCustomer({ ...selectedSecret.customer, ...customerData });
+                } else {
+                    await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
+                }
                 await updatePppSecret(selectedRouter, { ...selectedSecret, ...secretData });
             } else { // Adding
                 await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
@@ -249,16 +251,21 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
         useEffect(() => {
             if(isOpen) {
                 if (initialData) {
-                    const linkedCustomer = customers.find(c => c.username === initialData.name);
+                    const linkedCustomer = initialData.customer;
                     const linkedPlan = plans.find(p => p.pppoeProfile === initialData.profile);
                     setSecret({ name: initialData.name, password: '', profile: linkedPlan?.id || '' });
-                    setCustomer({ fullName: linkedCustomer?.fullName || '', address: linkedCustomer?.address || '', contactNumber: linkedCustomer?.contactNumber || '', email: linkedCustomer?.email || '' });
+                    setCustomer({ 
+                        fullName: linkedCustomer?.fullName || '', 
+                        address: linkedCustomer?.address || '', 
+                        contactNumber: linkedCustomer?.contactNumber || '', 
+                        email: linkedCustomer?.email || '' 
+                    });
                 } else {
                     setSecret({ name: '', password: '', profile: plans.length > 0 ? plans[0].id : '' });
                     setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
                 }
             }
-        }, [isOpen, initialData]);
+        }, [isOpen, initialData, plans]);
 
         if (!isOpen) return null;
         
@@ -268,7 +275,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
             const secretPayload: PppSecretData = {
                 name: secret.name,
                 service: 'pppoe',
-                profile: selectedPlan?.pppoeProfile || 'default',
+                profile: selectedPlan?.pppoeProfile || (initialData ? initialData.profile : 'default'),
                 comment: initialData?.comment || '',
                 disabled: initialData?.disabled || 'false',
             };
@@ -281,7 +288,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                 <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
                 <form onSubmit={handleSubmit}>
                     <div className="p-6">
-                         <h3 className="text-xl font-bold mb-4">{initialData ? 'Edit User' : 'Add New User'}</h3>
+                         <h3 className="text-xl font-bold mb-4">{initialData ? `Edit User: ${initialData.name}` : 'Add New User'}</h3>
                          <div className="space-y-4">
                             <div><label>Username</label><input type="text" value={secret.name} onChange={e => setSecret(s => ({...s, name: e.target.value}))} disabled={!!initialData} required className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700 disabled:opacity-50" /></div>
                             <div className="relative"><label>Password</label><input type={showPass ? 'text' : 'password'} value={secret.password} onChange={e => setSecret(s => ({...s, password: e.target.value}))} placeholder={initialData ? "Leave blank to keep old" : ""} required={!initialData} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-9">{showPass ? <EyeSlashIcon className="w-5 h-5"/> : <EyeIcon className="w-5 h-5"/>}</button></div>
@@ -289,6 +296,11 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                             <hr className="my-4 border-slate-200 dark:border-slate-700" />
                             <h4 className="font-semibold">Customer Information (Optional)</h4>
                             <div><label>Full Name</label><input type="text" value={customer.fullName} onChange={e => setCustomer(c => ({...c, fullName: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                            <div><label>Full Address</label><input type="text" value={customer.address} onChange={e => setCustomer(c => ({...c, address: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div><label>Contact Number</label><input type="text" value={customer.contactNumber} onChange={e => setCustomer(c => ({...c, contactNumber: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                                <div><label>Email</label><input type="email" value={customer.email} onChange={e => setCustomer(c => ({...c, email: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                            </div>
                          </div>
                     </div>
                      <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={isSubmitting}>Save</button></div>
@@ -311,11 +323,15 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
                  <table className="w-full text-sm">
-                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Username</th><th className="px-6 py-3">Profile</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Subscription Due</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Username/Customer</th><th className="px-6 py-3">Profile</th><th className="px-6 py-3">Status</th><th className="px-6 py-3">Subscription Due</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
                     <tbody>
                         {combinedUsers.map(user => (
                             <tr key={user.id} className={`border-b dark:border-slate-700 ${user.disabled === 'true' ? 'opacity-50' : ''}`}>
-                                <td className="px-6 py-4 font-medium">{user.name}</td><td>{user.profile}</td>
+                                <td className="px-6 py-4 font-medium">
+                                    <p className="text-slate-900 dark:text-slate-100">{user.name}</p>
+                                    <p className="text-xs text-slate-500">{user.customer?.fullName}</p>
+                                </td>
+                                <td>{user.profile}</td>
                                 <td>{user.isActive ? <span className="text-green-500">Active</span> : <span className="text-slate-500">Inactive</span>}</td>
                                 <td>{user.subscription.dueDate}</td>
                                 <td className="px-6 py-4 text-right space-x-1">
