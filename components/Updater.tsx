@@ -113,7 +113,7 @@ export const Updater: React.FC = () => {
                     setNewVersionInfo(data.newVersionInfo);
                 }
 
-                if (data.status) {
+                if (data.status && data.status !== 'finished') {
                     setStatusInfo(prev => ({...prev, ...data}));
                 }
             },
