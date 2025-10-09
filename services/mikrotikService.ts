@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams, HotspotProfile, HotspotProfileData } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -79,6 +79,12 @@ export const processPppPayment = (router: RouterConfig, paymentData: PaymentData
 export const getHotspotActiveUsers = (router: RouterConfig): Promise<HotspotActiveUser[]> => mikrotikApiPost( '/api/hotspot/active', { routerConfig: router });
 export const getHotspotHosts = (router: RouterConfig): Promise<HotspotHost[]> => mikrotikApiPost( '/api/hotspot/hosts', { routerConfig: router });
 export const removeHotspotActiveUser = (router: RouterConfig, userId: string): Promise<any> => mikrotikApiPost( '/api/hotspot/active/remove', { routerConfig: router, userId });
+
+// Hotspot Profiles
+export const getHotspotProfiles = (router: RouterConfig): Promise<HotspotProfile[]> => mikrotikApiPost('/api/hotspot/profiles', { routerConfig: router });
+export const addHotspotProfile = (router: RouterConfig, profileData: HotspotProfileData): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/add', { routerConfig: router, profileData });
+export const updateHotspotProfile = (router: RouterConfig, profileData: HotspotProfile): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/update', { routerConfig: router, profileData });
+export const deleteHotspotProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/delete', { routerConfig: router, profileId });
 
 // Hotspot File Editor
 export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => mikrotikApiPost('/api/hotspot/files/list', { routerConfig: router, path });

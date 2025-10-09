@@ -287,6 +287,49 @@ app.post('/api/hotspot/active/remove', (req, res, next) => {
     });
 });
 
+app.post('/api/hotspot/profiles', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/hotspot/profile');
+        const profiles = Array.isArray(response.data) ? response.data : [];
+        const data = profiles.map(p => ({
+            id: p['.id'],
+            name: p.name,
+            'hotspot-address': p['hotspot-address'],
+            'dns-name': p['dns-name'],
+            'html-directory': p['html-directory'],
+            'rate-limit': p['rate-limit'],
+            'login-by': p['login-by'],
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/hotspot/profiles/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileData } = req.body;
+        const response = await apiClient.put('/ip/hotspot/profile', camelToKebab(profileData));
+        res.status(201).json(response.data);
+    });
+});
+
+app.post('/api/hotspot/profiles/update', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileData } = req.body;
+        const profileId = profileData.id;
+        delete profileData.id;
+        const response = await apiClient.patch(`/ip/hotspot/profile/${profileId}`, camelToKebab(profileData));
+        res.status(200).json(response.data);
+    });
+});
+
+app.post('/api/hotspot/profiles/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileId } = req.body;
+        await apiClient.delete(`/ip/hotspot/profile/${profileId}`);
+        res.status(204).send();
+    });
+});
+
 app.post('/api/hotspot/run-setup', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { params } = req.body;
@@ -704,7 +747,7 @@ app.post('/api/ppp/process-payment', (req, res, next) => {
         const formattedStartTime = formatTimeForMikroTik(newDueDate);
         
         const schedulerResponse = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
-        const existingSchedulers = Array.isArray(schedulerResponse.data) ? schedulerResponse.data : (schedulerResponse.data ? [schedulerResponse.data] : []);
+        const existingSchedulers = Array.isArray(schedulerResponse.data) ? response.data : (schedulerResponse.data ? [schedulerResponse.data] : []);
 
         const schedulerPayload = {
             'start-date': formattedStartDate,

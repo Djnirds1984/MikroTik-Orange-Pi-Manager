@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, HotspotActiveUser, HotspotHost } from '../types.ts';
-import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, HotspotActiveUser, HotspotHost, HotspotProfile, HotspotProfileData } from '../types.ts';
+import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser, getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon, ServerIcon } from '../constants.tsx';
+import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon, ServerIcon, EditIcon } from '../constants.tsx';
 import { NodeMcuManager } from './NodeMcuManager.tsx';
 import { HotspotEditor } from './HotspotEditor.tsx';
 import { HotspotInstaller } from './HotspotInstaller.tsx';
@@ -30,6 +30,110 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
     </button>
 );
 
+// --- Profiles Management Sub-component ---
+const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProfile, setEditingProfile] = useState<HotspotProfile | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const profilesData = await getHotspotProfiles(selectedRouter);
+            setProfiles(profilesData);
+        } catch (err) {
+            setError(`Could not fetch data: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSave = async (profileData: HotspotProfile | HotspotProfileData) => {
+        setIsSubmitting(true);
+        try {
+            if ('id' in profileData) await updateHotspotProfile(selectedRouter, profileData as HotspotProfile);
+            else await addHotspotProfile(selectedRouter, profileData as HotspotProfileData);
+            setIsModalOpen(false);
+            setEditingProfile(null);
+            await fetchData();
+        } catch (err) { alert(`Error saving profile: ${(err as Error).message}`); }
+        finally { setIsSubmitting(false); }
+    };
+
+    const handleDelete = async (profileId: string) => {
+        if (!window.confirm("Are you sure?")) return;
+        try {
+            await deleteHotspotProfile(selectedRouter, profileId);
+            await fetchData();
+        } catch (err) { alert(`Error deleting profile: ${(err as Error).message}`); }
+    };
+
+    const ProfileFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotProfileData>>({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ name: initialData.name, 'hotspot-address': initialData['hotspot-address'] || '', 'rate-limit': initialData['rate-limit'] || '' });
+                } else {
+                    setProfile({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(initialData ? { ...profile, id: initialData.id } : profile); };
+
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit Profile' : 'Add New Profile'}</h3>
+                           <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Hotspot Address</label><input type="text" name="hotspot-address" value={profile['hotspot-address']} onChange={e => setProfile(p => ({ ...p, 'hotspot-address': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 10M/20M" name="rate-limit" value={profile['rate-limit']} onChange={e => setProfile(p => ({ ...p, 'rate-limit': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+
+    return (
+        <div>
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
+            <div className="flex justify-end mb-4">
+                <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New Profile</button>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Hotspot Address</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <tbody>
+                        {profiles.map(p => (
+                            <tr key={p.id} className="border-b dark:border-slate-700">
+                                <td className="px-6 py-4 font-medium">{p.name}</td><td className="px-6 py-4">{p['hotspot-address'] || 'n/a'}</td><td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
 
 // --- Main Component ---
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
@@ -38,7 +142,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'setup'>('activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'setup'>('activity');
 
     // Refactored fetchData to handle polling gracefully
     const fetchData = useCallback(async (isPolling = false) => {
@@ -81,8 +185,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
     // Initial data fetch on mount or router change
     useEffect(() => {
-        fetchData(false);
-    }, [fetchData]);
+        if (activeTab === 'activity') {
+            fetchData(false);
+        }
+    }, [fetchData, activeTab]);
 
     // Set up polling interval only for the 'activity' tab
     useEffect(() => {
@@ -120,7 +226,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         );
     }
 
-    if (isLoading) {
+    if (isLoading && activeTab === 'activity') {
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
@@ -161,6 +267,12 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                         icon={<CodeBracketIcon className="w-5 h-5 mr-2" />}
                         isActive={activeTab === 'editor'}
                         onClick={() => setActiveTab('editor')}
+                    />
+                    <TabButton
+                        label="Server Profiles"
+                        icon={<ServerIcon className="w-5 h-5 mr-2" />}
+                        isActive={activeTab === 'profiles'}
+                        onClick={() => setActiveTab('profiles')}
                     />
                     <TabButton
                         label="Server Setup"
@@ -276,6 +388,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             
             {activeTab === 'editor' && (
                 <HotspotEditor selectedRouter={selectedRouter} />
+            )}
+
+            {activeTab === 'profiles' && (
+                <ProfilesManager selectedRouter={selectedRouter} />
             )}
 
             {activeTab === 'setup' && (

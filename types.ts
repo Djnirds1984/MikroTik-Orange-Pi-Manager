@@ -77,6 +77,19 @@ export interface HotspotHost {
     comment?: string;
 }
 
+export interface HotspotProfile {
+    id: string;
+    name: string;
+    'hotspot-address'?: string;
+    'dns-name'?: string;
+    'html-directory'?: string;
+    'rate-limit'?: string;
+    'login-by'?: string;
+}
+
+export type HotspotProfileData = Omit<HotspotProfile, 'id'>;
+
+
 export interface PppProfile {
     id: string;
     name: string;
