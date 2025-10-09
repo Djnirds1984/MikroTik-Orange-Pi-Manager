@@ -585,7 +585,7 @@ app.post('/api/ppp/profiles/delete', (req, res, next) => {
 // --- PPPoE Servers ---
 app.post('/api/ppp/servers', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
-        const response = await apiClient.get('/ppp/server');
+        const response = await apiClient.get('/interface/pppoe-server/server');
         const servers = Array.isArray(response.data) ? response.data : [];
         const data = servers.map(s => ({
             id: s['.id'],
@@ -603,7 +603,7 @@ app.post('/api/ppp/servers', (req, res, next) => {
 app.post('/api/ppp/servers/add', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { serverData } = req.body;
-        const response = await apiClient.put('/ppp/server', serverData);
+        const response = await apiClient.put('/interface/pppoe-server/server', serverData);
         res.status(201).json(response.data);
     });
 });
@@ -611,7 +611,7 @@ app.post('/api/ppp/servers/add', (req, res, next) => {
 app.post('/api/ppp/servers/update', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { serverId, serverData } = req.body;
-        const response = await apiClient.patch(`/ppp/server/${serverId}`, serverData);
+        const response = await apiClient.patch(`/interface/pppoe-server/server/${serverId}`, serverData);
         res.status(200).json(response.data);
     });
 });
@@ -619,7 +619,7 @@ app.post('/api/ppp/servers/update', (req, res, next) => {
 app.post('/api/ppp/servers/delete', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { serverId } = req.body;
-        await apiClient.delete(`/ppp/server/${serverId}`);
+        await apiClient.delete(`/interface/pppoe-server/server/${serverId}`);
         res.status(204).send();
     });
 });
