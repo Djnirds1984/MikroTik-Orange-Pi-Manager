@@ -93,19 +93,12 @@ export const getSystemInfo = (router: RouterConfigWithId): Promise<SystemInfo> =
     return fetchMikrotikData<SystemInfo>(router, '/system/resource');
 };
 
-export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> => {
-    return fetchMikrotikData<NtpSettings>(router, '/system/ntp/client');
-};
-
-export const setRouterNtp = (router: RouterConfigWithId, settings: NtpSettings): Promise<{ message: string }> => {
-    return fetchMikrotikData<{ message: string }>(router, '/system/ntp/client', {
-        method: 'PATCH',
-        body: JSON.stringify(settings),
-    });
-};
-
 export const rebootRouter = (router: RouterConfigWithId): Promise<{ message: string }> => {
     return fetchMikrotikData<{ message: string }>(router, '/system/reboot', { method: 'POST' });
+};
+
+export const syncTimeToRouter = (router: RouterConfigWithId): Promise<{ message: string }> => {
+    return fetchMikrotikData<{ message: string }>(router, '/system/clock/sync', { method: 'POST' });
 };
 
 // --- Interfaces & IPs ---

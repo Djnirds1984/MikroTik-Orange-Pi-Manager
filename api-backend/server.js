@@ -296,6 +296,26 @@ app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
     });
 });
 
+// --- Custom Handlers for System Settings ---
+
+// Custom handler for syncing panel time to the router
+app.post('/mt-api/:routerId/system/clock/sync', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const now = new Date();
+        
+        const time = now.toTimeString().split(' ')[0]; // HH:MM:SS
+        
+        const month = now.toLocaleString('en-US', { month: 'short' }).toLowerCase();
+        const day = ('0' + now.getDate()).slice(-2);
+        const year = now.getFullYear();
+        const date = `${month}/${day}/${year}`; // Mmm/dd/yyyy
+
+        await req.routerInstance.patch('/system/clock', { time, date });
+
+        return { message: `Router time successfully synced to ${date} ${time}.` };
+    });
+});
+
 
 // Custom handler for processing PPPoE payments
 app.post('/mt-api/:routerId/ppp/process-payment', getRouterConfig, async (req, res) => {

@@ -3,7 +3,7 @@ import type { RouterConfigWithId, NtpSettings, PanelSettings, PanelNtpStatus } f
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useTheme } from '../contexts/ThemeContext.tsx';
 import { initializeAiClient } from '../services/geminiService.ts';
-import { getRouterNtp, setRouterNtp, rebootRouter } from '../services/mikrotikService.ts';
+import { rebootRouter, syncTimeToRouter } from '../services/mikrotikService.ts';
 import { getPanelSettings, savePanelSettings } from '../services/databaseService.ts';
 import { createDatabaseBackup, listDatabaseBackups, deleteDatabaseBackup, getPanelNtpStatus, togglePanelNtp } from '../services/panelService.ts';
 import { Loader } from './Loader.tsx';
@@ -13,7 +13,7 @@ import { KeyIcon, CogIcon, PowerIcon, RouterIcon, CircleStackIcon, ArrowPathIcon
 const SunIcon: React.FC<{ className?: string }> = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>;
 const MoonIcon: React.FC<{ className?: string }> = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" /></svg>;
 const ComputerDesktopIcon: React.FC<{ className?: string }> = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 01-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0115 18.257V17.25m6-12V15a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 15V5.25A2.25 2.25 0 015.25 3h13.5A2.25 2.25 0 0121 5.25z" /></svg>;
-const ClockIcon: React.FC<{ className?: string }> = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
+const ClockIcon: React.FC<{ className?: string }> = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 
 
 // A generic settings card component
@@ -57,70 +57,6 @@ const ThemeSwitcher = () => {
                         {t.label}
                     </button>
                 ))}
-            </div>
-        </div>
-    );
-};
-
-const RouterNtpManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [ntpSettings, setNtpSettings] = useState<NtpSettings>({ enabled: false, primaryNtp: '', secondaryNtp: '' });
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        setIsLoading(true);
-        setError(null);
-        getRouterNtp(selectedRouter)
-            .then(setNtpSettings)
-            .catch(err => {
-                console.error("Failed to fetch NTP settings:", err);
-                setError(`Could not fetch router NTP settings. Error: ${(err as Error).message}`);
-            })
-            .finally(() => setIsLoading(false));
-    }, [selectedRouter]);
-
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            await setRouterNtp(selectedRouter, ntpSettings);
-            alert('Router NTP settings saved successfully!');
-        } catch (err) {
-            alert(`Failed to save router NTP settings: ${(err as Error).message}`);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    if (isLoading) return <div className="flex justify-center"><Loader /></div>;
-    if (error) return <p className="text-red-500 text-sm">{error}</p>;
-
-    return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <label htmlFor="ntp-enabled" className="font-medium text-slate-700 dark:text-slate-300">Enable NTP Client</label>
-                <input
-                    type="checkbox"
-                    id="ntp-enabled"
-                    checked={ntpSettings.enabled}
-                    onChange={e => setNtpSettings(s => ({ ...s, enabled: e.target.checked }))}
-                    className="h-6 w-6 rounded border-gray-300 text-[--color-primary-600] focus:ring-[--color-primary-500]"
-                />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label htmlFor="primaryNtp" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Primary NTP Server</label>
-                    <input type="text" name="primaryNtp" id="primaryNtp" value={ntpSettings.primaryNtp} onChange={e => setNtpSettings(s => ({ ...s, primaryNtp: e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
-                </div>
-                <div>
-                    <label htmlFor="secondaryNtp" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Secondary NTP Server</label>
-                    <input type="text" name="secondaryNtp" id="secondaryNtp" value={ntpSettings.secondaryNtp} onChange={e => setNtpSettings(s => ({ ...s, secondaryNtp: e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white" />
-                </div>
-            </div>
-            <div className="flex justify-end">
-                <button onClick={handleSave} disabled={isSaving} className="px-4 py-2 bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-semibold rounded-lg disabled:opacity-50">
-                    {isSaving ? 'Saving...' : 'Save Router NTP'}
-                </button>
             </div>
         </div>
     );
@@ -170,7 +106,7 @@ const PanelNtpManager: React.FC = () => {
             <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
                 <div>
                     <p className="font-medium text-slate-700 dark:text-slate-300">Sync Panel Host Time</p>
-                    <p className="text-xs text-slate-500">Keep the panel server's time accurate.</p>
+                    <p className="text-xs text-slate-500">Keep the panel server's time accurate using timedatectl.</p>
                 </div>
                 <button
                     onClick={handleToggle}
@@ -322,6 +258,7 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
     
     const [apiKey, setApiKey] = useState('');
     const [isKeySaving, setIsKeySaving] = useState(false);
+    const [isSyncing, setIsSyncing] = useState(false);
     
     useEffect(() => {
         setLocalSettings({ language, currency });
@@ -397,6 +334,21 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         }
     };
     
+    const handleSyncTime = async () => {
+        if (!selectedRouter) return;
+        if (window.confirm(`Are you sure you want to set the time on "${selectedRouter.name}" to the panel's current time? This will set the router's system clock.`)) {
+            setIsSyncing(true);
+            try {
+                const res = await syncTimeToRouter(selectedRouter);
+                alert(res.message);
+            } catch (err) {
+                alert(`Failed to sync time: ${(err as Error).message}`);
+            } finally {
+                setIsSyncing(false);
+            }
+        }
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <SettingsCard title="Panel Settings" icon={<CogIcon className="w-6 h-6" />}>
@@ -447,31 +399,39 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
                 </div>
             </SettingsCard>
 
-            <SettingsCard title="Time Synchronization (NTP)" icon={<ClockIcon className="w-6 h-6" />}>
-                <div className="space-y-6">
-                    <PanelNtpManager />
-                    {selectedRouter && (
-                        <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
-                            <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Router NTP ({selectedRouter.name})</h4>
-                            <RouterNtpManager selectedRouter={selectedRouter} />
-                        </div>
-                    )}
-                </div>
+            <SettingsCard title="Panel Time Synchronization" icon={<ClockIcon className="w-6 h-6" />}>
+                <PanelNtpManager />
             </SettingsCard>
 
             {selectedRouter && (
                  <SettingsCard title={`Router Management (${selectedRouter.name})`} icon={<RouterIcon className="w-6 h-6" />}>
-                    <div>
-                         <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Power Actions</h4>
-                        <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
-                            <div>
-                                <p className="font-semibold text-red-800 dark:text-red-300">Reboot Router</p>
-                                <p className="text-sm text-red-600 dark:text-red-400">This will immediately restart the selected router.</p>
+                    <div className="space-y-6">
+                        <div>
+                            <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Time Synchronization</h4>
+                            <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                                <div>
+                                    <p className="font-medium text-slate-700 dark:text-slate-300">Sync Time from Panel</p>
+                                    <p className="text-sm text-slate-500">Set the router's clock to match this panel's server time.</p>
+                                </div>
+                                <button onClick={handleSyncTime} disabled={isSyncing} className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50">
+                                    {isSyncing ? <Loader /> : <ClockIcon className="w-5 h-5" />}
+                                    {isSyncing ? 'Syncing...' : 'Sync Now'}
+                                </button>
                             </div>
-                            <button onClick={handleReboot} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg flex items-center gap-2">
-                                <PowerIcon className="w-5 h-5" />
-                                Reboot
-                            </button>
+                        </div>
+
+                         <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
+                             <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Power Actions</h4>
+                            <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
+                                <div>
+                                    <p className="font-semibold text-red-800 dark:text-red-300">Reboot Router</p>
+                                    <p className="text-sm text-red-600 dark:text-red-400">This will immediately restart the selected router.</p>
+                                </div>
+                                <button onClick={handleReboot} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg flex items-center gap-2">
+                                    <PowerIcon className="w-5 h-5" />
+                                    Reboot
+                                </button>
+                            </div>
                         </div>
                     </div>
                  </SettingsCard>
