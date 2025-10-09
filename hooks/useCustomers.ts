@@ -69,5 +69,5 @@ export const useCustomers = (routerId: string | null) => {
         }
     };
 
-    return { customers, addCustomer, updateCustomer, deleteCustomer, isLoading, error };
+    return { customers, addCustomer, updateCustomer, deleteCustomer, isLoading, error, fetchCustomers };
 };

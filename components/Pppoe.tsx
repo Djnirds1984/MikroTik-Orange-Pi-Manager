@@ -144,7 +144,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
     const { plans } = useBillingPlans(selectedRouter.id);
-    const { customers, addCustomer, updateCustomer } = useCustomers(selectedRouter.id);
+    const { customers, addCustomer, updateCustomer, fetchCustomers } = useCustomers(selectedRouter.id);
     const { settings: companySettings } = useCompanySettings();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -201,20 +201,27 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     const handleSaveUser = async (secretData: PppSecretData, customerData: Partial<Customer>) => {
         setIsSubmitting(true);
         try {
-            if (selectedSecret) { // Editing
-                if (selectedSecret.customer) {
-                    await updateCustomer({ ...selectedSecret.customer, ...customerData });
-                } else {
-                    await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
-                }
-                await updatePppSecret(selectedRouter, { ...selectedSecret, ...secretData });
-            } else { // Adding
+            // Find if a customer already exists in our local DB
+            const existingCustomer = customers.find(c => c.username === secretData.name && c.routerId === selectedRouter.id);
+
+            if (existingCustomer) {
+                // If customer exists, always update their info.
+                await updateCustomer({ ...existingCustomer, ...customerData });
+            } else {
+                // If customer does not exist in our DB, create them.
                 await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
+            }
+            
+            if (selectedSecret) { // Editing an existing secret
+                await updatePppSecret(selectedRouter, { ...selectedSecret, ...secretData });
+            } else { // Adding a new secret
                 await addPppSecret(selectedRouter, secretData);
             }
+            
             setUserModalOpen(false);
             setSelectedSecret(null);
             await fetchData();
+            await fetchCustomers(); // Explicitly refetch customers
         } catch(err) {
             alert(`Failed to save user: ${(err as Error).message}`);
         } finally {
@@ -244,15 +251,16 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     };
     
     const UserFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
-        const [secret, setSecret] = useState({ name: '', password: '', profile: '' });
+        const [secret, setSecret] = useState({ name: '', password: '', profile: '' }); // profile is plan ID
         const [customer, setCustomer] = useState({ fullName: '', address: '', contactNumber: '', email: '' });
         const [showPass, setShowPass] = useState(false);
 
         useEffect(() => {
             if(isOpen) {
                 if (initialData) {
-                    const linkedCustomer = initialData.customer;
+                    const linkedCustomer = customers.find(c => c.username === initialData.name && c.routerId === selectedRouter.id);
                     const linkedPlan = plans.find(p => p.pppoeProfile === initialData.profile);
+                    
                     setSecret({ name: initialData.name, password: '', profile: linkedPlan?.id || '' });
                     setCustomer({ 
                         fullName: linkedCustomer?.fullName || '', 
@@ -265,21 +273,30 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                     setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
                 }
             }
-        }, [isOpen, initialData, plans]);
+        }, [isOpen, initialData, plans, customers, selectedRouter.id]);
 
         if (!isOpen) return null;
         
         const handleSubmit = (e: React.FormEvent) => {
             e.preventDefault();
             const selectedPlan = plans.find(p => p.id === secret.profile);
+            
             const secretPayload: PppSecretData = {
                 name: secret.name,
                 service: 'pppoe',
-                profile: selectedPlan?.pppoeProfile || (initialData ? initialData.profile : 'default'),
+                profile: initialData?.profile || 'default', // Default to original profile
                 comment: initialData?.comment || '',
                 disabled: initialData?.disabled || 'false',
             };
-            if (secret.password) secretPayload.password = secret.password;
+
+            // Only change the profile if a billing plan was actively selected in the form
+            if (selectedPlan) {
+                secretPayload.profile = selectedPlan.pppoeProfile;
+            }
+
+            if (secret.password) {
+                secretPayload.password = secret.password;
+            }
             onSave(secretPayload, customer);
         }
 
@@ -292,7 +309,10 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                          <div className="space-y-4">
                             <div><label>Username</label><input type="text" value={secret.name} onChange={e => setSecret(s => ({...s, name: e.target.value}))} disabled={!!initialData} required className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700 disabled:opacity-50" /></div>
                             <div className="relative"><label>Password</label><input type={showPass ? 'text' : 'password'} value={secret.password} onChange={e => setSecret(s => ({...s, password: e.target.value}))} placeholder={initialData ? "Leave blank to keep old" : ""} required={!initialData} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-9">{showPass ? <EyeSlashIcon className="w-5 h-5"/> : <EyeIcon className="w-5 h-5"/>}</button></div>
-                            <div><label>Billing Plan</label><select value={secret.profile} onChange={e => setSecret(s => ({...s, profile: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700">{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                            <div><label>Billing Plan</label><select value={secret.profile} onChange={e => setSecret(s => ({...s, profile: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700">
+                                <option value="">-- No Change --</option>
+                                {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select></div>
                             <hr className="my-4 border-slate-200 dark:border-slate-700" />
                             <h4 className="font-semibold">Customer Information (Optional)</h4>
                             <div><label>Full Name</label><input type="text" value={customer.fullName} onChange={e => setCustomer(c => ({...c, fullName: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
