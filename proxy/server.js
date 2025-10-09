@@ -8,12 +8,15 @@ const esbuild = require('esbuild');
 const archiver = require('archiver');
 const fsExtra = require('fs-extra');
 const tar = require('tar');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = 3001;
 const DB_PATH = path.join(__dirname, 'panel.db');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
+const SECRET_KEY = process.env.JWT_SECRET || 'a-very-weak-secret-key-for-dev-only';
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ limit: '5mb' })); // For AI fixer
@@ -201,12 +204,112 @@ async function initDb() {
             user_version = 8;
         }
 
+        if (user_version < 9) {
+            console.log('Applying migration v9 (Add users table for auth)...');
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT UNIQUE NOT NULL,
+                    password TEXT NOT NULL
+                );
+            `);
+            await db.exec('PRAGMA user_version = 9;');
+            user_version = 9;
+        }
 
     } catch (err) {
         console.error('Failed to initialize database:', err);
         process.exit(1);
     }
 }
+
+// --- Authentication ---
+const authRouter = express.Router();
+
+authRouter.get('/has-users', async (req, res) => {
+    try {
+        const row = await db.get("SELECT COUNT(*) as count FROM users");
+        res.json({ hasUsers: row.count > 0 });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+authRouter.post('/register', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ message: 'Username and password are required.' });
+    }
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = {
+            id: `user_${Date.now()}`,
+            username,
+        };
+
+        await db.run('INSERT INTO users (id, username, password) VALUES (?, ?, ?)', user.id, user.username, hashedPassword);
+
+        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
+        res.status(201).json({ token, user });
+
+    } catch (e) {
+        if (e.message.includes('UNIQUE constraint failed')) {
+            return res.status(409).json({ message: 'Username already exists.' });
+        }
+        res.status(500).json({ message: e.message });
+    }
+});
+
+authRouter.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    if (!username || !password) {
+        return res.status(400).json({ message: 'Username and password are required.' });
+    }
+    try {
+        const user = await db.get('SELECT * FROM users WHERE username = ?', username);
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid username or password.' });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid username or password.' });
+        }
+
+        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
+        res.json({ token, user: { id: user.id, username: user.username } });
+
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+const protect = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        const token = authHeader.split(' ')[1];
+        jwt.verify(token, SECRET_KEY, (err, user) => {
+            if (err) {
+                return res.status(401).json({ message: 'Invalid or expired token.' });
+            }
+            req.user = user;
+            next();
+        });
+    } else {
+        res.status(401).json({ message: 'Not authenticated, no token provided.' });
+    }
+};
+
+authRouter.get('/status', protect, (req, res) => {
+    res.json(req.user);
+});
+
+authRouter.post('/logout', (req, res) => {
+    // In a stateless JWT setup, logout is mainly handled client-side by deleting the token.
+    // This endpoint is here for completeness and could be used for token blacklisting in a more complex setup.
+    res.status(200).json({ message: 'Logged out successfully.' });
+});
+
+app.use('/api/auth', authRouter);
 
 // --- ESBuild Middleware for TS/TSX ---
 app.use(async (req, res, next) => {
@@ -231,7 +334,7 @@ app.use(async (req, res, next) => {
 // --- API Endpoints ---
 
 // Host Status
-app.get('/api/host-status', (req, res) => {
+app.get('/api/host-status', protect, (req, res) => {
     const getCpuUsage = () => new Promise(resolve => {
         exec("top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'", (err, stdout) => {
             resolve(parseFloat(stdout.trim()) || 0);
@@ -256,7 +359,7 @@ app.get('/api/host-status', (req, res) => {
 });
 
 // Panel NTP Status
-app.get('/api/system/host-ntp-status', (req, res) => {
+app.get('/api/system/host-ntp-status', protect, (req, res) => {
     exec("timedatectl status | grep 'NTP service:'", (err, stdout, stderr) => {
         if (err) {
             console.error("Failed to get NTP status:", stderr);
@@ -267,7 +370,7 @@ app.get('/api/system/host-ntp-status', (req, res) => {
     });
 });
 
-app.post('/api/system/host-ntp/toggle', (req, res) => {
+app.post('/api/system/host-ntp/toggle', protect, (req, res) => {
     const { enabled } = req.body;
     if (typeof enabled !== 'boolean') {
         return res.status(400).json({ message: 'A boolean "enabled" property is required.' });
@@ -399,13 +502,13 @@ const createSettingsSaver = (tableName) => async (req, res) => {
 };
 
 // FIX: Define specific routes BEFORE the generic `dbRouter` to ensure they are matched first.
-app.get('/api/db/panel-settings', createSettingsHandler('panel_settings'));
-app.post('/api/db/panel-settings', createSettingsSaver('panel_settings'));
-app.get('/api/db/company-settings', createSettingsHandler('company_settings'));
-app.post('/api/db/company-settings', createSettingsSaver('company_settings'));
+app.get('/api/db/panel-settings', protect, createSettingsHandler('panel_settings'));
+app.post('/api/db/panel-settings', protect, createSettingsSaver('panel_settings'));
+app.get('/api/db/company-settings', protect, createSettingsHandler('company_settings'));
+app.post('/api/db/company-settings', protect, createSettingsSaver('company_settings'));
 
 // All other /api/db routes will be handled by the generic router.
-app.use('/api/db', dbRouter);
+app.use('/api/db', protect, dbRouter);
 
 
 // --- ZeroTier CLI ---
@@ -424,7 +527,7 @@ const ztCli = (command) => new Promise((resolve, reject) => {
     });
 });
 
-app.get('/api/zt/status', async (req, res) => {
+app.get('/api/zt/status', protect, async (req, res) => {
     try {
         const [info, networks] = await Promise.all([ztCli('info'), ztCli('listnetworks')]);
         res.json({ info, networks });
@@ -433,21 +536,21 @@ app.get('/api/zt/status', async (req, res) => {
     }
 });
 // ... other ZT routes
-app.post('/api/zt/join', async (req, res) => {
+app.post('/api/zt/join', protect, async (req, res) => {
     try {
         const { networkId } = req.body;
         await ztCli(`join ${networkId}`);
         res.json({ message: 'Join command sent.' });
     } catch(err) { res.status(err.status || 500).json({ message: err.message }); }
 });
-app.post('/api/zt/leave', async (req, res) => {
+app.post('/api/zt/leave', protect, async (req, res) => {
     try {
         const { networkId } = req.body;
         await ztCli(`leave ${networkId}`);
         res.json({ message: 'Leave command sent.' });
     } catch(err) { res.status(err.status || 500).json({ message: err.message }); }
 });
-app.post('/api/zt/set', async (req, res) => {
+app.post('/api/zt/set', protect, async (req, res) => {
     try {
         const { networkId, setting, value } = req.body;
         await ztCli(`set ${networkId} ${setting}=${value}`);
@@ -456,7 +559,7 @@ app.post('/api/zt/set', async (req, res) => {
 });
 
 // ZT Installer
-app.get('/api/zt/install', (req, res) => {
+app.get('/api/zt/install', protect, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -479,7 +582,7 @@ app.get('/api/zt/install', (req, res) => {
 
 
 // --- AI Fixer ---
-app.get('/api/fixer/file-content', async (req, res) => {
+app.get('/api/fixer/file-content', protect, async (req, res) => {
     try {
         const content = await fs.promises.readFile(API_BACKEND_FILE, 'utf-8');
         res.type('text/plain').send(content);
@@ -488,7 +591,7 @@ app.get('/api/fixer/file-content', async (req, res) => {
     }
 });
 
-app.post('/api/fixer/apply-fix', (req, res) => {
+app.post('/api/fixer/apply-fix', protect, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
     
@@ -520,7 +623,7 @@ app.post('/api/fixer/apply-fix', (req, res) => {
 });
 
 // Report Generator
-app.post('/api/generate-report', async (req, res) => {
+app.post('/api/generate-report', protect, async (req, res) => {
     try {
         const { view, routerName, geminiAnalysis } = req.body;
         const backendCode = await fs.promises.readFile(API_BACKEND_FILE, 'utf-8').catch(() => 'Could not read backend file.');
@@ -584,7 +687,7 @@ const runCommandStream = (command, res, options = {}) => {
 
 const runCommand = (command) => runCommandStream(command, null);
 
-app.get('/api/current-version', async (req, res) => {
+app.get('/api/current-version', protect, async (req, res) => {
     try {
         // First, check if it's a git repo. This will throw if it's not.
         await runCommand("git rev-parse --is-inside-work-tree");
@@ -623,7 +726,7 @@ app.get('/api/current-version', async (req, res) => {
     }
 });
 
-app.get('/api/update-status', async (req, res) => {
+app.get('/api/update-status', protect, async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
@@ -673,7 +776,7 @@ app.get('/api/update-status', async (req, res) => {
     }
 });
 
-app.get('/api/update-app', async (req, res) => {
+app.get('/api/update-app', protect, async (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
@@ -738,7 +841,7 @@ app.get('/api/update-app', async (req, res) => {
     }
 });
 
-app.get('/api/rollback-app', (req, res) => {
+app.get('/api/rollback-app', protect, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
     const { backupFile } = req.query;
@@ -794,7 +897,7 @@ app.get('/api/rollback-app', (req, res) => {
 
 
 // Database Backup/Restore
-app.get('/api/create-backup', async (req, res) => {
+app.get('/api/create-backup', protect, async (req, res) => {
     const backupFile = `panel-db-backup-${new Date().toISOString().replace(/:/g, '-')}.sqlite`;
     try {
         await fs.promises.copyFile(DB_PATH, path.join(BACKUP_DIR, backupFile));
@@ -802,7 +905,7 @@ app.get('/api/create-backup', async (req, res) => {
     } catch(e) { res.status(500).json({ message: e.message }); }
 });
 
-app.get('/api/list-backups', async (req, res) => {
+app.get('/api/list-backups', protect, async (req, res) => {
     try {
         const dirents = await fs.promises.readdir(BACKUP_DIR, { withFileTypes: true });
         // Filter out directories and hidden files, then sort
@@ -816,7 +919,7 @@ app.get('/api/list-backups', async (req, res) => {
 });
 
 
-app.post('/api/delete-backup', async (req, res) => {
+app.post('/api/delete-backup', protect, async (req, res) => {
     try {
         const { backupFile } = req.body;
         // Basic path sanitization
@@ -826,13 +929,13 @@ app.post('/api/delete-backup', async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-app.get('/download-backup/:filename', (req, res) => {
+app.get('/download-backup/:filename', protect, (req, res) => {
     const { filename } = req.params;
     if (filename.includes('..')) return res.status(400).send('Invalid filename');
     res.download(path.join(BACKUP_DIR, filename));
 });
 
-app.get('/api/restore-backup', (req, res) => {
+app.get('/api/restore-backup', protect, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
