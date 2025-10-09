@@ -215,8 +215,8 @@ export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretDa
 };
 
 export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
-    // FIX: Remove 'id', '.id', and other frontend-specific properties before sending the update.
-    const { id, '.id': dotId, isActive, activeInfo, customer, subscription, ...dataToSend } = secretData as any;
+    // FIX: Remove 'id', '.id', and other frontend-specific/read-only properties before sending the update.
+    const { id, '.id': dotId, 'last-logged-out': lastLoggedOut, isActive, activeInfo, customer, subscription, ...dataToSend } = secretData as any;
     return fetchMikrotikData(router, `/ppp/secret/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 
