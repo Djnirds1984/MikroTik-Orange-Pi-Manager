@@ -360,22 +360,6 @@ export type FirewallNatRuleData = Partial<Omit<FirewallNatRule, 'id' | '.id' | '
 export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
 export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
 
-// --- NodeMCU Types ---
-export interface NodeMcuDevice {
-  id: string;
-  name: string;
-  ip: string;
-  username: string;
-  password?: string;
-}
-
-export interface NodeMcuSettings {
-  api_key: string;
-  auto_restart_minutes: number;
-  a0_button_function: string;
-}
-
-
 // --- Hotspot Setup Types ---
 export interface SslCertificate {
     id: string;

@@ -264,7 +264,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             )}
 
             {activeTab === 'nodemcu' && (
-                <NodeMcuManager />
+                <NodeMcuManager hosts={hosts} />
             )}
             
             {activeTab === 'editor' && (

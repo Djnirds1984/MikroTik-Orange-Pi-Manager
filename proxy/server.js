@@ -165,21 +165,6 @@ async function initDb() {
             user_version = 6;
         }
 
-        if (user_version < 7) {
-            console.log('Applying migration v7 (Add nodemcu_devices table)...');
-            await db.exec(`
-                CREATE TABLE IF NOT EXISTS nodemcu_devices (
-                    id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    ip TEXT NOT NULL,
-                    username TEXT NOT NULL,
-                    password TEXT
-                );
-            `);
-            await db.exec('PRAGMA user_version = 7;');
-            user_version = 7;
-        }
-
 
     } catch (err) {
         console.error('Failed to initialize database:', err);
@@ -266,8 +251,7 @@ const tableMap = {
     'sales': 'sales_records',
     'billing-plans': 'billing_plans',
     'company-settings': 'company_settings',
-    'panel-settings': 'panel_settings',
-    'nodemcu-devices': 'nodemcu_devices'
+    'panel-settings': 'panel_settings'
 };
 
 const dbRouter = express.Router();
