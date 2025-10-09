@@ -40,13 +40,15 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'setup'>('activity');
 
-    const fetchData = useCallback(async () => {
+    // Refactored fetchData to handle polling gracefully
+    const fetchData = useCallback(async (isPolling = false) => {
         if (!selectedRouter) {
             setActiveUsers([]);
             setHosts([]);
+            if (!isPolling) setIsLoading(false);
             return;
         }
-        setIsLoading(true);
+        if (!isPolling) setIsLoading(true);
         setErrors({});
 
         const [activeResult, hostsResult] = await Promise.allSettled([
@@ -74,21 +76,26 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             setErrors(newErrors);
         }
 
-        setIsLoading(false);
+        if (!isPolling) setIsLoading(false);
     }, [selectedRouter]);
 
+    // Initial data fetch on mount or router change
     useEffect(() => {
-        // Only fetch activity data if on the activity tab to avoid unnecessary polling
-        if (activeTab === 'activity') {
-            fetchData();
-            const interval = setInterval(() => {
-                if (selectedRouter) {
-                    fetchData();
-                }
-            }, 5000); // Refresh every 5 seconds
-            return () => clearInterval(interval);
+        fetchData(false);
+    }, [fetchData]);
+
+    // Set up polling interval only for the 'activity' tab
+    useEffect(() => {
+        let interval: number;
+        if (activeTab === 'activity' && selectedRouter) {
+            interval = window.setInterval(() => {
+                fetchData(true); // Pass true to indicate a background poll
+            }, 5000);
         }
-    }, [fetchData, selectedRouter, activeTab]);
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [activeTab, selectedRouter, fetchData]);
 
     const handleKickUser = async (userId: string) => {
         if (!selectedRouter || !window.confirm("Are you sure you want to kick this user?")) return;
@@ -113,7 +120,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         );
     }
 
-    if (isLoading && activeUsers.length === 0 && hosts.length === 0 && activeTab === 'activity') {
+    if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
