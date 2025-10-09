@@ -587,7 +587,7 @@ const sanitizeSecretData = (data) => {
     // This includes read-only properties from GET requests and client-side computed properties.
     const invalidKeys = [
         'id', '.id', 'last-logged-out', 'last-caller-id', 'caller-id', 'uptime',
-        'isActive', 'activeInfo', 'customer'
+        'isActive', 'activeInfo', 'customer', 'subscription'
     ];
     invalidKeys.forEach(key => delete data[key]);
     return data;
@@ -650,14 +650,32 @@ const formatDateForMikroTik = (date) => {
     return `${month}/${day}/${year}`;
 };
 
+const formatTimeForMikroTik = (date) => {
+    const d = new Date(date);
+    const hours = String(d.getUTCHours()).padStart(2, '0');
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(d.getUTCSeconds()).padStart(2, '0');
+    return `${hours}:${minutes}:${seconds}`;
+};
+
 app.post('/api/ppp/process-payment', (req, res, next) => {
     handleApiRequest(req, res, next, async (apiClient) => {
         const { secret, plan, nonPaymentProfile, discountDays, paymentDate } = req.body;
 
         const currentDueDate = secret.comment ? JSON.parse(secret.comment).dueDate : null;
+        // The paymentDate is now a datetime string. The start of the new cycle is based on it.
         const startDate = new Date(currentDueDate && new Date(currentDueDate) > new Date() ? currentDueDate : paymentDate);
+        
         const newDueDate = new Date(startDate);
-        newDueDate.setDate(newDueDate.getDate() + 30);
+        // Calculate new due date based on plan cycle
+        if (plan.cycle === 'Yearly') newDueDate.setFullYear(newDueDate.getFullYear() + 1);
+        else if (plan.cycle === 'Quarterly') newDueDate.setMonth(newDueDate.getMonth() + 3);
+        else newDueDate.setMonth(newDueDate.getMonth() + 1); // Default to Monthly
+
+        // Apply discount days by subtracting them
+        if (discountDays > 0) {
+            newDueDate.setDate(newDueDate.getDate() - discountDays);
+        }
 
         const newComment = JSON.stringify({
             plan: plan.name,
@@ -672,7 +690,6 @@ app.post('/api/ppp/process-payment', (req, res, next) => {
         const scriptName = `expire-${secret.name}`;
         const scriptSource = `/ppp secret set [find where name="${secret.name}"] profile="${nonPaymentProfile}"`;
         
-        // FIX: Handle cases where the router returns a single object or nothing, preventing server crashes.
         const scriptResponse = await apiClient.get(`/system/script?name=${scriptName}`);
         const existingScripts = Array.isArray(scriptResponse.data) ? scriptResponse.data : (scriptResponse.data ? [scriptResponse.data] : []);
 
@@ -684,23 +701,24 @@ app.post('/api/ppp/process-payment', (req, res, next) => {
 
         const schedulerName = `expire-sched-${secret.name}`;
         const formattedStartDate = formatDateForMikroTik(newDueDate);
+        const formattedStartTime = formatTimeForMikroTik(newDueDate);
         
-        // FIX: Handle cases where the router returns a single object or nothing, preventing server crashes.
         const schedulerResponse = await apiClient.get(`/system/scheduler?name=${schedulerName}`);
         const existingSchedulers = Array.isArray(schedulerResponse.data) ? schedulerResponse.data : (schedulerResponse.data ? [schedulerResponse.data] : []);
 
+        const schedulerPayload = {
+            'start-date': formattedStartDate,
+            'start-time': formattedStartTime,
+            'on-event': scriptName
+        };
+
         if (existingSchedulers.length > 0) {
-            await apiClient.patch(`/system/scheduler/${existingSchedulers[0]['.id']}`, {
-                'start-date': formattedStartDate,
-                'on-event': scriptName
-            });
+            await apiClient.patch(`/system/scheduler/${existingSchedulers[0]['.id']}`, schedulerPayload);
         } else {
             await apiClient.put('/system/scheduler', {
                 name: schedulerName,
-                'start-date': formattedStartDate,
-                'start-time': '00:00:01',
+                ...schedulerPayload,
                 interval: '0s',
-                'on-event': scriptName,
             });
         }
 
