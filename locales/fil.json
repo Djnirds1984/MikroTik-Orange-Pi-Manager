@@ -67,5 +67,16 @@
         "cycle": "Siklo",
         "description": "Deskripsyon",
         "description_placeholder": "Isang maikling paglalarawan ng plano."
+    },
+    "pppoe": {
+        "users": "Mga User",
+        "profiles": "Mga Profile",
+        "servers": "Mga Server",
+        "add_new_server": "Magdagdag ng Bagong Server",
+        "edit_server": "I-edit ang Server",
+        "service_name": "Pangalan ng Serbisyo",
+        "interface": "Interface",
+        "default_profile": "Default na Profile",
+        "authentication": "Pagpapatunay"
     }
 }

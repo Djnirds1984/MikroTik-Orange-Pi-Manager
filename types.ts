@@ -111,6 +111,24 @@ export interface PppProfile {
 
 export type PppProfileData = Omit<PppProfile, 'id'>;
 
+export interface PppServer {
+    id: string;
+    name: string;
+    'service-name': string;
+    interface: string;
+    'default-profile': string;
+    authentication: string; // "pap,chap,mschap1,mschap2"
+    disabled: string; // 'true' or 'false'
+}
+
+export type PppServerData = {
+    'service-name': string;
+    interface: string;
+    'default-profile': string;
+    authentication: ('pap' | 'chap' | 'mschap1' | 'mschap2')[];
+    disabled?: 'true' | 'false';
+};
+
 export interface IpPool {
     id: string;
     name: string;

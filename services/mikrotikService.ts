@@ -1,4 +1,4 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams, HotspotProfile, HotspotProfileData, HotspotUserProfile, HotspotUserProfileData } from '../types.ts';
+import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams, HotspotProfile, HotspotProfileData, HotspotUserProfile, HotspotUserProfileData, PppServer } from '../types.ts';
 
 // The API backend is on a different port, usually 3002 as per README.md
 const API_BASE_URL = `http://${window.location.hostname}:3002`;
@@ -56,6 +56,12 @@ export const getPppProfiles = (router: RouterConfig): Promise<PppProfile[]> => m
 export const addPppProfile = (router: RouterConfig, profileData: PppProfileData): Promise<any> => mikrotikApiPost('/api/ppp/profiles/add', { routerConfig: router, profileData });
 export const updatePppProfile = (router: RouterConfig, profileData: PppProfile): Promise<any> => mikrotikApiPost('/api/ppp/profiles/update', { routerConfig: router, profileData });
 export const deletePppProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/ppp/profiles/delete', { routerConfig: router, profileId });
+
+// PPPoE Servers
+export const getPppServers = (router: RouterConfig): Promise<PppServer[]> => mikrotikApiPost('/api/ppp/servers', { routerConfig: router });
+export const addPppServer = (router: RouterConfig, serverData: Record<string, any>): Promise<any> => mikrotikApiPost('/api/ppp/servers/add', { routerConfig: router, serverData });
+export const updatePppServer = (router: RouterConfig, serverId: string, serverData: Record<string, any>): Promise<any> => mikrotikApiPost('/api/ppp/servers/update', { routerConfig: router, serverId, serverData });
+export const deletePppServer = (router: RouterConfig, serverId: string): Promise<any> => mikrotikApiPost('/api/ppp/servers/delete', { routerConfig: router, serverId });
 
 // PPPoE Users
 export const getPppSecrets = (router: RouterConfig): Promise<PppSecret[]> => mikrotikApiPost('/api/ppp/secrets', { routerConfig: router });

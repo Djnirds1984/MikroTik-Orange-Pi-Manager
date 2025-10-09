@@ -1,14 +1,14 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData, PppSecret, PppActiveConnection, SaleRecord, BillingPlanWithId, Customer, PppSecretData } from '../types.ts';
+import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData, PppSecret, PppActiveConnection, SaleRecord, BillingPlanWithId, Customer, PppSecretData, PppServer, PppServerData, Interface } from '../types.ts';
 import { 
     getPppProfiles, getIpPools, addPppProfile, updatePppProfile, deletePppProfile,
-    getPppSecrets, getPppActiveConnections, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment
+    getPppSecrets, getPppActiveConnections, addPppSecret, updatePppSecret, deletePppSecret, processPppPayment,
+    getPppServers, addPppServer, updatePppServer, deletePppServer, getInterfaces
 } from '../services/mikrotikService.ts';
 import { useBillingPlans } from '../hooks/useBillingPlans.ts';
 import { useCustomers } from '../hooks/useCustomers.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon, UsersIcon, SignalIcon, CurrencyDollarIcon, KeyIcon, SearchIcon, EyeIcon, EyeSlashIcon } from '../constants.tsx';
+import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon, UsersIcon, SignalIcon, CurrencyDollarIcon, KeyIcon, SearchIcon, EyeIcon, EyeSlashIcon, ServerIcon } from '../constants.tsx';
 import { PaymentModal } from './PaymentModal.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useCompanySettings } from '../hooks/useCompanySettings.ts';
@@ -377,12 +377,167 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     );
 }
 
+// --- Servers Management Sub-component ---
+const ServersManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const { t } = useLocalization();
+    const [servers, setServers] = useState<PppServer[]>([]);
+    const [interfaces, setInterfaces] = useState<Interface[]>([]);
+    const [profiles, setProfiles] = useState<PppProfile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingServer, setEditingServer] = useState<PppServer | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [serversData, interfacesData, profilesData] = await Promise.all([
+                getPppServers(selectedRouter),
+                getInterfaces(selectedRouter),
+                getPppProfiles(selectedRouter),
+            ]);
+            setServers(serversData);
+            setInterfaces(interfacesData.filter(i => i.type === 'bridge' || i.type === 'ether' || i.type === 'vlan'));
+            setProfiles(profilesData);
+        } catch (err) {
+            setError(`Could not fetch data: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSave = async (serverData: any, serverId?: string) => {
+        setIsSubmitting(true);
+        try {
+            const payload = { ...serverData };
+            // Convert auth array to comma-separated string for MikroTik API
+            if (Array.isArray(payload.authentication)) {
+                payload.authentication = payload.authentication.join(',');
+            }
+
+            if (serverId) {
+                await updatePppServer(selectedRouter, serverId, payload);
+            } else {
+                await addPppServer(selectedRouter, payload);
+            }
+            setIsModalOpen(false);
+            setEditingServer(null);
+            await fetchData();
+        } catch (err) {
+            alert(`Error saving server: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const handleDelete = async (serverId: string) => {
+        if (!window.confirm("Are you sure? This will disconnect all users on this server.")) return;
+        try {
+            await deletePppServer(selectedRouter, serverId);
+            await fetchData();
+        } catch (err) {
+            alert(`Error deleting server: ${(err as Error).message}`);
+        }
+    };
+    
+    const ServerFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [server, setServer] = useState<PppServerData>({ 'service-name': '', interface: '', 'default-profile': '', authentication: ['pap', 'chap', 'mschap1', 'mschap2'], disabled: 'false' });
+        
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setServer({
+                        'service-name': initialData['service-name'] || '',
+                        interface: initialData.interface,
+                        'default-profile': initialData['default-profile'],
+                        authentication: (initialData.authentication?.split(',') || []) as PppServerData['authentication'],
+                        disabled: initialData.disabled,
+                    });
+                } else {
+                     setServer({
+                        'service-name': 'pppoe-in',
+                        interface: interfaces.length > 0 ? interfaces[0].name : '',
+                        'default-profile': profiles.length > 0 ? profiles[0].name : '',
+                        authentication: ['pap', 'chap', 'mschap1', 'mschap2'],
+                        disabled: 'false',
+                    });
+                }
+            }
+        }, [initialData, isOpen, interfaces, profiles]);
+        
+        if (!isOpen) return null;
+
+        const handleAuthChange = (authMethod: string, checked: boolean) => {
+            setServer(s => ({
+                ...s,
+                authentication: checked
+                    ? [...s.authentication, authMethod as any]
+                    : s.authentication.filter(m => m !== authMethod)
+            }));
+        };
+
+        const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(server, initialData?.id); };
+
+        return (
+             <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold mb-4">{initialData ? t('pppoe.edit_server') : t('pppoe.add_new_server')}</h3>
+                            <div className="space-y-4">
+                                <div><label>{t('pppoe.service_name')}</label><input value={server['service-name']} onChange={e => setServer(s => ({...s, 'service-name': e.target.value}))} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label>{t('pppoe.interface')}</label><select value={server.interface} onChange={e => setServer(s => ({...s, interface: e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2">{interfaces.map(i => <option key={i.name} value={i.name}>{i.name}</option>)}</select></div>
+                                <div><label>{t('pppoe.default_profile')}</label><select value={server['default-profile']} onChange={e => setServer(s => ({...s, 'default-profile': e.target.value}))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2">{profiles.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
+                                <div><label>{t('pppoe.authentication')}</label><div className="flex flex-wrap gap-4 mt-2">
+                                    {['pap','chap','mschap1','mschap2'].map(method => (
+                                        <label key={method} className="flex items-center gap-2"><input type="checkbox" checked={server.authentication.includes(method as any)} onChange={e => handleAuthChange(method, e.target.checked)} />{method}</label>
+                                    ))}
+                                </div></div>
+                                 <label className="flex items-center gap-2"><input type="checkbox" checked={server.disabled === 'true'} onChange={e => setServer(s => ({...s, disabled: e.target.checked ? 'true' : 'false'}))} /> Disabled</label>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={isSubmitting}>Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+
+    return (
+        <div>
+            <ServerFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingServer} />
+            <div className="flex justify-end mb-4"><button onClick={() => { setEditingServer(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">{t('pppoe.add_new_server')}</button></div>
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm"><thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
+                    <tr><th className="px-6 py-3">Service</th><th className="px-6 py-3">Interface</th><th className="px-6 py-3">Default Profile</th><th className="px-6 py-3">Status</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <tbody>{servers.map(s => (
+                        <tr key={s.id} className={`border-b dark:border-slate-700 ${s.disabled === 'true' ? 'opacity-50' : ''}`}>
+                            <td className="px-6 py-4 font-medium">{s['service-name']}</td><td className="px-6 py-4">{s.interface}</td><td className="px-6 py-4">{s['default-profile']}</td>
+                            <td className="px-6 py-4">{s.disabled === 'true' ? <span className="text-red-500">Disabled</span> : <span className="text-green-500">Enabled</span>}</td>
+                            <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingServer(s); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(s.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
+                        </tr>
+                    ))}</tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+
 // --- Main Container Component ---
 export const Pppoe: React.FC<{ 
     selectedRouter: RouterConfigWithId | null;
     addSale: (saleData: Omit<SaleRecord, 'id'>) => Promise<void>;
 }> = ({ selectedRouter, addSale }) => {
-    const [activeTab, setActiveTab] = useState<'users' | 'profiles'>('users');
+    const { t } = useLocalization();
+    const [activeTab, setActiveTab] = useState<'users' | 'profiles' | 'servers'>('users');
     
     if (!selectedRouter) {
         return (
@@ -398,13 +553,15 @@ export const Pppoe: React.FC<{
         <div className="space-y-8">
             <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="flex space-x-2" aria-label="Tabs">
-                    <TabButton label="Users" icon={<UsersIcon className="w-5 h-5" />} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-                    <TabButton label="Profiles" icon={<SignalIcon className="w-5 h-5" />} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
+                    <TabButton label={t('pppoe.users')} icon={<UsersIcon className="w-5 h-5" />} isActive={activeTab === 'users'} onClick={() => setActiveTab('users')} />
+                    <TabButton label={t('pppoe.profiles')} icon={<SignalIcon className="w-5 h-5" />} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
+                    <TabButton label={t('pppoe.servers')} icon={<ServerIcon className="w-5 h-5" />} isActive={activeTab === 'servers'} onClick={() => setActiveTab('servers')} />
                 </nav>
             </div>
 
             {activeTab === 'users' && <UsersManager selectedRouter={selectedRouter} addSale={addSale} />}
             {activeTab === 'profiles' && <ProfilesManager selectedRouter={selectedRouter} />}
+            {activeTab === 'servers' && <ServersManager selectedRouter={selectedRouter} />}
         </div>
     );
 };

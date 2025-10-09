@@ -67,5 +67,16 @@
         "cycle": "Ciclo",
         "description": "Descrição",
         "description_placeholder": "Uma breve descrição do plano."
+    },
+     "pppoe": {
+        "users": "Usuários",
+        "profiles": "Perfis",
+        "servers": "Servidores",
+        "add_new_server": "Adicionar Novo Servidor",
+        "edit_server": "Editar Servidor",
+        "service_name": "Nome do Serviço",
+        "interface": "Interface",
+        "default_profile": "Perfil Padrão",
+        "authentication": "Autenticação"
     }
 }

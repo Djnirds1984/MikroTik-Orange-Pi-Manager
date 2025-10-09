@@ -68,5 +68,16 @@
         "cycle": "Cycle",
         "description": "Description",
         "description_placeholder": "A brief description of the plan."
+    },
+    "pppoe": {
+        "users": "Users",
+        "profiles": "Profiles",
+        "servers": "Servers",
+        "add_new_server": "Add New Server",
+        "edit_server": "Edit Server",
+        "service_name": "Service Name",
+        "interface": "Interface",
+        "default_profile": "Default Profile",
+        "authentication": "Authentication"
     }
 }
