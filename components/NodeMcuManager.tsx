@@ -11,6 +11,7 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
                 <div>
                     <p className="font-semibold text-slate-900 dark:text-slate-100 font-mono">{host.address}</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{host.macAddress}</p>
+                    {host.comment && <p className="text-xs text-slate-400 italic mt-1">Comment: {host.comment}</p>}
                 </div>
             </div>
             <div className="flex items-center space-x-2">
@@ -25,28 +26,18 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
     );
 };
 
-// List of common MAC address prefixes (OUIs) for Espressif, the manufacturer of NodeMCU chips.
-const NODEMCU_MAC_PREFIXES = [
-    // Espressif Inc.
-    'A0:20:A6', 'A0:B7:65', 'DC:4F:22', '84:0D:8E', '24:0A:C4', 'D8:A0:1D',
-    '68:C6:3A', '54:5A:A6', 'AC:D0:74', '2C:3A:E8', '30:AE:A4', '9C:9C:1F',
-    '8C:AA:B5', '90:97:D5', 'BC:DD:C2', 'C4:DD:57', 'CC:50:E3', 'EC:FA:BC',
-    // AI-Thinker (popular ESP module maker)
-    '5C:CF:7F', 'AC:D0:74',
-];
-
-
 // The main manager component
 export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) => {
     const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
 
     const nodeMcuHosts = useMemo(() => {
         if (!hosts) return [];
-        return hosts.filter(host =>
-            NODEMCU_MAC_PREFIXES.some(prefix =>
-                host.macAddress.toUpperCase().startsWith(prefix)
-            )
-        );
+        const keywords = ['vendo', 'vendo1', 'pisowifi'];
+        return hosts.filter(host => {
+            if (!host.comment) return false;
+            const lowerCaseComment = host.comment.toLowerCase();
+            return keywords.some(keyword => lowerCaseComment.includes(keyword));
+        });
     }, [hosts]);
 
 
@@ -91,7 +82,7 @@ export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) =>
                     <ChipIcon className="w-6 h-6 text-[--color-primary-500]"/> 
                     Detected NodeMCU Vendo Machines
                 </h3>
-                <p className="text-sm text-slate-500 mt-1">This list is filtered from Hotspot hosts to show devices with MAC addresses matching common NodeMCU/ESP manufacturers.</p>
+                <p className="text-sm text-slate-500 mt-1">This list is filtered from Hotspot hosts to show devices with a comment containing 'vendo', 'vendo1', or 'pisowifi'.</p>
             </div>
              <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
                 {nodeMcuHosts.length > 0 ? (
@@ -100,7 +91,7 @@ export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) =>
                     ))
                 ) : (
                     <li className="p-6 text-center text-slate-500">
-                        No NodeMCU devices detected among the active Hotspot hosts.
+                        No Vendo machines detected among the active Hotspot hosts with a matching comment.
                     </li>
                 )}
             </ul>
