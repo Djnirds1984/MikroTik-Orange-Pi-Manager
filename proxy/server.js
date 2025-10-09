@@ -164,6 +164,23 @@ async function initDb() {
             await db.exec('PRAGMA user_version = 6;');
             user_version = 6;
         }
+        
+        if (user_version < 7) {
+            console.log('Applying migration v7 (Add routerId to sales and billing)...');
+            
+            const salesCols = await db.all("PRAGMA table_info(sales_records);");
+            if (!salesCols.some(c => c.name === 'routerId')) {
+                await db.exec('ALTER TABLE sales_records ADD COLUMN routerId TEXT;');
+            }
+
+            const billingCols = await db.all("PRAGMA table_info(billing_plans);");
+            if (!billingCols.some(c => c.name === 'routerId')) {
+                await db.exec('ALTER TABLE billing_plans ADD COLUMN routerId TEXT;');
+            }
+            
+            await db.exec('PRAGMA user_version = 7;');
+            user_version = 7;
+        }
 
 
     } catch (err) {
@@ -264,7 +281,24 @@ dbRouter.use('/:table', (req, res, next) => {
 
 dbRouter.get('/:table', async (req, res) => {
     try {
-        const items = await db.all(`SELECT * FROM ${req.tableName}`);
+        const { routerId } = req.query;
+        let query = `SELECT * FROM ${req.tableName}`;
+        const params = [];
+
+        const cols = await db.all(`PRAGMA table_info(${req.tableName});`);
+        const hasRouterId = cols.some(c => c.name === 'routerId');
+
+        if (hasRouterId) {
+            if (routerId) {
+                query += ' WHERE routerId = ?';
+                params.push(routerId);
+            } else {
+                // If the table is router-specific but no routerId is provided, return an empty array.
+                return res.json([]);
+            }
+        }
+        
+        const items = await db.all(query, params);
         res.json(items);
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
@@ -295,7 +329,24 @@ dbRouter.delete('/:table/:id', async (req, res) => {
 });
 dbRouter.post('/:table/clear-all', async (req, res) => {
     try {
-        await db.run(`DELETE FROM ${req.tableName}`);
+        const { routerId } = req.body;
+        let query = `DELETE FROM ${req.tableName}`;
+        const params = [];
+
+        const cols = await db.all(`PRAGMA table_info(${req.tableName});`);
+        const hasRouterId = cols.some(c => c.name === 'routerId');
+
+        if (hasRouterId) {
+            if (routerId) {
+                 query += ' WHERE routerId = ?';
+                 params.push(routerId);
+            } else {
+                // If routerId is required but not provided, do nothing and return error
+                return res.status(400).json({ message: 'routerId is required to clear this table.' });
+            }
+        }
+        
+        await db.run(query, params);
         res.status(204).send();
     } catch(e) { res.status(500).json({ message: e.message }); }
 });

@@ -143,7 +143,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     const [secrets, setSecrets] = useState<PppSecret[]>([]);
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
-    const { plans } = useBillingPlans();
+    const { plans } = useBillingPlans(selectedRouter.id);
     const { customers, addCustomer, updateCustomer } = useCustomers(selectedRouter.id);
     const { settings: companySettings } = useCompanySettings();
 

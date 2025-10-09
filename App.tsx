@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -66,16 +67,15 @@ const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const isLargeScreen = useMediaQuery('(min-width: 1024px)');
   const [isSidebarOpen, setIsSidebarOpen] = useState(isLargeScreen);
+  const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
   
   const { routers, addRouter, updateRouter, deleteRouter, isLoading: isLoadingRouters } = useRouters();
-  const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData();
+  const { sales, addSale, deleteSale, clearSales, isLoading: isLoadingSales } = useSalesData(selectedRouterId);
   const { items, addItem, updateItem, deleteItem, isLoading: isLoadingInventory } = useInventoryData();
   const { expenses, addExpense, updateExpense, deleteExpense, isLoading: isLoadingExpenses } = useExpensesData();
   const { settings: companySettings, updateSettings: updateCompanySettings, isLoading: isLoadingCompany } = useCompanySettings();
   const { t, isLoading: isLoadingLocalization } = useLocalization();
 
-
-  const [selectedRouterId, setSelectedRouterId] = useState<string | null>(null);
 
   const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization || isLoadingExpenses;
 

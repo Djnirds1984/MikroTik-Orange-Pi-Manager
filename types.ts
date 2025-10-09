@@ -129,6 +129,7 @@ export interface BillingPlan {
     pppoeProfile: string;
     description: string;
     currency: string;
+    routerId?: string;
 }
 
 export interface BillingPlanWithId extends BillingPlan {
@@ -181,6 +182,7 @@ export interface SaleRecord {
     finalAmount: number;
     routerName: string;
     currency: string;
+    routerId?: string;
     // New fields for receipt
     clientAddress?: string;
     clientContact?: string;

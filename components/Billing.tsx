@@ -90,7 +90,7 @@ interface BillingProps {
 }
 
 export const Billing: React.FC<BillingProps> = ({ selectedRouter }) => {
-    const { plans, addPlan, updatePlan, deletePlan, isLoading: isLoadingPlans, error: plansError } = useBillingPlans();
+    const { plans, addPlan, updatePlan, deletePlan, isLoading: isLoadingPlans, error: plansError } = useBillingPlans(selectedRouter?.id || null);
     const { t, formatCurrency } = useLocalization();
     const [editingPlan, setEditingPlan] = useState<BillingPlanWithId | null>(null);
     const [isAdding, setIsAdding] = useState(false);
