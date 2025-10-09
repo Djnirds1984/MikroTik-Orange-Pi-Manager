@@ -8,7 +8,7 @@ const { Client } = require('ssh2');
 
 const app = express();
 const PORT = 3002;
-const DB_SERVER_URL = 'http://127.0.0.1:3001'; // The main panel server runs on port 3001
+const DB_SERVER_URL = 'http://localhost:3001'; // The main panel server runs on port 3001
 
 app.use(cors()); // Allow all origins as it's proxied by Nginx
 app.use(express.json());
@@ -74,17 +74,31 @@ const createRouterInstance = (config) => {
 // Middleware to fetch and cache router config from the main panel server
 const getRouterConfig = async (req, res, next) => {
     const { routerId } = req.params;
+
+    // Grab the Authorization header from the incoming request from the frontend
+    const authHeader = req.headers.authorization;
+    
+    // Create headers for the internal request to the main server
+    const internalRequestHeaders = {};
+    if (authHeader) {
+        internalRequestHeaders['Authorization'] = authHeader;
+    }
+
     if (routerConfigCache.has(routerId)) {
         req.routerInstance = createRouterInstance(routerConfigCache.get(routerId));
         return next();
     }
     try {
-        // Fetch ALL router configs from the panel DB server
-        const response = await axios.get(`${DB_SERVER_URL}/api/db/routers`);
+        // Fetch ALL router configs from the panel DB server, now with auth headers
+        const response = await axios.get(`${DB_SERVER_URL}/api/db/routers`, {
+            headers: internalRequestHeaders // Pass the headers here
+        });
         const routers = response.data;
         const config = routers.find(r => r.id === routerId);
         
         if (!config) {
+            // Clear cache for this ID if it was somehow invalid
+            routerConfigCache.delete(routerId);
             return res.status(404).json({ message: `Router config for ID ${routerId} not found in database.` });
         }
 
@@ -93,8 +107,31 @@ const getRouterConfig = async (req, res, next) => {
         req.routerInstance = createRouterInstance(config);
         next();
     } catch (error) {
-        console.error(`Failed to fetch router config for ${routerId}:`, error.message);
-        res.status(500).json({ message: 'Could not communicate with the panel database server to get router configuration.' });
+        let errorMessage;
+        if (axios.isAxiosError(error)) {
+            if (error.response) {
+                // The request was made and the server responded with a status code
+                // that falls out of the range of 2xx
+                if (error.response.status === 401) {
+                    errorMessage = 'Authentication failed when fetching router config from the main server. The session may have expired.';
+                } else {
+                    errorMessage = `The main panel server responded with an error (Status: ${error.response.status}).`;
+                }
+                console.error(`API Backend Error: Received ${error.response.status} from Panel DB Server. Data:`, error.response.data);
+            } else if (error.request) {
+                // The request was made but no response was received
+                errorMessage = 'Could not get a response from the main panel server. Please ensure the "mikrotik-manager" process is running correctly.';
+                console.error('API Backend Error: No response received from Panel DB Server. Error code:', error.code);
+            } else {
+                // Something happened in setting up the request that triggered an Error
+                errorMessage = `An unexpected error occurred while setting up the request to the main panel server: ${error.message}`;
+            }
+        } else {
+            errorMessage = `An internal error occurred in the API backend: ${error.message}`;
+        }
+        
+        console.error(`Failed to fetch router config for ${routerId}:`, errorMessage);
+        res.status(500).json({ message: errorMessage });
     }
 };
 

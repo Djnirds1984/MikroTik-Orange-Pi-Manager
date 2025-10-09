@@ -64,6 +64,7 @@ This new, more reliable method starts each server as a separate, named process.
    **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running these commands.**
    ```bash
    # First, stop and delete any old running processes to ensure a clean start
+   # NOTE: This command only removes the apps from PM2's list, it does NOT delete any of your files.
    pm2 delete all
    
    # Start the UI server on port 3001
@@ -131,7 +132,7 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 ### **Step 3: Start and Manage the Application with PM2**
 
 1.  **Stop and Delete Old Processes (CRITICAL STEP):**
-    Before starting, always clear out any old or lingering processes to prevent conflicts.
+    Before starting, always clear out any old or lingering processes to prevent conflicts. **Note:** This command only removes the apps from PM2's process list; it does **not** delete any of your project files or backups.
     ```bash
     pm2 delete all
     ```
