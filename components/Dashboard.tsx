@@ -303,7 +303,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                             <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData.rxRate)}</span></p>
                             <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData.txRate)}</span></p>
                         </div>
-                        <div className="h-64 mt-2">
+                        <div className="h-48 mt-2">
                            <Chart trafficHistory={chartData.trafficHistory} />
                         </div>
                     </div>

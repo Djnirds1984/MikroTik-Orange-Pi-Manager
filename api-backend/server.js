@@ -235,9 +235,10 @@ app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
                 name: iface.name,
                 type: iface.type,
                 macAddress: iface['mac-address'],
-                // These are the important ones for the dashboard traffic chart
-                rxRate: iface['rx-rate'],
-                txRate: iface['tx-rate'],
+                // FIX: Use the correct property names from the MikroTik API ('-bits-per-second')
+                // and convert them to numbers.
+                rxRate: Number(iface['rx-bits-per-second'] || 0),
+                txRate: Number(iface['tx-bits-per-second'] || 0),
                 disabled: iface.disabled,
                 comment: iface.comment,
             }));
