@@ -1,4 +1,3 @@
-
 import type {
     RouterConfig,
     RouterConfigWithId,
@@ -38,8 +37,9 @@ type RuleType = 'filter' | 'nat' | 'mangle';
 
 // A generic fetcher for MikroTik API calls
 const fetchMikrotikData = async <T>(router: RouterConfig, path: string, options: RequestInit = {}): Promise<T> => {
-    // Corrected Base URL to be handled by Nginx
-    const apiBaseUrl = `/mt-api`; 
+    // FIX: Restore explicit communication to the backend server on port 3002.
+    // This makes the app work correctly when accessed directly via port 3001, bypassing Nginx.
+    const apiBaseUrl = `http://${window.location.hostname}:3002/mt-api`;
     
     // The backend identifies the router by an ID.
     // The test-connection endpoint is special as it doesn't have an ID yet.

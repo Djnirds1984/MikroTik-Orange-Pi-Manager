@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus } from '../types.ts';
 import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
@@ -129,6 +128,15 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
 
             setInterfaces(prevInterfaces => {
                 const now = new Date().toLocaleTimeString();
+                
+                // FIX: Add a defensive check to ensure currentInterfaces is an array before mapping.
+                // This prevents the ".map is not a function" error if the API returns an unexpected response.
+                if (!Array.isArray(currentInterfaces)) {
+                    console.error("Received non-array data for interfaces:", currentInterfaces);
+                    // Return previous state to avoid crashing the UI
+                    return prevInterfaces;
+                }
+
                 const newInterfaces = currentInterfaces.map((iface: Interface) => {
                     const existingIface = prevInterfaces.find(p => p.name === iface.name);
                     const newHistoryPoint: TrafficHistoryPoint = { name: now, rx: iface.rxRate, tx: iface.txRate };
