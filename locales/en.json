@@ -1,3 +1,4 @@
+
 {
     "app": {
         "loading_data": "Loading application data..."
@@ -8,8 +9,7 @@
         "terminal": "Terminal",
         "routers": "Routers",
         "network": "Network",
-        "pppoe_profiles": "PPPoE Profiles",
-        "pppoe_users": "PPPoE Users",
+        "pppoe": "PPPoE Management",
         "billing_plans": "Billing Plans",
         "sales_report": "Sales Report",
         "inventory": "Stock & Inventory",
@@ -25,8 +25,7 @@
         "terminal": "Router Terminal",
         "routers": "Router Management",
         "network": "Network Management",
-        "pppoe": "PPPoE Profiles",
-        "users": "PPPoE Users",
+        "pppoe": "PPPoE Management",
         "billing": "Billing Plans",
         "sales": "Sales Report",
         "inventory": "Stock & Inventory",

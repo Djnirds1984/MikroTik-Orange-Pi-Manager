@@ -7,7 +7,6 @@ import { Scripting } from './components/Scripting.tsx';
 import { Routers } from './components/Routers.tsx';
 import { Updater } from './components/Updater.tsx';
 import { Pppoe } from './components/Pppoe.tsx';
-import { Users } from './components/Users.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
@@ -136,9 +135,7 @@ const AppContent: React.FC = () => {
       case 'terminal':
           return <Terminal selectedRouter={selectedRouter} />;
       case 'pppoe':
-          return <Pppoe selectedRouter={selectedRouter} />;
-      case 'users':
-          return <Users selectedRouter={selectedRouter} addSale={addSale} />;
+          return <Pppoe selectedRouter={selectedRouter} addSale={addSale} />;
       case 'billing':
           return <Billing selectedRouter={selectedRouter} />;
       case 'sales':

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
@@ -57,8 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     { id: 'terminal', label: t('sidebar.terminal'), icon: <TerminalIcon className="w-6 h-6" /> },
     { id: 'routers', label: t('sidebar.routers'), icon: <RouterIcon className="w-6 h-6" /> },
     { id: 'network', label: t('sidebar.network'), icon: <ShareIcon className="w-6 h-6" /> },
-    { id: 'pppoe', label: t('sidebar.pppoe_profiles'), icon: <VlanIcon className="w-6 h-6" /> },
-    { id: 'users', label: t('sidebar.pppoe_users'), icon: <UsersIcon className="w-6 h-6" /> },
+    { id: 'pppoe', label: t('sidebar.pppoe'), icon: <UsersIcon className="w-6 h-6" /> },
     { id: 'billing', label: t('sidebar.billing_plans'), icon: <SignalIcon className="w-6 h-6" /> },
     { id: 'sales', label: t('sidebar.sales_report'), icon: <CurrencyDollarIcon className="w-6 h-6" /> },
     { id: 'inventory', label: t('sidebar.inventory'), icon: <ArchiveBoxIcon className="w-6 h-6" /> },

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData } from '../types.ts';
+// FIX: Add SaleRecord to import to be used in props type.
+import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData, SaleRecord } from '../types.ts';
 import { getPppProfiles, getIpPools, addPppProfile, updatePppProfile, deletePppProfile } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon } from '../constants.tsx';
@@ -97,7 +98,11 @@ const ProfileFormModal: React.FC<ProfileFormModalProps> = ({ isOpen, onClose, on
 };
 
 
-export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+// FIX: Add 'addSale' to the component's props to match its usage in App.tsx.
+export const Pppoe: React.FC<{ 
+    selectedRouter: RouterConfigWithId | null;
+    addSale: (saleData: Omit<SaleRecord, 'id'>) => Promise<void>;
+}> = ({ selectedRouter, addSale }) => {
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
     const [pools, setPools] = useState<IpPool[]>([]);
     const [isLoading, setIsLoading] = useState(true);
