@@ -227,25 +227,43 @@ app.get('/mt-api/:routerId/system/resource', getRouterConfig, async (req, res) =
 // Custom handler for interfaces to format data for the dashboard
 app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
     await handleApiRequest(req, res, async () => {
-        const { data } = await req.routerInstance.get('/interface');
-        if (Array.isArray(data)) {
-            // Map kebab-case to camelCase for the frontend
-            return data.map(iface => ({
+        // Step 1: Get static interface data
+        const { data: staticInterfaces } = await req.routerInstance.get('/interface');
+        if (!Array.isArray(staticInterfaces)) {
+            // If the response isn't an array, we can't proceed. Return it as-is.
+            return staticInterfaces;
+        }
+        if (staticInterfaces.length === 0) {
+            return [];
+        }
+
+        // Step 2: Get live traffic data for all interfaces at once
+        const interfaceNames = staticInterfaces.map(i => i.name).join(',');
+        const { data: trafficData } = await req.routerInstance.post('/interface/monitor', {
+            "interface": interfaceNames, 
+            "once": "" 
+        });
+
+        // Step 3: Combine the data into a more usable format for the frontend
+        const trafficMap = new Map(trafficData.map(t => [t.name, t]));
+
+        return staticInterfaces.map(iface => {
+            const traffic = trafficMap.get(iface.name);
+            return {
                 id: iface['.id'],
                 name: iface.name,
                 type: iface.type,
                 macAddress: iface['mac-address'],
-                // FIX: Use the correct property names from the MikroTik API ('-bits-per-second')
-                // and convert them to numbers.
-                rxRate: Number(iface['rx-bits-per-second'] || 0),
-                txRate: Number(iface['tx-bits-per-second'] || 0),
+                // Use live traffic data if available, otherwise default to 0
+                rxRate: Number(traffic ? traffic['rx-bits-per-second'] : 0),
+                txRate: Number(traffic ? traffic['tx-bits-per-second'] : 0),
                 disabled: iface.disabled,
                 comment: iface.comment,
-            }));
-        }
-        return data; // Return as-is if not an array
+            };
+        });
     });
 });
+
 
 // Custom handler for processing PPPoE payments
 app.post('/mt-api/:routerId/ppp/process-payment', getRouterConfig, async (req, res) => {

@@ -1,89 +1,43 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus, PppActiveConnection } from '../types.ts';
+import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus } from '../types.ts';
 import { getSystemInfo, getInterfaces, getPppActiveConnections } from '../services/mikrotikService.ts';
 import { getPanelHostStatus } from '../services/panelService.ts';
 import { Loader } from './Loader.tsx';
 import { Chart } from './chart.tsx';
-import { RouterIcon, ExclamationTriangleIcon, UsersIcon } from '../constants.tsx';
+import { RouterIcon, ExclamationTriangleIcon, UsersIcon, ChipIcon } from '../constants.tsx';
 import { AIFixer } from './AIFixer.tsx';
 
-const StatCard: React.FC<{ title: string; value: string | number; unit?: string; children?: React.ReactNode }> = ({ title, value, unit, children }) => (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
-        <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</h3>
-        <div className="mt-2 flex items-baseline">
-            <p className="text-3xl font-bold text-slate-900 dark:text-white">{value}</p>
-            {unit && <p className="ml-2 text-slate-500 dark:text-slate-400">{unit}</p>}
+const StatCard: React.FC<{ title: string; children: React.ReactNode; className?: string }> = ({ title, children, className }) => (
+    <div className={`bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700 ${className}`}>
+        <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200 mb-4">{title}</h3>
+        <div className="space-y-4">
+            {children}
         </div>
-        {children}
     </div>
 );
 
-const HostStatusPanel: React.FC = () => {
-    const [status, setStatus] = useState<PanelHostStatus | null>(null);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchHostStatus = useCallback(async () => {
-        try {
-            const data = await getPanelHostStatus();
-            setStatus(data);
-            if (error) setError(null);
-        } catch (err) {
-            setError('Could not load panel host status.');
-        }
-    }, [error]);
-
-    useEffect(() => {
-        fetchHostStatus();
-        const interval = setInterval(fetchHostStatus, 5000); // Poll every 5 seconds
-        return () => clearInterval(interval);
-    }, [fetchHostStatus]);
-    
-    if (error && !status) {
-        return (
-             <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700/50 text-yellow-700 dark:text-yellow-300 p-4 rounded-lg text-center">
-                <p className="font-semibold">Host Panel Error</p>
-                <p className="text-sm">{error}</p>
+const StatItem: React.FC<{ label: string; value: string | number; subtext?: string; children?: React.ReactNode; icon?: React.ReactNode }> = ({ label, value, subtext, children, icon }) => (
+    <div>
+        <div className="flex justify-between items-center text-sm">
+            <div className="flex items-center gap-2">
+                 {icon}
+                <span className="font-medium text-slate-600 dark:text-slate-300">{label}</span>
             </div>
-        )
-    }
-
-    if (!status) {
-        return (
-             <div className="flex items-center justify-center h-24 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                <Loader />
-                <p className="ml-4 text-slate-500">Loading Host Panel...</p>
-            </div>
-        )
-    }
-
-    return (
-        <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Host Panel Status</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard title="CPU Usage" value={`${status.cpuUsage.toFixed(1)}%`}>
-                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                        <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${status.cpuUsage}%` }}></div>
-                    </div>
-                </StatCard>
-                <StatCard title="RAM Usage" value={`${status.memory.percent.toFixed(1)}%`}>
-                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                        <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${status.memory.percent}%` }}></div>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{status.memory.used} / {status.memory.total}</p>
-                </StatCard>
-                <StatCard title="SD Card Usage" value={`${status.disk.percent}%`}>
-                     <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                        <div className="bg-amber-500 h-2.5 rounded-full" style={{ width: `${status.disk.percent}%` }}></div>
-                    </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{status.disk.used} / {status.disk.total}</p>
-                </StatCard>
-            </div>
+            <span className="font-bold text-slate-900 dark:text-white">{value} {subtext && <span className="font-normal text-slate-500 dark:text-slate-400">{subtext}</span>}</span>
         </div>
-    );
-}
+        {children && <div className="mt-2">{children}</div>}
+    </div>
+);
+
+const ProgressBar: React.FC<{ percent: number; colorClass: string }> = ({ percent, colorClass }) => (
+    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2">
+        <div className={`${colorClass} h-2 rounded-full`} style={{ width: `${percent}%` }}></div>
+    </div>
+);
 
 
 const formatBps = (bps: number): string => {
+    if (typeof bps !== 'number' || !isFinite(bps)) return '0 bps';
     if (bps < 1000) return `${bps.toFixed(0)} bps`;
     if (bps < 1000 * 1000) return `${(bps / 1000).toFixed(2)} Kbps`;
     if (bps < 1000 * 1000 * 1000) return `${(bps / (1000 * 1000)).toFixed(2)} Mbps`;
@@ -93,20 +47,45 @@ const formatBps = (bps: number): string => {
 const MAX_HISTORY_POINTS = 30;
 
 export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+    // Router States
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
     const [pppoeCount, setPppoeCount] = useState<number>(0);
+    const [selectedChartInterface, setSelectedChartInterface] = useState<string | null>(null);
+
+    // Host States
+    const [hostStatus, setHostStatus] = useState<PanelHostStatus | null>(null);
+    const [hostError, setHostError] = useState<string | null>(null);
+
+    // General States
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<{ message: string; details?: any } | null>(null);
     const [showFixer, setShowFixer] = useState(false);
-    const [selectedChartInterface, setSelectedChartInterface] = useState<string | null>(null);
 
-    // FIX: The type for setInterval in the browser is `number`, not `NodeJS.Timeout`.
     const intervalRef = useRef<number | null>(null);
 
-    const fetchData = useCallback(async (isInitial = false) => {
+    // --- Data Fetching ---
+
+    const fetchHostData = useCallback(async () => {
+        try {
+            const data = await getPanelHostStatus();
+            setHostStatus(data);
+            if (hostError) setHostError(null);
+        } catch (err) {
+            setHostError('Could not load panel host status.');
+        }
+    }, [hostError]);
+
+    useEffect(() => {
+        fetchHostData();
+        const interval = setInterval(fetchHostData, 5000); // Poll every 5 seconds
+        return () => clearInterval(interval);
+    }, [fetchHostData]);
+
+
+    const fetchRouterData = useCallback(async (isInitial = false) => {
         if (!selectedRouter) {
-            setIsLoading(false);
+            if(isInitial) setIsLoading(false);
             setSystemInfo(null);
             setInterfaces([]);
             setPppoeCount(0);
@@ -126,26 +105,16 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             const [info, currentInterfaces, pppoeActive] = await Promise.all([
                 getSystemInfo(selectedRouter),
                 getInterfaces(selectedRouter),
-                getPppActiveConnections(selectedRouter).catch(() => []), // Add catch to prevent Promise.all failure if PPP package is not installed
+                getPppActiveConnections(selectedRouter).catch(() => []), 
             ]);
             setSystemInfo(info);
-
-            if (Array.isArray(pppoeActive)) {
-                 setPppoeCount(pppoeActive.length);
-            } else {
-                 setPppoeCount(0);
-                 console.warn("Could not fetch PPPoE active connections, response was not an array:", pppoeActive);
-            }
-
+            setPppoeCount(Array.isArray(pppoeActive) ? pppoeActive.length : 0);
 
             setInterfaces(prevInterfaces => {
                 const now = new Date().toLocaleTimeString();
                 
-                // FIX: Add a defensive check to ensure currentInterfaces is an array before mapping.
-                // This prevents the ".map is not a function" error if the API returns an unexpected response.
                 if (!Array.isArray(currentInterfaces)) {
                     console.error("Received non-array data for interfaces:", currentInterfaces);
-                    // Return previous state to avoid crashing the UI
                     return prevInterfaces;
                 }
 
@@ -158,10 +127,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                         newHistory = newHistory.slice(newHistory.length - MAX_HISTORY_POINTS);
                     }
 
-                    return {
-                        ...iface,
-                        trafficHistory: newHistory,
-                    };
+                    return { ...iface, trafficHistory: newHistory };
                 });
                 return newInterfaces;
             });
@@ -173,20 +139,16 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                 message: `Failed to fetch data from ${selectedRouter.name}. Check connection and credentials.`,
                 details: err,
             });
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+            if (intervalRef.current) clearInterval(intervalRef.current);
         } finally {
-            if (isInitial) {
-                setIsLoading(false);
-            }
+            if (isInitial) setIsLoading(false);
         }
     }, [selectedRouter, error]);
 
     useEffect(() => {
         if (selectedRouter) {
-            fetchData(true);
-            intervalRef.current = window.setInterval(() => fetchData(false), 2000);
+            fetchRouterData(true);
+            intervalRef.current = window.setInterval(() => fetchRouterData(false), 2000);
         } else {
             setIsLoading(false);
             setSystemInfo(null);
@@ -194,11 +156,11 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
         }
 
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+            if (intervalRef.current) clearInterval(intervalRef.current);
         };
-    }, [selectedRouter, fetchData]);
+    }, [selectedRouter, fetchRouterData]);
+    
+    // --- Memos and Effects for UI ---
     
     const etherInterfaces = useMemo(() => interfaces.filter(i => i.type.startsWith('ether')), [interfaces]);
     const chartData = useMemo(() => interfaces.find(i => i.name === selectedChartInterface), [interfaces, selectedChartInterface]);
@@ -210,10 +172,20 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
     }, [etherInterfaces, selectedChartInterface]);
 
 
+    // --- Render Logic ---
+
     if (!selectedRouter) {
         return (
             <div className="space-y-8">
-                 <HostStatusPanel />
+                 <StatCard title="Host Panel Status">
+                     {hostError && <p className="text-yellow-600 dark:text-yellow-400 text-sm">{hostError}</p>}
+                     {!hostStatus && !hostError && <div className="flex items-center justify-center h-24"><Loader /></div>}
+                     {hostStatus && <>
+                        <StatItem label="CPU Usage" value={`${hostStatus.cpuUsage.toFixed(1)}%`}><ProgressBar percent={hostStatus.cpuUsage} colorClass="bg-green-500" /></StatItem>
+                        <StatItem label="RAM Usage" value={`${hostStatus.memory.percent.toFixed(1)}%`} subtext={`(${hostStatus.memory.used} / ${hostStatus.memory.total})`}><ProgressBar percent={hostStatus.memory.percent} colorClass="bg-sky-500" /></StatItem>
+                        <StatItem label="SD Card Usage" value={`${hostStatus.disk.percent}%`} subtext={`(${hostStatus.disk.used} / ${hostStatus.disk.total})`}><ProgressBar percent={hostStatus.disk.percent} colorClass="bg-amber-500" /></StatItem>
+                     </>}
+                 </StatCard>
                  <div className="flex flex-col items-center justify-center h-full text-center py-16">
                     <RouterIcon className="w-24 h-24 text-slate-300 dark:text-slate-700 mb-4" />
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Welcome to the Dashboard</h2>
@@ -241,7 +213,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                     <h3 className="text-lg font-bold">Connection Error</h3>
                     <p className="mt-2 text-sm">{errorMessage}</p>
                     <div className="flex justify-center gap-4 mt-4">
-                        <button onClick={() => fetchData(true)} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600">
+                        <button onClick={() => fetchRouterData(true)} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md hover:bg-slate-300 dark:hover:bg-slate-600">
                            Try Again
                         </button>
                         <button onClick={() => setShowFixer(!showFixer)} className="px-4 py-2 text-sm bg-sky-100 dark:bg-sky-900/50 text-sky-700 dark:text-sky-300 rounded-md hover:bg-sky-200 dark:hover:bg-sky-800">
@@ -255,33 +227,30 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
     }
 
     return (
-        <div className="space-y-8">
-            <HostStatusPanel />
-
-            <div className="border-t border-slate-200 dark:border-slate-700"></div>
-
-            {systemInfo && (
-                <div>
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Router Status: {selectedRouter.name}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                        <StatCard title="Board Name" value={systemInfo.boardName} />
-                        <StatCard title="Uptime" value={systemInfo.uptime} />
-                        <StatCard title="CPU Load" value={systemInfo.cpuLoad} unit="%">
-                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                                <div className="bg-green-500 h-2.5 rounded-full" style={{ width: `${systemInfo.cpuLoad}%` }}></div>
-                            </div>
-                        </StatCard>
-                         <StatCard title="Memory Usage" value={systemInfo.memoryUsage} unit={`% of ${systemInfo.totalMemory}`}>
-                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
-                                <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${systemInfo.memoryUsage}%` }}></div>
-                            </div>
-                        </StatCard>
-                        <StatCard title="PPPoE Active" value={pppoeCount}>
-                             <UsersIcon className="w-6 h-6 text-slate-400 mt-2" />
-                        </StatCard>
-                    </div>
-                </div>
-            )}
+        <div className="space-y-6">
+            <div>
+                 <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 mb-4">System Overview</h2>
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                     <StatCard title="Host Panel Status">
+                         {hostError && <p className="text-yellow-600 dark:text-yellow-400 text-sm">{hostError}</p>}
+                         {!hostStatus && !hostError && <div className="flex items-center justify-center h-24"><Loader /></div>}
+                         {hostStatus && <>
+                            <StatItem label="CPU Usage" value={`${hostStatus.cpuUsage.toFixed(1)}%`}><ProgressBar percent={hostStatus.cpuUsage} colorClass="bg-green-500" /></StatItem>
+                            <StatItem label="RAM Usage" value={`${hostStatus.memory.percent.toFixed(1)}%`} subtext={`(${hostStatus.memory.used}/${hostStatus.memory.total})`}><ProgressBar percent={hostStatus.memory.percent} colorClass="bg-sky-500" /></StatItem>
+                            <StatItem label="SD Card" value={`${hostStatus.disk.percent}%`} subtext={`(${hostStatus.disk.used}/${hostStatus.disk.total})`}><ProgressBar percent={hostStatus.disk.percent} colorClass="bg-amber-500" /></StatItem>
+                         </>}
+                     </StatCard>
+                     <StatCard title={`Router: ${selectedRouter.name}`}>
+                         {systemInfo ? <>
+                             <StatItem label="Board Name" value={systemInfo.boardName} icon={<ChipIcon className="w-5 h-5 text-slate-400"/>} />
+                             <StatItem label="Uptime" value={systemInfo.uptime} />
+                             <StatItem label="CPU Load" value={`${systemInfo.cpuLoad}%`}><ProgressBar percent={systemInfo.cpuLoad} colorClass="bg-green-500" /></StatItem>
+                             <StatItem label="Memory" value={`${systemInfo.memoryUsage}%`} subtext={`of ${systemInfo.totalMemory}`}><ProgressBar percent={systemInfo.memoryUsage} colorClass="bg-sky-500" /></StatItem>
+                             <StatItem label="Active PPPoE" value={pppoeCount} icon={<UsersIcon className="w-5 h-5 text-slate-400" />} />
+                         </> : <div className="flex items-center justify-center h-24"><Loader /></div>}
+                     </StatCard>
+                 </div>
+            </div>
             
             {selectedRouter && chartData && etherInterfaces.length > 0 && (
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -299,11 +268,11 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                         </select>
                     </div>
                     <div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-sm mb-2">
                             <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData.rxRate)}</span></p>
                             <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData.txRate)}</span></p>
                         </div>
-                        <div className="h-48 mt-2">
+                        <div className="h-64">
                            <Chart trafficHistory={chartData.trafficHistory} />
                         </div>
                     </div>
