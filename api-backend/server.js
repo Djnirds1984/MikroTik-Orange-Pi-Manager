@@ -247,6 +247,75 @@ app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
     });
 });
 
+// Custom handler for processing PPPoE payments
+app.post('/mt-api/:routerId/ppp/process-payment', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { secret, plan, nonPaymentProfile, paymentDate } = req.body;
+
+        if (!secret || !secret.id || !secret.name || !plan || !nonPaymentProfile || !paymentDate) {
+            throw new Error('Missing required payment data: secret, plan, nonPaymentProfile, and paymentDate are required.');
+        }
+
+        const payment = new Date(paymentDate);
+        let newDueDate = new Date(payment);
+        
+        switch(plan.cycle) {
+            case 'Monthly':
+                newDueDate.setMonth(newDueDate.getMonth() + 1);
+                break;
+            case 'Quarterly':
+                newDueDate.setMonth(newDueDate.getMonth() + 3);
+                break;
+            case 'Yearly':
+                newDueDate.setFullYear(newDueDate.getFullYear() + 1);
+                break;
+            default:
+                // Default to 30 days if cycle is unrecognized
+                newDueDate.setDate(newDueDate.getDate() + 30);
+                break;
+        }
+
+        const formatDateForMikroTik = (date) => {
+            const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+            const month = months[date.getMonth()];
+            const day = ('0' + date.getDate()).slice(-2);
+            const year = date.getFullYear();
+            return `${month}/${day}/${year}`;
+        };
+        
+        const mikrotikDate = formatDateForMikroTik(newDueDate);
+        // The comment will be used by the frontend to display subscription info
+        const comment = JSON.stringify({ plan: plan.name, dueDate: newDueDate.toISOString().split('T')[0] });
+        
+        // 1. Update secret with new due date in comment
+        // The 'id' from the frontend is the '.id' from MikroTik.
+        await req.routerInstance.patch(`/ppp/secret/${secret.id}`, { comment });
+
+        // 2. Create/update the expiration script
+        const scriptName = `expire-${secret.name}`;
+        // The script finds the user by name and changes their profile
+        const scriptSource = `/ppp secret set [find name="${secret.name}"] profile="${nonPaymentProfile}"`;
+        // Using PUT to create or overwrite the script, adding policy for compatibility.
+        await req.routerInstance.put('/system/script', { 
+            name: scriptName, 
+            source: scriptSource, 
+            policy: "read,write,test" 
+        });
+
+        // 3. Create/update the scheduler to run the script on the due date
+        const schedulerName = `expire-sched-${secret.name}`;
+        // Using PUT to create or overwrite the scheduler
+        await req.routerInstance.put('/system/scheduler', { 
+            name: schedulerName, 
+            'on-event': scriptName, 
+            'start-date': mikrotikDate, 
+            'start-time': '00:00:01' // Run at the beginning of the day
+        });
+        
+        return { message: `Payment processed successfully. User ${secret.name} will expire on ${mikrotikDate}.` };
+    });
+});
+
 
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
