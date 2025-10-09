@@ -15,6 +15,8 @@ app.use(express.json());
 
 // In-memory cache for router configs to avoid hitting the DB on every single request
 const routerConfigCache = new Map();
+// In-memory cache for calculating traffic stats
+const trafficStatsCache = new Map();
 
 const handleApiRequest = async (req, res, action) => {
     try {
@@ -224,43 +226,73 @@ app.get('/mt-api/:routerId/system/resource', getRouterConfig, async (req, res) =
     });
 });
 
-// Custom handler for interfaces to format data for the dashboard
+// Custom handler for interfaces to calculate traffic rates manually
 app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
     await handleApiRequest(req, res, async () => {
-        // Step 1: Get static interface data
-        const { data: staticInterfaces } = await req.routerInstance.get('/interface');
-        if (!Array.isArray(staticInterfaces)) {
-            // If the response isn't an array, we can't proceed. Return it as-is.
-            return staticInterfaces;
-        }
-        if (staticInterfaces.length === 0) {
-            return [];
+        const { routerId } = req.params;
+        const { data: currentInterfaces } = await req.routerInstance.get('/interface');
+
+        if (!Array.isArray(currentInterfaces)) {
+            return currentInterfaces; // Not an array, return as-is
         }
 
-        // Step 2: Get live traffic data for all interfaces at once
-        const interfaceNames = staticInterfaces.map(i => i.name).join(',');
-        const { data: trafficData } = await req.routerInstance.post('/interface/monitor', {
-            "interface": interfaceNames, 
-            "once": "" 
-        });
+        const now = Date.now();
+        const previousStats = trafficStatsCache.get(routerId);
+        let processedInterfaces = [];
 
-        // Step 3: Combine the data into a more usable format for the frontend
-        const trafficMap = new Map(trafficData.map(t => [t.name, t]));
+        if (previousStats && previousStats.interfaces) {
+            const timeDiffSeconds = (now - previousStats.timestamp) / 1000;
+            const prevInterfaceMap = previousStats.interfaces;
 
-        return staticInterfaces.map(iface => {
-            const traffic = trafficMap.get(iface.name);
-            return {
+            processedInterfaces = currentInterfaces.map(iface => {
+                const prevIface = prevInterfaceMap.get(iface.name);
+                let rxRate = 0;
+                let txRate = 0;
+
+                if (prevIface && timeDiffSeconds > 0.1) { // Avoid division by zero or tiny intervals
+                    let rxByteDiff = iface['rx-byte'] - prevIface.rxByte;
+                    let txByteDiff = iface['tx-byte'] - prevIface.txByte;
+                    
+                    // Handle counter wrap-around (for 32-bit or 64-bit counters)
+                    if (rxByteDiff < 0) { rxByteDiff = iface['rx-byte']; }
+                    if (txByteDiff < 0) { txByteDiff = iface['tx-byte']; }
+
+                    rxRate = (rxByteDiff * 8) / timeDiffSeconds;
+                    txRate = (txByteDiff * 8) / timeDiffSeconds;
+                }
+
+                return {
+                    ...iface,
+                    id: iface['.id'],
+                    rxRate: Math.round(rxRate),
+                    txRate: Math.round(txRate),
+                };
+            });
+        } else {
+            // First run, just return 0 rates
+            processedInterfaces = currentInterfaces.map(iface => ({
+                ...iface,
                 id: iface['.id'],
-                name: iface.name,
-                type: iface.type,
-                macAddress: iface['mac-address'],
-                // Use live traffic data if available, otherwise default to 0
-                rxRate: Number(traffic ? traffic['rx-bits-per-second'] : 0),
-                txRate: Number(traffic ? traffic['tx-bits-per-second'] : 0),
-                disabled: iface.disabled,
-                comment: iface.comment,
-            };
+                rxRate: 0,
+                txRate: 0,
+            }));
+        }
+
+        // Update cache for the next call with only the necessary data
+        const newInterfaceMap = new Map();
+        currentInterfaces.forEach(iface => {
+            newInterfaceMap.set(iface.name, {
+                rxByte: iface['rx-byte'],
+                txByte: iface['tx-byte']
+            });
         });
+
+        trafficStatsCache.set(routerId, {
+            timestamp: now,
+            interfaces: newInterfaceMap
+        });
+
+        return processedInterfaces;
     });
 });
 
