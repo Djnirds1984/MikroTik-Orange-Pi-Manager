@@ -425,3 +425,15 @@ export interface HotspotSetupParams {
     hotspotUser: string;
     hotspotPass: string;
 }
+
+export interface VersionInfo {
+    title: string;
+    description: string;
+    hash?: string;
+}
+
+export interface NewVersionInfo {
+    title: string;
+    description: string;
+    changelog: string;
+}

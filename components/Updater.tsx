@@ -1,23 +1,19 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
+import { 
+    getCurrentVersion, listBackups, deleteBackup, 
+    streamUpdateStatus, streamUpdateApp, streamRollbackApp 
+} from '../services/updaterService.ts';
 import { UpdateIcon, CloudArrowUpIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from '../constants.tsx';
 import { Loader } from './Loader.tsx';
+// FIX: Import shared types from types.ts to resolve type errors.
+import type { VersionInfo, NewVersionInfo } from '../types.ts';
 
 type UpdateStatus = 'idle' | 'checking' | 'uptodate' | 'available' | 'diverged' | 'ahead' | 'error' | 'updating' | 'restarting' | 'rollingback';
 type StatusInfo = {
     status: UpdateStatus;
     message: string;
 };
-type VersionInfo = {
-    title: string;
-    description: string;
-    hash?: string;
-};
-type NewVersionInfo = {
-    title: string;
-    description: string;
-    changelog: string;
-};
+// FIX: Removed local type definitions, now imported from types.ts.
 type LogEntry = {
     text: string;
     isError?: boolean;
@@ -76,12 +72,11 @@ export const Updater: React.FC = () => {
 
     const fetchBackups = useCallback(async () => {
         try {
-            const res = await fetch('/api/list-backups');
-            if (!res.ok) throw new Error('Failed to fetch backups');
-            const data: string[] = await res.json();
+            const data = await listBackups();
             setBackups(data.filter(file => file.endsWith('.tar.gz')));
         } catch (error) {
             console.error(error);
+             setStatusInfo({ status: 'error', message: `Failed to fetch backups: ${(error as Error).message}` });
         }
     }, []);
 
@@ -89,11 +84,7 @@ export const Updater: React.FC = () => {
         const fetchCurrentVersion = async () => {
             setIsLoadingCurrentVersion(true);
             try {
-                const res = await fetch('/api/current-version');
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.message || 'Failed to fetch current version');
-                }
+                const data = await getCurrentVersion();
                 setCurrentVersionInfo(data);
             } catch (error) {
                 console.error(error);
@@ -112,66 +103,55 @@ export const Updater: React.FC = () => {
         setNewVersionInfo(null);
         setStatusInfo({ status: 'checking', message: 'Connecting to repository...' });
 
-        const eventSource = new EventSource('/api/update-status');
+        streamUpdateStatus({
+            onMessage: (data) => {
+                 if (data.log) {
+                    setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
+                }
+                
+                if (data.newVersionInfo) {
+                    setNewVersionInfo(data.newVersionInfo);
+                }
 
-        eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-
-            if (data.status === 'finished') {
-                eventSource.close();
+                if (data.status) {
+                    setStatusInfo(prev => ({...prev, ...data}));
+                }
+            },
+            onClose: () => {
                 setStatusInfo(prev => {
                     if (prev.status === 'checking') {
-                        return { status: 'error', message: 'Failed to determine update status. Check logs for details.' };
+                         return { status: 'error', message: 'Failed to determine update status. Check logs for details.' };
                     }
                     return prev;
                 });
-                return;
+            },
+            onError: (err) => {
+                setStatusInfo({ status: 'error', message: `Connection to server failed. Could not check for updates. ${err.message}` });
             }
-
-            if (data.log) {
-                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
-            }
-            
-            if (data.newVersionInfo) {
-                setNewVersionInfo(data.newVersionInfo);
-            }
-
-            if (data.status) {
-                setStatusInfo(prev => ({...prev, ...data}));
-            }
-        };
-
-        eventSource.onerror = () => {
-            setStatusInfo({ status: 'error', message: 'Connection to server failed. Could not check for updates.' });
-            eventSource.close();
-        };
+        });
     };
     
     const handleUpdate = () => {
         setStatusInfo(prev => ({ ...prev, status: 'updating', message: 'Starting update process...' }));
         setLogs([]);
-        const eventSource = new EventSource('/api/update-app');
-        
-        eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.log) {
-                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
-            }
-            if (data.status === 'restarting') {
-                setStatusInfo({ status: 'restarting', message: 'Update complete! The server is restarting. This page will reload in a few seconds...' });
-                setTimeout(() => window.location.reload(), 8000);
-                eventSource.close();
-            }
-             if (data.status === 'error') {
-                setStatusInfo({ status: 'error', message: data.message });
-                 eventSource.close();
-            }
-        };
 
-        eventSource.onerror = () => {
-            setStatusInfo({ status: 'error', message: 'Lost connection to the server during the update process.' });
-            eventSource.close();
-        };
+        streamUpdateApp({
+            onMessage: (data) => {
+                if (data.log) {
+                    setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
+                }
+                if (data.status === 'restarting') {
+                    setStatusInfo({ status: 'restarting', message: 'Update complete! The server is restarting. This page will reload in a few seconds...' });
+                    setTimeout(() => window.location.reload(), 8000);
+                }
+                 if (data.status === 'error') {
+                    setStatusInfo({ status: 'error', message: data.message });
+                }
+            },
+            onError: (err) => {
+                 setStatusInfo({ status: 'error', message: `Lost connection to the server during the update process. ${err.message}` });
+            }
+        });
     };
     
     const handleRollback = (backupFile: string) => {
@@ -180,28 +160,23 @@ export const Updater: React.FC = () => {
         setStatusInfo({ status: 'rollingback', message: `Restoring from ${backupFile}...` });
         setLogs([]);
         
-        const eventSource = new EventSource(`/api/rollback-app?backupFile=${encodeURIComponent(backupFile)}`);
-        
-         eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if(data.log) {
-                setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
-            }
-            if(data.status === 'restarting') {
-                setStatusInfo({ status: 'restarting', message: 'Rollback complete! Server is restarting...' });
-                setTimeout(() => window.location.reload(), 8000);
-                eventSource.close();
-            }
-             if(data.status === 'error') {
-                 setStatusInfo({ status: 'error', message: data.message });
-                 eventSource.close();
+        streamRollbackApp(backupFile, {
+             onMessage: (data) => {
+                if(data.log) {
+                    setLogs(prev => [...prev, { text: data.log.trim(), isError: data.isError }]);
+                }
+                if(data.status === 'restarting') {
+                    setStatusInfo({ status: 'restarting', message: 'Rollback complete! Server is restarting...' });
+                    setTimeout(() => window.location.reload(), 8000);
+                }
+                 if(data.status === 'error') {
+                     setStatusInfo({ status: 'error', message: data.message });
+                 }
+             },
+             onError: (err) => {
+                 setStatusInfo({ status: 'error', message: `Lost connection during rollback. ${err.message}` });
              }
-         };
-
-         eventSource.onerror = () => {
-             setStatusInfo({ status: 'error', message: 'Lost connection during rollback.' });
-             eventSource.close();
-         };
+        });
     };
 
     const handleDeleteBackup = async (backupFile: string) => {
@@ -209,15 +184,7 @@ export const Updater: React.FC = () => {
 
         setIsDeleting(backupFile);
         try {
-            const res = await fetch('/api/delete-backup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ backupFile }),
-            });
-            if (!res.ok) {
-                const errorData = await res.json();
-                throw new Error(errorData.message || 'Failed to delete backup.');
-            }
+            await deleteBackup(backupFile);
             await fetchBackups(); // Refresh the list
         } catch (error) {
             alert(`Error: ${(error as Error).message}`);
