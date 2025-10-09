@@ -1,147 +1,310 @@
-import type { RouterConfig, SystemInfo, Interface, HotspotActiveUser, HotspotHost, PppProfile, PppProfileData, IpPool, IpAddress, IpRoute, IpRouteData, NtpSettings, VlanInterface, PppSecret, PppSecretData, PppActiveConnection, BillingPlanWithId, WanRoute, FailoverStatus, FirewallFilterRule, FirewallNatRule, FirewallMangleRule, FirewallRuleData, RouterConfigWithId, SslCertificate, HotspotSetupParams, HotspotProfile, HotspotProfileData, HotspotUserProfile, HotspotUserProfileData, PppServer } from '../types.ts';
 
-// The API backend is on a different port, usually 3002 as per README.md
-const API_BASE_URL = ``;
+import type {
+    RouterConfig,
+    RouterConfigWithId,
+    SystemInfo,
+    Interface,
+    PppProfile,
+    PppProfileData,
+    IpPool,
+    PppSecret,
+    PppSecretData,
+    PppActiveConnection,
+    HotspotActiveUser,
+    HotspotHost,
+    HotspotProfile,
+    HotspotProfileData,
+    HotspotUserProfile,
+    HotspotUserProfileData,
+    NtpSettings,
+    VlanInterface,
+    IpAddress,
+    IpRoute,
+    IpRouteData,
+    WanRoute,
+    FailoverStatus,
+    FirewallFilterRule,
+    FirewallNatRule,
+    FirewallMangleRule,
+    FirewallRuleData,
+    SslCertificate,
+    HotspotSetupParams,
+    PppServer,
+    PppServerData,
+    FirewallRule,
+} from '../types.ts';
 
-// A generic fetcher for MikroTik API POST calls
-const mikrotikApiPost = async <T>(path: string, body: Record<string, any>): Promise<T> => {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
-        method: 'POST',
+type RuleType = 'filter' | 'nat' | 'mangle';
+
+// A generic fetcher for MikroTik API calls
+const fetchMikrotikData = async <T>(router: RouterConfig, path: string, options: RequestInit = {}): Promise<T> => {
+    // The API backend is proxied by the UI server.
+    const apiBaseUrl = `/api/router`;
+    
+    // The backend identifies the router by an ID.
+    // The test-connection endpoint is special as it doesn't have an ID yet.
+    const fullPath = 'id' in router ? `${apiBaseUrl}/${(router as RouterConfigWithId).id}${path}` : `${apiBaseUrl}${path}`;
+
+    const response = await fetch(fullPath, {
         headers: {
             'Content-Type': 'application/json',
+            ...options.headers,
         },
-        body: JSON.stringify(body),
+        ...options,
     });
-
+  
     const contentType = response.headers.get("content-type");
     if (!response.ok) {
         let errorMsg = `Request failed with status ${response.status}`;
-        let details: any = {};
         if (contentType && contentType.includes("application/json")) {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
-            details = errorData.details;
         } else {
-            errorMsg = await response.text();
+            const textError = await response.text();
+            if (textError) errorMsg = textError;
         }
-        const error = new Error(errorMsg) as any;
-        error.details = details;
-        throw error;
+        throw new Error(errorMsg);
     }
     
     if (response.status === 204) { // No Content
-        return null as T;
+        return {} as T;
     }
 
-    return response.json() as Promise<T>;
+    if (contentType && contentType.includes("application/json")) {
+        return response.json() as Promise<T>;
+    }
+    // Handle text responses, e.g., for file content
+    return response.text() as unknown as Promise<T>;
+};
+
+// --- Test Connection ---
+export const testRouterConnection = (routerConfig: RouterConfig): Promise<{ success: boolean, message: string }> => {
+    return fetchMikrotikData<{ success: boolean, message: string }>(routerConfig, '/test-connection', {
+        method: 'POST',
+        body: JSON.stringify(routerConfig),
+    });
+};
+
+// --- System Info ---
+export const getSystemInfo = (router: RouterConfigWithId): Promise<SystemInfo> => {
+    return fetchMikrotikData<SystemInfo>(router, '/system-info');
+};
+
+export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> => {
+    return fetchMikrotikData<NtpSettings>(router, '/system/ntp');
+};
+
+export const setRouterNtp = (router: RouterConfigWithId, settings: NtpSettings): Promise<{ message: string }> => {
+    return fetchMikrotikData<{ message: string }>(router, '/system/ntp', {
+        method: 'POST',
+        body: JSON.stringify(settings),
+    });
+};
+
+export const rebootRouter = (router: RouterConfigWithId): Promise<{ message: string }> => {
+    return fetchMikrotikData<{ message: string }>(router, '/system/reboot', { method: 'POST' });
+};
+
+// --- Interfaces & IPs ---
+export const getInterfaces = (router: RouterConfigWithId): Promise<Interface[]> => {
+    return fetchMikrotikData<Interface[]>(router, '/interfaces');
+};
+
+export const getIpAddresses = (router: RouterConfigWithId): Promise<IpAddress[]> => {
+    return fetchMikrotikData<IpAddress[]>(router, '/ip/addresses');
+};
+
+export const getVlans = (router: RouterConfigWithId): Promise<VlanInterface[]> => {
+    return fetchMikrotikData<VlanInterface[]>(router, '/interfaces/vlans');
+};
+
+export const addVlan = (router: RouterConfigWithId, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => {
+    return fetchMikrotikData(router, '/interfaces/vlans', {
+        method: 'POST',
+        body: JSON.stringify(vlanData),
+    });
+};
+
+export const deleteVlan = (router: RouterConfigWithId, vlanId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/interfaces/vlans/${encodeURIComponent(vlanId)}`, {
+        method: 'DELETE',
+    });
+};
+
+// --- IP Routes & WAN ---
+export const getIpRoutes = (router: RouterConfigWithId): Promise<IpRoute[]> => {
+    return fetchMikrotikData<IpRoute[]>(router, '/ip/routes');
+};
+
+export const addIpRoute = (router: RouterConfigWithId, routeData: IpRouteData): Promise<any> => {
+    return fetchMikrotikData(router, '/ip/routes', {
+        method: 'POST',
+        body: JSON.stringify(routeData),
+    });
+};
+
+export const updateIpRoute = (router: RouterConfigWithId, routeId: string, routeData: Partial<IpRouteData>): Promise<any> => {
+    return fetchMikrotikData(router, `/ip/routes/${encodeURIComponent(routeId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(routeData),
+    });
+};
+
+export const deleteIpRoute = (router: RouterConfigWithId, routeId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/ip/routes/${encodeURIComponent(routeId)}`, {
+        method: 'DELETE',
+    });
+};
+
+export const getWanRoutes = (router: RouterConfigWithId): Promise<WanRoute[]> => {
+    return fetchMikrotikData<WanRoute[]>(router, '/ip/wan-routes');
+};
+
+export const setRouteProperty = (router: RouterConfigWithId, routeId: string, properties: Partial<{ disabled: 'true' | 'false' }>): Promise<any> => {
+    return fetchMikrotikData(router, `/ip/routes/${encodeURIComponent(routeId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(properties),
+    });
+};
+
+export const getWanFailoverStatus = (router: RouterConfigWithId): Promise<FailoverStatus> => {
+    return fetchMikrotikData<FailoverStatus>(router, '/ip/wan-failover-status');
+};
+
+export const configureWanFailover = (router: RouterConfigWithId, enabled: boolean): Promise<any> => {
+    return fetchMikrotikData(router, '/ip/wan-failover', {
+        method: 'POST',
+        body: JSON.stringify({ enabled }),
+    });
 };
 
 
-// --- API Functions ---
-
-// Dashboard
-export const getSystemInfo = (router: RouterConfig): Promise<SystemInfo> => mikrotikApiPost<SystemInfo>('/api/system-info', { routerConfig: router });
-export const getInterfaces = (router: RouterConfig): Promise<Interface[]> => mikrotikApiPost<Interface[]>('/api/interfaces', { routerConfig: router });
-export const testRouterConnection = async (router: RouterConfig): Promise<{ success: boolean; message: string }> => {
-    try {
-        const result = await mikrotikApiPost<{ success: boolean; message: string }>('/api/test-connection', { routerConfig: router });
-        return result;
-    } catch (err) {
-        return { success: false, message: `Connection failed: ${(err as Error).message}` };
-    }
+// --- PPP ---
+export const getPppProfiles = (router: RouterConfigWithId): Promise<PppProfile[]> => {
+    return fetchMikrotikData<PppProfile[]>(router, '/ppp/profiles');
 };
 
-// PPPoE
-export const getPppProfiles = (router: RouterConfig): Promise<PppProfile[]> => mikrotikApiPost( '/api/ppp/profiles', { routerConfig: router });
-export const addPppProfile = (router: RouterConfig, profileData: PppProfileData): Promise<any> => mikrotikApiPost('/api/ppp/profiles/add', { routerConfig: router, profileData });
-export const updatePppProfile = (router: RouterConfig, profileData: PppProfile): Promise<any> => mikrotikApiPost('/api/ppp/profiles/update', { routerConfig: router, profileData });
-export const deletePppProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/ppp/profiles/delete', { routerConfig: router, profileId });
+export const addPppProfile = (router: RouterConfigWithId, profileData: PppProfileData): Promise<any> => {
+    return fetchMikrotikData(router, '/ppp/profiles', { method: 'POST', body: JSON.stringify(profileData) });
+};
 
-// PPPoE Servers
-export const getPppServers = (router: RouterConfig): Promise<PppServer[]> => mikrotikApiPost('/api/ppp/servers', { routerConfig: router });
-export const addPppServer = (router: RouterConfig, serverData: Record<string, any>): Promise<any> => mikrotikApiPost('/api/ppp/servers/add', { routerConfig: router, serverData });
-export const updatePppServer = (router: RouterConfig, serverId: string, serverData: Record<string, any>): Promise<any> => mikrotikApiPost('/api/ppp/servers/update', { routerConfig: router, serverId, serverData });
-export const deletePppServer = (router: RouterConfig, serverId: string): Promise<any> => mikrotikApiPost('/api/ppp/servers/delete', { routerConfig: router, serverId });
+export const updatePppProfile = (router: RouterConfigWithId, profileData: PppProfile): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/profiles/${encodeURIComponent(profileData.id)}`, { method: 'PATCH', body: JSON.stringify(profileData) });
+};
 
-// PPPoE Users
-export const getPppSecrets = (router: RouterConfig): Promise<PppSecret[]> => mikrotikApiPost('/api/ppp/secrets', { routerConfig: router });
-export const getPppActiveConnections = (router: RouterConfig): Promise<PppActiveConnection[]> => mikrotikApiPost('/api/ppp/active', { routerConfig: router });
-export const addPppSecret = (router: RouterConfig, secretData: PppSecretData): Promise<any> => mikrotikApiPost('/api/ppp/secrets/add', { routerConfig: router, secretData });
-export const updatePppSecret = (router: RouterConfig, secretData: PppSecret): Promise<any> => mikrotikApiPost('/api/ppp/secrets/update', { routerConfig: router, secretData });
-export const deletePppSecret = (router: RouterConfig, secretId: string): Promise<any> => mikrotikApiPost('/api/ppp/secrets/delete', { routerConfig: router, secretId });
+export const deletePppProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/profiles/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+};
 
-// Payment Processing
-export interface PaymentData {
-    secret: PppSecret;
-    plan: BillingPlanWithId;
-    nonPaymentProfile: string;
-    discountDays: number;
-    paymentDate: string;
-}
-export const processPppPayment = (router: RouterConfig, paymentData: PaymentData): Promise<any> => mikrotikApiPost('/api/ppp/process-payment', { routerConfig: router, ...paymentData });
+export const getIpPools = (router: RouterConfigWithId): Promise<IpPool[]> => {
+    return fetchMikrotikData<IpPool[]>(router, '/ip/pools');
+};
 
+export const getPppSecrets = (router: RouterConfigWithId): Promise<PppSecret[]> => {
+    return fetchMikrotikData<PppSecret[]>(router, '/ppp/secrets');
+};
 
-// Hotspot
-export const getHotspotActiveUsers = (router: RouterConfig): Promise<HotspotActiveUser[]> => mikrotikApiPost( '/api/hotspot/active', { routerConfig: router });
-export const getHotspotHosts = (router: RouterConfig): Promise<HotspotHost[]> => mikrotikApiPost( '/api/hotspot/hosts', { routerConfig: router });
-export const removeHotspotActiveUser = (router: RouterConfig, userId: string): Promise<any> => mikrotikApiPost( '/api/hotspot/active/remove', { routerConfig: router, userId });
+export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretData): Promise<any> => {
+    return fetchMikrotikData(router, '/ppp/secrets', { method: 'POST', body: JSON.stringify(secretData) });
+};
 
-// Hotspot Server Profiles
-export const getHotspotProfiles = (router: RouterConfig): Promise<HotspotProfile[]> => mikrotikApiPost('/api/hotspot/profiles', { routerConfig: router });
-export const addHotspotProfile = (router: RouterConfig, profileData: HotspotProfileData): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/add', { routerConfig: router, profileData });
-export const updateHotspotProfile = (router: RouterConfig, profileData: HotspotProfile): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/update', { routerConfig: router, profileData });
-export const deleteHotspotProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/hotspot/profiles/delete', { routerConfig: router, profileId });
+export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/secrets/${encodeURIComponent(secretData.id)}`, { method: 'PATCH', body: JSON.stringify(secretData) });
+};
 
-// Hotspot User Profiles
-export const getHotspotUserProfiles = (router: RouterConfig): Promise<HotspotUserProfile[]> => mikrotikApiPost('/api/hotspot/user/profiles', { routerConfig: router });
-export const addHotspotUserProfile = (router: RouterConfig, profileData: HotspotUserProfileData): Promise<any> => mikrotikApiPost('/api/hotspot/user/profiles/add', { routerConfig: router, profileData });
-export const updateHotspotUserProfile = (router: RouterConfig, profileData: HotspotUserProfile): Promise<any> => mikrotikApiPost('/api/hotspot/user/profiles/update', { routerConfig: router, profileData });
-export const deleteHotspotUserProfile = (router: RouterConfig, profileId: string): Promise<any> => mikrotikApiPost('/api/hotspot/user/profiles/delete', { routerConfig: router, profileId });
+export const deletePppSecret = (router: RouterConfigWithId, secretId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/secrets/${encodeURIComponent(secretId)}`, { method: 'DELETE' });
+};
 
-// Hotspot File Editor
-export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => mikrotikApiPost('/api/hotspot/files/list', { routerConfig: router, path });
-export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => mikrotikApiPost('/api/hotspot/files/get-content', { routerConfig: router, filePath });
-export const saveHotspotFileContent = (router: RouterConfigWithId, filePath: string, content: string): Promise<{ message: string }> => mikrotikApiPost('/api/hotspot/files/save-content', { routerConfig: router, filePath, content });
+export const getPppActiveConnections = (router: RouterConfigWithId): Promise<PppActiveConnection[]> => {
+    return fetchMikrotikData<PppActiveConnection[]>(router, '/ppp/active');
+};
 
-// Hotspot Setup
+export const processPppPayment = (router: RouterConfigWithId, paymentData: any): Promise<any> => {
+    return fetchMikrotikData(router, '/ppp/process-payment', { method: 'POST', body: JSON.stringify(paymentData) });
+};
+
+export const getPppServers = (router: RouterConfigWithId): Promise<PppServer[]> => {
+    return fetchMikrotikData<PppServer[]>(router, '/ppp/servers');
+};
+
+export const addPppServer = (router: RouterConfigWithId, serverData: PppServerData): Promise<any> => {
+    return fetchMikrotikData(router, '/ppp/servers', { method: 'POST', body: JSON.stringify(serverData) });
+};
+
+export const updatePppServer = (router: RouterConfigWithId, serverId: string, serverData: Partial<PppServerData>): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/servers/${encodeURIComponent(serverId)}`, { method: 'PATCH', body: JSON.stringify(serverData) });
+};
+
+export const deletePppServer = (router: RouterConfigWithId, serverId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/ppp/servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' });
+};
+
+// --- Hotspot ---
+export const getHotspotActiveUsers = (router: RouterConfigWithId): Promise<HotspotActiveUser[]> => {
+    return fetchMikrotikData<HotspotActiveUser[]>(router, '/hotspot/active');
+};
+
+export const removeHotspotActiveUser = (router: RouterConfigWithId, userId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/active/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+};
+
+export const getHotspotHosts = (router: RouterConfigWithId): Promise<HotspotHost[]> => {
+    return fetchMikrotikData<HotspotHost[]>(router, '/hotspot/hosts');
+};
+
+export const getHotspotProfiles = (router: RouterConfigWithId): Promise<HotspotProfile[]> => {
+    return fetchMikrotikData<HotspotProfile[]>(router, '/hotspot/profiles');
+};
+export const addHotspotProfile = (router: RouterConfigWithId, profileData: HotspotProfileData): Promise<any> => {
+    return fetchMikrotikData(router, '/hotspot/profiles', { method: 'POST', body: JSON.stringify(profileData) });
+};
+export const updateHotspotProfile = (router: RouterConfigWithId, profile: HotspotProfile): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/profiles/${encodeURIComponent(profile.id)}`, { method: 'PATCH', body: JSON.stringify(profile) });
+};
+export const deleteHotspotProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/profiles/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+};
+
+export const getHotspotUserProfiles = (router: RouterConfigWithId): Promise<HotspotUserProfile[]> => {
+    return fetchMikrotikData<HotspotUserProfile[]>(router, '/hotspot/user-profiles');
+};
+export const addHotspotUserProfile = (router: RouterConfigWithId, profileData: HotspotUserProfileData): Promise<any> => {
+    return fetchMikrotikData(router, '/hotspot/user-profiles', { method: 'POST', body: JSON.stringify(profileData) });
+};
+export const updateHotspotUserProfile = (router: RouterConfigWithId, profile: HotspotUserProfile): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/user-profiles/${encodeURIComponent(profile.id)}`, { method: 'PATCH', body: JSON.stringify(profile) });
+};
+export const deleteHotspotUserProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/user-profiles/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+};
+
+export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => {
+    return fetchMikrotikData<any[]>(router, `/hotspot/files?path=${encodeURIComponent(path)}`);
+};
+export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => {
+    return fetchMikrotikData<{ content: string }>(router, `/hotspot/file-content?path=${encodeURIComponent(filePath)}`);
+};
+export const saveHotspotFileContent = (router: RouterConfigWithId, filePath: string, content: string): Promise<any> => {
+    return fetchMikrotikData(router, `/hotspot/file-content`, { method: 'POST', body: JSON.stringify({ path: filePath, content }) });
+};
+
+export const getSslCertificates = (router: RouterConfigWithId): Promise<SslCertificate[]> => {
+    return fetchMikrotikData<SslCertificate[]>(router, '/system/certificates');
+};
+
 export const runHotspotSetup = (router: RouterConfigWithId, params: HotspotSetupParams): Promise<{ message: string }> => {
-    return mikrotikApiPost('/api/hotspot/run-setup', { routerConfig: router, params });
+    return fetchMikrotikData(router, '/hotspot/setup', { method: 'POST', body: JSON.stringify(params) });
 };
 
+// --- Firewall ---
+const firewallApi = <T extends FirewallRule, U extends FirewallRuleData>(type: RuleType) => ({
+    get: (router: RouterConfigWithId): Promise<T[]> => fetchMikrotikData<T[]>(router, `/firewall/${type}`),
+    add: (router: RouterConfigWithId, data: U): Promise<any> => fetchMikrotikData(router, `/firewall/${type}`, { method: 'POST', body: JSON.stringify(data) }),
+    update: (router: RouterConfigWithId, id: string, data: U): Promise<any> => fetchMikrotikData(router, `/firewall/${type}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
+    delete: (router: RouterConfigWithId, id: string): Promise<any> => fetchMikrotikData(router, `/firewall/${type}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+});
 
-// Network
-export const getIpPools = (router: RouterConfig): Promise<IpPool[]> => mikrotikApiPost('/api/ip/pools', { routerConfig: router });
-export const getIpAddresses = (router: RouterConfig): Promise<IpAddress[]> => mikrotikApiPost('/api/ip/addresses', { routerConfig: router });
-export const getIpRoutes = (router: RouterConfig): Promise<IpRoute[]> => mikrotikApiPost('/api/ip/routes', { routerConfig: router });
-export const addIpRoute = (router: RouterConfig, routeData: IpRouteData): Promise<any> => mikrotikApiPost('/api/ip/routes/add', { routerConfig: router, routeData });
-export const updateIpRoute = (router: RouterConfig, routeId: string, routeData: Partial<IpRouteData>): Promise<any> => mikrotikApiPost('/api/ip/routes/update', { routerConfig: router, routeId, routeData });
-export const deleteIpRoute = (router: RouterConfig, routeId: string): Promise<any> => mikrotikApiPost('/api/ip/routes/delete', { routerConfig: router, routeId });
-export const getVlans = (router: RouterConfig): Promise<VlanInterface[]> => mikrotikApiPost('/api/network/vlans', { routerConfig: router });
-export const addVlan = (router: RouterConfig, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => mikrotikApiPost('/api/network/vlans/add', { routerConfig: router, vlanData });
-export const deleteVlan = (router: RouterConfig, vlanId: string): Promise<any> => mikrotikApiPost('/api/network/vlans/delete', { routerConfig: router, vlanId });
-export const getWanRoutes = (router: RouterConfig): Promise<WanRoute[]> => mikrotikApiPost('/api/network/wan-routes', { routerConfig: router });
-export const setRouteProperty = (router: RouterConfig, routeId: string, properties: Record<string, any>): Promise<any> => mikrotikApiPost('/api/network/routes/set', { routerConfig: router, routeId, properties });
-export const getWanFailoverStatus = (router: RouterConfig): Promise<FailoverStatus> => mikrotikApiPost('/api/network/wan-failover/status', { routerConfig: router });
-export const configureWanFailover = (router: RouterConfig, enabled: boolean): Promise<{ message: string }> => mikrotikApiPost('/api/network/wan-failover/configure', { routerConfig: router, enabled });
-
-// Firewall
-export const getFirewallFilter = (router: RouterConfig): Promise<FirewallFilterRule[]> => mikrotikApiPost('/api/firewall/filter', { routerConfig: router });
-export const addFirewallFilter = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/filter/add', { routerConfig: router, ruleData });
-export const updateFirewallFilter = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/filter/update', { routerConfig: router, ruleId, ruleData });
-export const deleteFirewallFilter = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/filter/delete', { routerConfig: router, ruleId });
-
-export const getFirewallNat = (router: RouterConfig): Promise<FirewallNatRule[]> => mikrotikApiPost('/api/firewall/nat', { routerConfig: router });
-export const addFirewallNat = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/nat/add', { routerConfig: router, ruleData });
-export const updateFirewallNat = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/nat/update', { routerConfig: router, ruleId, ruleData });
-export const deleteFirewallNat = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/nat/delete', { routerConfig: router, ruleId });
-
-export const getFirewallMangle = (router: RouterConfig): Promise<FirewallMangleRule[]> => mikrotikApiPost('/api/firewall/mangle', { routerConfig: router });
-export const addFirewallMangle = (router: RouterConfig, ruleData: FirewallRuleData): Promise<any> => mikrotikApiPost('/api/firewall/mangle/add', { routerConfig: router, ruleData });
-export const updateFirewallMangle = (router: RouterConfig, ruleId: string, ruleData: Partial<FirewallRuleData>): Promise<any> => mikrotikApiPost('/api/firewall/mangle/update', { routerConfig: router, ruleId, ruleData });
-export const deleteFirewallMangle = (router: RouterConfig, ruleId: string): Promise<any> => mikrotikApiPost('/api/firewall/mangle/delete', { routerConfig: router, ruleId });
-
-// System
-export const getRouterNtp = (router: RouterConfig): Promise<NtpSettings> => mikrotikApiPost( '/api/system/ntp/client', { routerConfig: router });
-export const setRouterNtp = (router: RouterConfig, settings: NtpSettings): Promise<any> => mikrotikApiPost('/api/system/ntp/client/set', { routerConfig: router, settings });
-export const rebootRouter = (router: RouterConfig): Promise<{ message: string }> => mikrotikApiPost( '/api/system/reboot', { routerConfig: router });
-export const getSslCertificates = (router: RouterConfig): Promise<SslCertificate[]> => mikrotikApiPost('/api/system/certificates', { routerConfig: router });
+export const { get: getFirewallFilter, add: addFirewallFilter, update: updateFirewallFilter, delete: deleteFirewallFilter } = firewallApi<FirewallFilterRule, FirewallRuleData>('filter');
+export const { get: getFirewallNat, add: addFirewallNat, update: updateFirewallNat, delete: deleteFirewallNat } = firewallApi<FirewallNatRule, FirewallRuleData>('nat');
+export const { get: getFirewallMangle, add: addFirewallMangle, update: updateFirewallMangle, delete: deleteFirewallMangle } = firewallApi<FirewallMangleRule, FirewallRuleData>('mangle');
