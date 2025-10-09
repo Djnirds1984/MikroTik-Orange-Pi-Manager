@@ -207,21 +207,21 @@ export const getIpPools = (router: RouterConfigWithId): Promise<IpPool[]> => {
 };
 
 export const getPppSecrets = (router: RouterConfigWithId): Promise<PppSecret[]> => {
-    return fetchMikrotikData<PppSecret[]>(router, '/ppp/secrets');
+    return fetchMikrotikData<PppSecret[]>(router, '/ppp/secret');
 };
 
 export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretData): Promise<any> => {
-    return fetchMikrotikData(router, '/ppp/secrets', { method: 'POST', body: JSON.stringify(secretData) });
+    return fetchMikrotikData(router, '/ppp/secret', { method: 'POST', body: JSON.stringify(secretData) });
 };
 
 export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
     // FIX: Remove 'id', '.id', and other frontend-specific/read-only properties before sending the update.
     const { id, '.id': dotId, 'last-logged-out': lastLoggedOut, isActive, activeInfo, customer, subscription, ...dataToSend } = secretData as any;
-    return fetchMikrotikData(router, `/ppp/secrets/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
+    return fetchMikrotikData(router, `/ppp/secret/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(dataToSend) });
 };
 
 export const deletePppSecret = (router: RouterConfigWithId, secretId: string): Promise<any> => {
-    return fetchMikrotikData(router, `/ppp/secrets/${encodeURIComponent(secretId)}`, { method: 'DELETE' });
+    return fetchMikrotikData(router, `/ppp/secret/${encodeURIComponent(secretId)}`, { method: 'DELETE' });
 };
 
 export const getPppActiveConnections = (router: RouterConfigWithId): Promise<PppActiveConnection[]> => {
