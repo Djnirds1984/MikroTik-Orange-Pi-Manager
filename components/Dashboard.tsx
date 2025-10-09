@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus } from '../types.ts';
-import { getSystemInfo, getInterfaces } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, SystemInfo, InterfaceWithHistory, TrafficHistoryPoint, Interface, PanelHostStatus, PppActiveConnection } from '../types.ts';
+import { getSystemInfo, getInterfaces, getPppActiveConnections } from '../services/mikrotikService.ts';
 import { getPanelHostStatus } from '../services/panelService.ts';
 import { Loader } from './Loader.tsx';
 import { Chart } from './chart.tsx';
-import { RouterIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { RouterIcon, ExclamationTriangleIcon, UsersIcon } from '../constants.tsx';
 import { AIFixer } from './AIFixer.tsx';
 
 const StatCard: React.FC<{ title: string; value: string | number; unit?: string; children?: React.ReactNode }> = ({ title, value, unit, children }) => (
@@ -95,6 +95,7 @@ const MAX_HISTORY_POINTS = 30;
 export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
+    const [pppoeCount, setPppoeCount] = useState<number>(0);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<{ message: string; details?: any } | null>(null);
     const [showFixer, setShowFixer] = useState(false);
@@ -108,6 +109,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             setIsLoading(false);
             setSystemInfo(null);
             setInterfaces([]);
+            setPppoeCount(0);
             return;
         }
 
@@ -117,14 +119,24 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             setShowFixer(false);
             setInterfaces([]);
             setSelectedChartInterface(null);
+            setPppoeCount(0);
         }
 
         try {
-            const [info, currentInterfaces] = await Promise.all([
+            const [info, currentInterfaces, pppoeActive] = await Promise.all([
                 getSystemInfo(selectedRouter),
                 getInterfaces(selectedRouter),
+                getPppActiveConnections(selectedRouter).catch(() => []), // Add catch to prevent Promise.all failure if PPP package is not installed
             ]);
             setSystemInfo(info);
+
+            if (Array.isArray(pppoeActive)) {
+                 setPppoeCount(pppoeActive.length);
+            } else {
+                 setPppoeCount(0);
+                 console.warn("Could not fetch PPPoE active connections, response was not an array:", pppoeActive);
+            }
+
 
             setInterfaces(prevInterfaces => {
                 const now = new Date().toLocaleTimeString();
@@ -251,7 +263,7 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             {systemInfo && (
                 <div>
                     <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-4">Router Status: {selectedRouter.name}</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
                         <StatCard title="Board Name" value={systemInfo.boardName} />
                         <StatCard title="Uptime" value={systemInfo.uptime} />
                         <StatCard title="CPU Load" value={systemInfo.cpuLoad} unit="%">
@@ -263,6 +275,9 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                             <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 mt-2">
                                 <div className="bg-sky-500 h-2.5 rounded-full" style={{ width: `${systemInfo.memoryUsage}%` }}></div>
                             </div>
+                        </StatCard>
+                        <StatCard title="PPPoE Active" value={pppoeCount}>
+                             <UsersIcon className="w-6 h-6 text-slate-400 mt-2" />
                         </StatCard>
                     </div>
                 </div>

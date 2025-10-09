@@ -194,6 +194,58 @@ app.post('/mt-api/:routerId/ip/wan-failover', getRouterConfig, async (req, res) 
     });
 });
 
+// --- Custom Handlers for Dashboard ---
+
+// Custom handler for system resource to format data for the dashboard
+app.get('/mt-api/:routerId/system/resource', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { data } = await req.routerInstance.get('/system/resource');
+        
+        const totalMemoryBytes = data['total-memory'];
+        const freeMemoryBytes = data['free-memory'];
+        const usedMemoryBytes = totalMemoryBytes - freeMemoryBytes;
+        
+        const formatBytes = (bytes) => {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(0)) + sizes[i];
+        };
+
+        return {
+            boardName: data['board-name'],
+            version: data.version,
+            cpuLoad: data['cpu-load'],
+            uptime: data.uptime,
+            memoryUsage: totalMemoryBytes > 0 ? parseFloat(((usedMemoryBytes / totalMemoryBytes) * 100).toFixed(1)) : 0,
+            totalMemory: formatBytes(totalMemoryBytes)
+        };
+    });
+});
+
+// Custom handler for interfaces to format data for the dashboard
+app.get('/mt-api/:routerId/interface', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { data } = await req.routerInstance.get('/interface');
+        if (Array.isArray(data)) {
+            // Map kebab-case to camelCase for the frontend
+            return data.map(iface => ({
+                id: iface['.id'],
+                name: iface.name,
+                type: iface.type,
+                macAddress: iface['mac-address'],
+                // These are the important ones for the dashboard traffic chart
+                rxRate: iface['rx-rate'],
+                txRate: iface['tx-rate'],
+                disabled: iface.disabled,
+                comment: iface.comment,
+            }));
+        }
+        return data; // Return as-is if not an array
+    });
+});
+
 
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
