@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData, PppSecret, PppActiveConnection, SaleRecord, BillingPlanWithId, Customer, PppSecretData } from '../types.ts';
 import { 
@@ -144,7 +145,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
     const { plans } = useBillingPlans(selectedRouter.id);
-    const { customers, addCustomer, updateCustomer, fetchCustomers } = useCustomers(selectedRouter.id);
+    const { customers, addCustomer, updateCustomer } = useCustomers(selectedRouter.id);
     const { settings: companySettings } = useCompanySettings();
 
     const [isLoading, setIsLoading] = useState(true);
@@ -179,7 +180,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
     const combinedUsers = useMemo(() => {
         const activeMap = new Map(active.map(a => [a.name, a]));
         return secrets.map(secret => {
-            const customer = customers.find(c => c.username === secret.name && c.routerId === selectedRouter.id);
+            const customer = customers.find(c => c.username === secret.name);
             let subscription = { plan: 'N/A', dueDate: 'No Info' };
             if (secret.comment) {
                 try { 
@@ -196,32 +197,41 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                 subscription
             };
         });
-    }, [secrets, active, customers, selectedRouter.id]);
+    }, [secrets, active, customers]);
     
     const handleSaveUser = async (secretData: PppSecretData, customerData: Partial<Customer>) => {
         setIsSubmitting(true);
         try {
-            // Find if a customer already exists in our local DB
-            const existingCustomer = customers.find(c => c.username === secretData.name && c.routerId === selectedRouter.id);
+            // Find if a customer record already exists in our local DB for this user.
+            const existingCustomer = customers.find(c => c.username === secretData.name);
 
-            if (existingCustomer) {
-                // If customer exists, always update their info.
-                await updateCustomer({ ...existingCustomer, ...customerData });
-            } else {
-                // If customer does not exist in our DB, create them.
-                await addCustomer({ routerId: selectedRouter.id, username: secretData.name, ...customerData });
-            }
-            
+            // Step 1: Update the MikroTik router first. If this fails, we don't touch our DB.
             if (selectedSecret) { // Editing an existing secret
                 await updatePppSecret(selectedRouter, { ...selectedSecret, ...secretData });
             } else { // Adding a new secret
                 await addPppSecret(selectedRouter, secretData);
             }
+
+            // Step 2: Update our local customer database.
+            if (existingCustomer) {
+                // If the customer record exists, update it with the new form data.
+                await updateCustomer({ ...existingCustomer, ...customerData });
+            } else {
+                // Only create a new customer record if there's actual customer info to save.
+                const hasCustomerInfo = Object.values(customerData).some(val => val && String(val).trim() !== '');
+                if (hasCustomerInfo) {
+                    await addCustomer({ 
+                        routerId: selectedRouter.id, 
+                        username: secretData.name, 
+                        ...customerData 
+                    });
+                }
+            }
             
+            // Step 3: Close modal and refresh data from router.
             setUserModalOpen(false);
             setSelectedSecret(null);
-            await fetchData();
-            await fetchCustomers(); // Explicitly refetch customers
+            await fetchData(); // The `useCustomers` hook will refresh itself after add/update.
         } catch(err) {
             alert(`Failed to save user: ${(err as Error).message}`);
         } finally {
@@ -258,7 +268,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
         useEffect(() => {
             if(isOpen) {
                 if (initialData) {
-                    const linkedCustomer = customers.find(c => c.username === initialData.name && c.routerId === selectedRouter.id);
+                    const linkedCustomer = customers.find(c => c.username === initialData.name);
                     const linkedPlan = plans.find(p => p.pppoeProfile === initialData.profile);
                     
                     setSecret({ name: initialData.name, password: '', profile: linkedPlan?.id || '' });
@@ -273,7 +283,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                     setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
                 }
             }
-        }, [isOpen, initialData, plans, customers, selectedRouter.id]);
+        }, [isOpen, initialData, plans, customers]);
 
         if (!isOpen) return null;
         
@@ -289,7 +299,6 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                 disabled: initialData?.disabled || 'false',
             };
 
-            // Only change the profile if a billing plan was actively selected in the form
             if (selectedPlan) {
                 secretPayload.profile = selectedPlan.pppoeProfile;
             }
