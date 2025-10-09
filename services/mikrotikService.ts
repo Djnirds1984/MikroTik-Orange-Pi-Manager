@@ -99,7 +99,7 @@ export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> =
 
 export const setRouterNtp = (router: RouterConfigWithId, settings: NtpSettings): Promise<{ message: string }> => {
     return fetchMikrotikData<{ message: string }>(router, '/system/ntp/client', {
-        method: 'POST',
+        method: 'PATCH',
         body: JSON.stringify(settings),
     });
 };
@@ -123,7 +123,7 @@ export const getVlans = (router: RouterConfigWithId): Promise<VlanInterface[]> =
 
 export const addVlan = (router: RouterConfigWithId, vlanData: Omit<VlanInterface, 'id'>): Promise<any> => {
     return fetchMikrotikData(router, '/interface/vlan', {
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify(vlanData),
     });
 };
@@ -141,7 +141,7 @@ export const getIpRoutes = (router: RouterConfigWithId): Promise<IpRoute[]> => {
 
 export const addIpRoute = (router: RouterConfigWithId, routeData: IpRouteData): Promise<any> => {
     return fetchMikrotikData(router, '/ip/route', {
-        method: 'POST',
+        method: 'PUT',
         body: JSON.stringify(routeData),
     });
 };
@@ -189,7 +189,7 @@ export const getPppProfiles = (router: RouterConfigWithId): Promise<PppProfile[]
 };
 
 export const addPppProfile = (router: RouterConfigWithId, profileData: PppProfileData): Promise<any> => {
-    return fetchMikrotikData(router, '/ppp/profile', { method: 'POST', body: JSON.stringify(profileData) });
+    return fetchMikrotikData(router, '/ppp/profile', { method: 'PUT', body: JSON.stringify(profileData) });
 };
 
 export const updatePppProfile = (router: RouterConfigWithId, profileData: PppProfile): Promise<any> => {
@@ -238,7 +238,7 @@ export const getPppServers = (router: RouterConfigWithId): Promise<PppServer[]> 
 };
 
 export const addPppServer = (router: RouterConfigWithId, serverData: PppServerData): Promise<any> => {
-    return fetchMikrotikData(router, '/interface/pppoe-server/server', { method: 'POST', body: JSON.stringify(serverData) });
+    return fetchMikrotikData(router, '/interface/pppoe-server/server', { method: 'PUT', body: JSON.stringify(serverData) });
 };
 
 export const updatePppServer = (router: RouterConfigWithId, serverId: string, serverData: Partial<PppServerData>): Promise<any> => {
@@ -266,7 +266,7 @@ export const getHotspotProfiles = (router: RouterConfigWithId): Promise<HotspotP
     return fetchMikrotikData<HotspotProfile[]>(router, '/ip/hotspot/profile');
 };
 export const addHotspotProfile = (router: RouterConfigWithId, profileData: HotspotProfileData): Promise<any> => {
-    return fetchMikrotikData(router, '/ip/hotspot/profile', { method: 'POST', body: JSON.stringify(profileData) });
+    return fetchMikrotikData(router, '/ip/hotspot/profile', { method: 'PUT', body: JSON.stringify(profileData) });
 };
 export const updateHotspotProfile = (router: RouterConfigWithId, profile: HotspotProfile): Promise<any> => {
     // FIX: Remove 'id' and '.id' from the body.
@@ -281,7 +281,7 @@ export const getHotspotUserProfiles = (router: RouterConfigWithId): Promise<Hots
     return fetchMikrotikData<HotspotUserProfile[]>(router, '/ip/hotspot/user/profile');
 };
 export const addHotspotUserProfile = (router: RouterConfigWithId, profileData: HotspotUserProfileData): Promise<any> => {
-    return fetchMikrotikData(router, '/ip/hotspot/user/profile', { method: 'POST', body: JSON.stringify(profileData) });
+    return fetchMikrotikData(router, '/ip/hotspot/user/profile', { method: 'PUT', body: JSON.stringify(profileData) });
 };
 export const updateHotspotUserProfile = (router: RouterConfigWithId, profile: HotspotUserProfile): Promise<any> => {
     // FIX: Remove 'id' and '.id' from the body.
@@ -313,7 +313,7 @@ export const runHotspotSetup = (router: RouterConfigWithId, params: HotspotSetup
 // --- Firewall ---
 const firewallApi = <T extends FirewallRule, U extends FirewallRuleData>(type: RuleType) => ({
     get: (router: RouterConfigWithId): Promise<T[]> => fetchMikrotikData<T[]>(router, `/ip/firewall/${type}`),
-    add: (router: RouterConfigWithId, data: U): Promise<any> => fetchMikrotikData(router, `/ip/firewall/${type}`, { method: 'POST', body: JSON.stringify(data) }),
+    add: (router: RouterConfigWithId, data: U): Promise<any> => fetchMikrotikData(router, `/ip/firewall/${type}`, { method: 'PUT', body: JSON.stringify(data) }),
     update: (router: RouterConfigWithId, id: string, data: U): Promise<any> => fetchMikrotikData(router, `/ip/firewall/${type}/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(data) }),
     delete: (router: RouterConfigWithId, id: string): Promise<any> => fetchMikrotikData(router, `/ip/firewall/${type}/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 });
