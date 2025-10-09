@@ -388,6 +388,48 @@ app.post('/api/hotspot/run-setup', (req, res, next) => {
     });
 });
 
+app.post('/api/hotspot/user/profiles', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const response = await apiClient.get('/ip/hotspot/user/profile');
+        const profiles = Array.isArray(response.data) ? response.data : [];
+        const data = profiles.map(p => ({
+            id: p['.id'],
+            name: p.name,
+            'rate-limit': p['rate-limit'],
+            'session-timeout': p['session-timeout'],
+            'shared-users': p['shared-users'],
+            'address-pool': p['address-pool'],
+        }));
+        res.status(200).json(data);
+    });
+});
+
+app.post('/api/hotspot/user/profiles/add', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileData } = req.body;
+        const response = await apiClient.put('/ip/hotspot/user/profile', camelToKebab(profileData));
+        res.status(201).json(response.data);
+    });
+});
+
+app.post('/api/hotspot/user/profiles/update', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileData } = req.body;
+        const profileId = profileData.id;
+        delete profileData.id;
+        const response = await apiClient.patch(`/ip/hotspot/user/profile/${profileId}`, camelToKebab(profileData));
+        res.status(200).json(response.data);
+    });
+});
+
+app.post('/api/hotspot/user/profiles/delete', (req, res, next) => {
+    handleApiRequest(req, res, next, async (apiClient) => {
+        const { profileId } = req.body;
+        await apiClient.delete(`/ip/hotspot/user/profile/${profileId}`);
+        res.status(204).send();
+    });
+});
+
 
 // --- Hotspot File Browser Endpoints ---
 app.post('/api/hotspot/files/list', (req, res, next) => {

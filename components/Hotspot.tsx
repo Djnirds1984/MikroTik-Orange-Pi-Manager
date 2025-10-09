@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, HotspotActiveUser, HotspotHost, HotspotProfile, HotspotProfileData } from '../types.ts';
-import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser, getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, HotspotActiveUser, HotspotHost, HotspotProfile, HotspotProfileData, HotspotUserProfile, HotspotUserProfileData, IpPool } from '../types.ts';
+import { getHotspotActiveUsers, getHotspotHosts, removeHotspotActiveUser, getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile, getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile, getIpPools } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
 import { RouterIcon, ExclamationTriangleIcon, TrashIcon, UsersIcon, ChipIcon, CodeBracketIcon, ServerIcon, EditIcon } from '../constants.tsx';
 import { NodeMcuManager } from './NodeMcuManager.tsx';
@@ -30,7 +30,7 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
     </button>
 );
 
-// --- Profiles Management Sub-component ---
+// --- Server Profiles Management Sub-component ---
 const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -133,6 +133,123 @@ const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
             </div>
         </div>
     );
+};
+
+// --- User Profiles Management Sub-component ---
+const UserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
+    const [pools, setPools] = useState<IpPool[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProfile, setEditingProfile] = useState<HotspotUserProfile | null>(null);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [profilesData, poolsData] = await Promise.all([
+                getHotspotUserProfiles(selectedRouter),
+                getIpPools(selectedRouter)
+            ]);
+            setProfiles(profilesData);
+            setPools(poolsData);
+        } catch (err) {
+            setError(`Could not fetch data: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSave = async (profileData: HotspotUserProfile | HotspotUserProfileData) => {
+        setIsSubmitting(true);
+        try {
+            if ('id' in profileData) await updateHotspotUserProfile(selectedRouter, profileData as HotspotUserProfile);
+            else await addHotspotUserProfile(selectedRouter, profileData as HotspotUserProfileData);
+            setIsModalOpen(false);
+            setEditingProfile(null);
+            await fetchData();
+        } catch (err) { alert(`Error saving profile: ${(err as Error).message}`); }
+        finally { setIsSubmitting(false); }
+    };
+
+    const handleDelete = async (profileId: string) => {
+        if (!window.confirm("Are you sure you want to delete this user profile?")) return;
+        try {
+            await deleteHotspotUserProfile(selectedRouter, profileId);
+            await fetchData();
+        } catch (err) { alert(`Error deleting profile: ${(err as Error).message}`); }
+    };
+
+    const UserProfileFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotUserProfileData>>({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ name: initialData.name, 'address-pool': initialData['address-pool'] || 'none', 'rate-limit': initialData['rate-limit'] || '', 'session-timeout': initialData['session-timeout'] || '00:00:00', 'shared-users': initialData['shared-users'] || '1' });
+                } else {
+                    setProfile({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); onSave(initialData ? { ...profile, id: initialData.id } : profile); };
+
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit User Profile' : 'Add New User Profile'}</h3>
+                            <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Address Pool</label><select name="address-pool" value={profile['address-pool']} onChange={e => setProfile(p => ({ ...p, 'address-pool': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2"><option value="none">none</option>{pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 512k/5M" name="rate-limit" value={profile['rate-limit']} onChange={e => setProfile(p => ({ ...p, 'rate-limit': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Session Timeout</label><input type="text" placeholder="00:30:00" name="session-timeout" value={profile['session-timeout']} onChange={e => setProfile(p => ({ ...p, 'session-timeout': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Shared Users</label><input type="number" name="shared-users" value={profile['shared-users']} onChange={e => setProfile(p => ({ ...p, 'shared-users': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+
+    return (
+        <div>
+            <UserProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
+            <div className="flex justify-end mb-4">
+                <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New User Profile</button>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Address Pool</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3">Shared Users</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <tbody>
+                        {profiles.map(p => (
+                            <tr key={p.id} className="border-b dark:border-slate-700">
+                                <td className="px-6 py-4 font-medium">{p.name}</td>
+                                <td className="px-6 py-4">{p['address-pool'] || 'none'}</td>
+                                <td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
+                                <td className="px-6 py-4">{p['shared-users'] || 'N/A'}</td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 }
 
 // --- Main Component ---
@@ -142,7 +259,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     const [isLoading, setIsLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'setup'>('activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'user-profiles' | 'setup'>('activity');
 
     // Refactored fetchData to handle polling gracefully
     const fetchData = useCallback(async (isPolling = false) => {
@@ -275,6 +392,12 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                         onClick={() => setActiveTab('profiles')}
                     />
                     <TabButton
+                        label="User Profiles"
+                        icon={<UsersIcon className="w-5 h-5 mr-2" />}
+                        isActive={activeTab === 'user-profiles'}
+                        onClick={() => setActiveTab('user-profiles')}
+                    />
+                    <TabButton
                         label="Server Setup"
                         icon={<ServerIcon className="w-5 h-5 mr-2" />}
                         isActive={activeTab === 'setup'}
@@ -392,6 +515,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
             {activeTab === 'profiles' && (
                 <ProfilesManager selectedRouter={selectedRouter} />
+            )}
+
+            {activeTab === 'user-profiles' && (
+                <UserProfilesManager selectedRouter={selectedRouter} />
             )}
 
             {activeTab === 'setup' && (

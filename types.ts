@@ -89,6 +89,17 @@ export interface HotspotProfile {
 
 export type HotspotProfileData = Omit<HotspotProfile, 'id'>;
 
+export interface HotspotUserProfile {
+    id: string;
+    name: string;
+    'rate-limit'?: string;
+    'session-timeout'?: string;
+    'shared-users'?: string;
+    'address-pool'?: string;
+}
+
+export type HotspotUserProfileData = Omit<HotspotUserProfile, 'id'>;
+
 
 export interface PppProfile {
     id: string;
