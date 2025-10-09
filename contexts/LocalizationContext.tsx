@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { getPanelSettings, savePanelSettings } from '../services/databaseService.ts';
+import { getPanelSettings } from '../services/databaseService.ts';
 import type { PanelSettings } from '../types.ts';
+import { useAuth } from './AuthContext.tsx';
 
 interface LocalizationContextType {
     language: PanelSettings['language'];
@@ -15,6 +16,9 @@ interface LocalizationContextType {
 const LocalizationContext = createContext<LocalizationContextType | undefined>(undefined);
 
 export const LocalizationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    // Get auth state to prevent premature API calls
+    const { user, isLoading: isAuthLoading } = useAuth();
+    
     const [settings, setSettings] = useState<PanelSettings>({ language: 'en', currency: 'USD' });
     const [translations, setTranslations] = useState<Record<string, any>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -37,31 +41,49 @@ export const LocalizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     useEffect(() => {
         const loadInitialSettings = async () => {
             setIsLoading(true);
+
+            // Wait until authentication is resolved
+            if (isAuthLoading) {
+                // If auth is still loading, do nothing yet. This effect will re-run when it's done.
+                 setIsLoading(false);
+                return;
+            }
+
+            // If no user is logged in after auth check, use defaults
+            if (!user) {
+                setSettings({ language: 'en', currency: 'USD' });
+                await fetchTranslations('en');
+                setIsLoading(false);
+                return;
+            }
+            
+            // User is logged in, now we can safely fetch their settings
             try {
                 const savedSettings = await getPanelSettings() as PanelSettings;
-                setSettings(s => ({...s, ...savedSettings}));
-                await fetchTranslations(savedSettings.language || 'en');
+                const finalSettings = { language: 'en', currency: 'USD', ...savedSettings };
+                setSettings(finalSettings);
+                await fetchTranslations(finalSettings.language);
             } catch (error) {
                 console.error("Failed to load panel settings, using defaults:", error);
-                await fetchTranslations('en');
+                await fetchTranslations('en'); // Fallback
             } finally {
                 setIsLoading(false);
             }
         };
         loadInitialSettings();
-    }, [fetchTranslations]);
+    }, [fetchTranslations, user, isAuthLoading]);
 
     const handleSetLanguage = async (lang: PanelSettings['language']) => {
         setSettings(s => ({ ...s, language: lang }));
         await fetchTranslations(lang);
-        // Saving logic is now handled by the component that calls this.
+        // The saving logic is handled in SystemSettings.tsx, this just updates the context state.
     };
 
     const handleSetCurrency = (curr: PanelSettings['currency']) => {
         setSettings(s => ({ ...s, currency: curr }));
-        // Saving logic is now handled by the component that calls this.
+        // The saving logic is handled in SystemSettings.tsx.
     };
-
+    
     const t = (key: string, replacements?: Record<string, string>): string => {
         const keys = key.split('.');
         let result = translations;
