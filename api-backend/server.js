@@ -338,29 +338,31 @@ app.post('/mt-api/:routerId/ppp/process-payment', getRouterConfig, async (req, r
         const comment = JSON.stringify({ plan: plan.name, dueDate: newDueDate.toISOString().split('T')[0] });
         
         // 1. Update secret with new due date in comment
-        // The 'id' from the frontend is the '.id' from MikroTik.
         await req.routerInstance.patch(`/ppp/secret/${secret.id}`, { comment });
 
-        // 2. Create/update the expiration script
+        // 2. Create/update the expiration script idempotently
         const scriptName = `expire-${secret.name}`;
-        // The script finds the user by name and changes their profile
         const scriptSource = `/ppp secret set [find name="${secret.name}"] profile="${nonPaymentProfile}"`;
-        // Using PUT to create or overwrite the script, adding policy for compatibility.
-        await req.routerInstance.put('/system/script', { 
-            name: scriptName, 
-            source: scriptSource, 
-            policy: "read,write,test" 
-        });
+        
+        const { data: existingScripts } = await req.routerInstance.get(`/system/script?name=${scriptName}`);
+        if (existingScripts && existingScripts.length > 0) {
+            const scriptId = existingScripts[0]['.id'];
+            await req.routerInstance.patch(`/system/script/${scriptId}`, { source: scriptSource });
+        } else {
+            await req.routerInstance.put('/system/script', { name: scriptName, source: scriptSource, policy: "read,write,test" });
+        }
 
-        // 3. Create/update the scheduler to run the script on the due date
+        // 3. Create/update the scheduler idempotently
         const schedulerName = `expire-sched-${secret.name}`;
-        // Using PUT to create or overwrite the scheduler
-        await req.routerInstance.put('/system/scheduler', { 
-            name: schedulerName, 
-            'on-event': scriptName, 
-            'start-date': mikrotikDate, 
-            'start-time': '00:00:01' // Run at the beginning of the day
-        });
+        const schedulerPayload = { 'on-event': scriptName, 'start-date': mikrotikDate, 'start-time': '00:00:01' };
+
+        const { data: existingSchedulers } = await req.routerInstance.get(`/system/scheduler?name=${schedulerName}`);
+        if (existingSchedulers && existingSchedulers.length > 0) {
+            const schedulerId = existingSchedulers[0]['.id'];
+            await req.routerInstance.patch(`/system/scheduler/${schedulerId}`, schedulerPayload);
+        } else {
+            await req.routerInstance.put('/system/scheduler', { name: schedulerName, ...schedulerPayload });
+        }
         
         return { message: `Payment processed successfully. User ${secret.name} will expire on ${mikrotikDate}.` };
     });
