@@ -211,7 +211,8 @@ export const getPppSecrets = (router: RouterConfigWithId): Promise<PppSecret[]> 
 };
 
 export const addPppSecret = (router: RouterConfigWithId, secretData: PppSecretData): Promise<any> => {
-    return fetchMikrotikData(router, '/ppp/secret', { method: 'POST', body: JSON.stringify(secretData) });
+    // FIX: Use 'PUT' for adding new items as required by the MikroTik REST API.
+    return fetchMikrotikData(router, '/ppp/secret', { method: 'PUT', body: JSON.stringify(secretData) });
 };
 
 export const updatePppSecret = (router: RouterConfigWithId, secretData: PppSecret): Promise<any> => {
