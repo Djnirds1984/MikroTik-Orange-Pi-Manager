@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import type { HotspotHost } from '../types.ts';
 import { ChipIcon } from '../constants.tsx';
 
@@ -25,10 +25,30 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
     );
 };
 
+// List of common MAC address prefixes (OUIs) for Espressif, the manufacturer of NodeMCU chips.
+const NODEMCU_MAC_PREFIXES = [
+    // Espressif Inc.
+    'A0:20:A6', 'A0:B7:65', 'DC:4F:22', '84:0D:8E', '24:0A:C4', 'D8:A0:1D',
+    '68:C6:3A', '54:5A:A6', 'AC:D0:74', '2C:3A:E8', '30:AE:A4', '9C:9C:1F',
+    '8C:AA:B5', '90:97:D5', 'BC:DD:C2', 'C4:DD:57', 'CC:50:E3', 'EC:FA:BC',
+    // AI-Thinker (popular ESP module maker)
+    '5C:CF:7F', 'AC:D0:74',
+];
+
 
 // The main manager component
 export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) => {
     const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
+
+    const nodeMcuHosts = useMemo(() => {
+        if (!hosts) return [];
+        return hosts.filter(host =>
+            NODEMCU_MAC_PREFIXES.some(prefix =>
+                host.macAddress.toUpperCase().startsWith(prefix)
+            )
+        );
+    }, [hosts]);
+
 
     // Iframe view when a host is selected
     if (selectedHost) {
@@ -69,18 +89,18 @@ export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) =>
              <div className="p-4 border-b border-slate-200 dark:border-slate-700">
                 <h3 className="text-lg font-semibold flex items-center gap-2">
                     <ChipIcon className="w-6 h-6 text-[--color-primary-500]"/> 
-                    Available Vendo Machines (from Hotspot Hosts)
+                    Detected NodeMCU Vendo Machines
                 </h3>
-                <p className="text-sm text-slate-500 mt-1">This list shows all devices detected on the Hotspot. Select a device to access its settings panel.</p>
+                <p className="text-sm text-slate-500 mt-1">This list is filtered from Hotspot hosts to show devices with MAC addresses matching common NodeMCU/ESP manufacturers.</p>
             </div>
              <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
-                {hosts.length > 0 ? (
-                    hosts.map(host => (
+                {nodeMcuHosts.length > 0 ? (
+                    nodeMcuHosts.map(host => (
                         <HostItem key={host.id} host={host} onSelect={() => setSelectedHost(host)} />
                     ))
                 ) : (
                     <li className="p-6 text-center text-slate-500">
-                        No active hosts found on the router's Hotspot.
+                        No NodeMCU devices detected among the active Hotspot hosts.
                     </li>
                 )}
             </ul>
