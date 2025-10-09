@@ -13,6 +13,7 @@ export type View =
   | 'inventory'
   | 'hotspot'
   | 'zerotier'
+  | 'dataplicity'
   | 'company'
   | 'system'
   | 'updater'
@@ -301,6 +302,11 @@ export interface ZeroTierNetwork {
 export interface ZeroTierStatusResponse {
     info: ZeroTierInfo;
     networks: ZeroTierNetwork[];
+}
+
+export interface DataplicityStatus {
+    installed: boolean;
+    url: string | null;
 }
 
 export interface PanelHostStatus {

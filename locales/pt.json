@@ -15,6 +15,7 @@
         "inventory": "Estoque",
         "hotspot": "Hotspot",
         "zerotier": "ZeroTier",
+        "dataplicity": "Dataplicity",
         "company": "Empresa",
         "system_settings": "Configurações do Sistema",
         "updater": "Atualizador"
@@ -31,6 +32,7 @@
         "inventory": "Estoque e Inventário",
         "hotspot": "Gerenciamento de Hotspot",
         "zerotier": "Gerenciamento de ZeroTier",
+        "dataplicity": "Acesso Remoto Dataplicity",
         "company": "Configurações da Empresa",
         "system": "Configurações do Sistema",
         "updater": "Atualizador do Painel"

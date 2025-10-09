@@ -580,6 +580,75 @@ app.get('/api/zt/install', protect, (req, res) => {
     });
 });
 
+// --- Dataplicity Endpoints ---
+
+app.get('/api/dataplicity/status', protect, (req, res) => {
+    exec('echo $HOME', (err, stdout) => {
+        if (err) {
+            return res.status(500).json({ message: 'Could not determine home directory.' });
+        }
+        const homeDir = stdout.trim();
+        const confPath = path.join(homeDir, '.dataplicity', 'dataplicity.conf');
+
+        fs.readFile(confPath, 'utf-8', (readErr, fileContent) => {
+            if (readErr) {
+                if (readErr.code === 'ENOENT') {
+                    return res.json({ installed: false, url: null });
+                }
+                return res.status(500).json({ message: readErr.message });
+            }
+
+            const conf = fileContent.split('\n').reduce((acc, line) => {
+                const [key, value] = line.split('=');
+                if (key && value) acc[key.trim()] = value.trim();
+                return acc;
+            }, {});
+
+            if (conf.device_id) {
+                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io` });
+            } else {
+                res.json({ installed: true, url: null }); // Installed but misconfigured
+            }
+        });
+    });
+});
+
+app.get('/api/dataplicity/install', protect, (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    const child = exec('curl -s https://www.dataplicity.com/install.py | sudo python3');
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    child.stdout.on('data', log => send({ log }));
+    child.stderr.on('data', log => send({ log, isError: true }));
+    child.on('close', code => {
+        if (code !== 0) {
+            send({ status: 'error', message: 'Installation script failed.' });
+        }
+        send({ status: 'finished' });
+        res.end();
+    });
+});
+
+app.get('/api/dataplicity/uninstall', protect, (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+    
+    const child = exec('curl -s https://www.dataplicity.com/uninstall.py | sudo python3');
+
+    child.stdout.on('data', log => send({ log }));
+    child.stderr.on('data', log => send({ log, isError: true }));
+    child.on('close', code => {
+        if (code !== 0) {
+            send({ status: 'error', message: 'Uninstallation script failed.' });
+        }
+        send({ status: 'finished' });
+        res.end();
+    });
+});
+
 
 // --- AI Fixer ---
 app.get('/api/fixer/file-content', protect, async (req, res) => {
