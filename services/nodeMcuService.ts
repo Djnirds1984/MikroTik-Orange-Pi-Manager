@@ -1,4 +1,4 @@
-import type { NodeMcuStatus } from '../types.ts';
+import type { NodeMcuSettings } from '../types.ts';
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
     // API backend is on port 3002
@@ -18,7 +18,6 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         throw error;
     }
 
-    // Reboot might return text/html, settings should return json
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
         return response.json() as Promise<T>;
@@ -26,9 +25,28 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-export const getVendingStatus = (deviceIp: string, apiKey: string): Promise<NodeMcuStatus> => {
-    return fetchData<NodeMcuStatus>('/api/nodemcu/proxy-get', {
+export const getNodeMcuSettings = (deviceIp: string, apiKey: string): Promise<NodeMcuSettings> => {
+    return fetchData<NodeMcuSettings>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/get_status', apiKey }),
+        body: JSON.stringify({ deviceIp, path: '/get_config', apiKey }),
+    });
+};
+
+export const saveNodeMcuSettings = (deviceIp: string, apiKey: string, settings: Partial<NodeMcuSettings>): Promise<{ message: string }> => {
+    return fetchData<{ message: string }>('/api/nodemcu/proxy-post', {
+        method: 'POST',
+        body: JSON.stringify({
+            deviceIp,
+            path: '/save_config',
+            apiKey,
+            data: settings
+        }),
+    });
+};
+
+export const generateNodeMcuApiKey = (deviceIp: string, apiKey: string): Promise<{ new_api_key: string }> => {
+    return fetchData<{ new_api_key: string }>('/api/nodemcu/proxy-get', {
+        method: 'POST',
+        body: JSON.stringify({ deviceIp, path: '/generate_api_key', apiKey }),
     });
 };
