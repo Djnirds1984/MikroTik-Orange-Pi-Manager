@@ -1,4 +1,4 @@
-import type { NodeMcuSettings, NodeMcuRate } from '../types.ts';
+import type { NodeMcuStatus } from '../types.ts';
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
     // API backend is on port 3002
@@ -26,62 +26,9 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     return response.text() as unknown as Promise<T>;
 };
 
-export const getSettings = async (deviceIp: string, apiKey: string): Promise<NodeMcuSettings> => {
-    const rawSettings = await fetchData<any>('/api/nodemcu/proxy-get', {
+export const getVendingStatus = (deviceIp: string, apiKey: string): Promise<NodeMcuStatus> => {
+    return fetchData<NodeMcuStatus>('/api/nodemcu/proxy-get', {
         method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/get_config', apiKey }),
-    });
-
-    // Transform the flat rate structure into an array of objects
-    const rates: NodeMcuRate[] = [];
-    if (rawSettings) {
-        for (const key in rawSettings) {
-            if (key.startsWith('rate')) {
-                const credit = parseInt(key.substring(4), 10);
-                const time = parseInt(rawSettings[key], 10);
-                if (!isNaN(credit) && credit > 0 && !isNaN(time)) {
-                    rates.push({ credit, time });
-                }
-            }
-        }
-    }
-    
-    // Sort rates by credit for consistent display
-    rates.sort((a, b) => a.credit - b.credit);
-
-    const settings: NodeMcuSettings = {
-        deviceName: rawSettings.deviceName || '',
-        portalUrl: rawSettings.portalUrl || '',
-        rates: rates,
-    };
-
-    return settings;
-};
-
-export const saveSettings = (deviceIp: string, apiKey: string, settings: Partial<NodeMcuSettings>): Promise<string> => {
-    // Transform settings into the flat structure the firmware likely expects
-    const formData: Record<string, any> = {
-        deviceName: settings.deviceName,
-        portalUrl: settings.portalUrl,
-    };
-
-    settings.rates?.forEach(rate => {
-        // Ensure that we don't create empty rate parameters
-        if (rate.credit > 0) {
-            formData[`rate${rate.credit}`] = rate.time;
-        }
-    });
-
-    return fetchData<string>('/api/nodemcu/proxy-post', {
-        method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/save_config', data: formData, apiKey }),
-    });
-};
-
-
-export const rebootDevice = (deviceIp: string, apiKey: string): Promise<string> => {
-    return fetchData<string>('/api/nodemcu/proxy-get', {
-        method: 'POST',
-        body: JSON.stringify({ deviceIp, path: '/reboot_device', apiKey }),
+        body: JSON.stringify({ deviceIp, path: '/get_status', apiKey }),
     });
 };

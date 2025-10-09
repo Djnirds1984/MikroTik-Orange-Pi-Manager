@@ -361,16 +361,11 @@ export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.i
 export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
 
 // --- NodeMCU Types ---
-export interface NodeMcuRate {
-    credit: number;
-    time: number; // in minutes
+export interface NodeMcuStatus {
+    sales: number;
+    connected_users: number;
 }
 
-export interface NodeMcuSettings {
-    deviceName: string;
-    rates: NodeMcuRate[];
-    portalUrl: string;
-}
 
 // --- Hotspot Setup Types ---
 export interface SslCertificate {
