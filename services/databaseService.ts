@@ -1,17 +1,34 @@
-
 import type { PanelSettings } from '../types.ts';
 
 const apiBaseUrl = '/api/db';
+
+// --- Auth Helper ---
+// This can be used by other services as well
+export const getAuthHeader = () => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+};
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
     const response = await fetch(`${apiBaseUrl}${path}`, {
         headers: {
             'Content-Type': 'application/json',
+            ...getAuthHeader(),
             ...options.headers,
         },
         ...options,
     });
   
+    if (response.status === 401) {
+        // Unauthorized, likely bad token. Force a logout.
+        localStorage.removeItem('authToken');
+        window.location.reload();
+        throw new Error('Session expired. Please log in again.');
+    }
+
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: `Request failed with status ${response.status}` }));
         throw new Error(errorData.message);

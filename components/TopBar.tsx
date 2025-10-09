@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { RouterConfigWithId, View } from '../types.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useTheme, colorThemes, ColorTheme } from '../contexts/ThemeContext.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 
 interface TopBarProps {
@@ -29,6 +30,13 @@ const PaletteIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75a2.25 2.25 0 012.25 2.25c0 1.24-1.01 2.25-2.25 2.25S7.5 13.24 7.5 12s1.01-2.25 2.25-2.25z" />
     </svg>
 );
+
+const LogoutIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
+    </svg>
+);
+
 
 const ColorSelector: React.FC = () => {
     const { colorTheme, setColorTheme } = useTheme();
@@ -150,6 +158,8 @@ const RouterSelector: React.FC<{
 }
 
 export const TopBar: React.FC<TopBarProps> = ({ title, routers, selectedRouter, onSelectRouter, setCurrentView, onToggleSidebar }) => {
+  const { logout } = useAuth();
+  
   return (
     <header className="bg-white/80 dark:bg-slate-900/70 backdrop-blur-sm sticky top-0 z-20 border-b border-slate-200 dark:border-slate-800">
       <div className="flex items-center justify-between h-16 px-4 sm:px-8">
@@ -167,6 +177,13 @@ export const TopBar: React.FC<TopBarProps> = ({ title, routers, selectedRouter, 
                 setCurrentView={setCurrentView} 
             />
             <ColorSelector />
+             <button
+                onClick={logout}
+                className="p-2 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors"
+                title="Logout"
+            >
+                <LogoutIcon className="w-5 h-5" />
+            </button>
         </div>
       </div>
     </header>

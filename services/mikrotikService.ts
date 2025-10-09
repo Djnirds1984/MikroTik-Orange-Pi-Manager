@@ -32,26 +32,30 @@ import type {
     PppServerData,
     FirewallRule,
 } from '../types.ts';
+import { getAuthHeader } from './databaseService.ts';
 
 type RuleType = 'filter' | 'nat' | 'mangle';
 
 // A generic fetcher for MikroTik API calls
 const fetchMikrotikData = async <T>(router: RouterConfig, path: string, options: RequestInit = {}): Promise<T> => {
-    // FIX: Restore explicit communication to the backend server on port 3002.
-    // This makes the app work correctly when accessed directly via port 3001, bypassing Nginx.
     const apiBaseUrl = `http://${window.location.hostname}:3002/mt-api`;
     
-    // The backend identifies the router by an ID.
-    // The test-connection endpoint is special as it doesn't have an ID yet.
     const fullPath = 'id' in router ? `${apiBaseUrl}/${(router as RouterConfigWithId).id}${path}` : `${apiBaseUrl}${path}`;
 
     const response = await fetch(fullPath, {
         headers: {
             'Content-Type': 'application/json',
+            ...getAuthHeader(),
             ...options.headers,
         },
         ...options,
     });
+    
+    if (response.status === 401) {
+        localStorage.removeItem('authToken');
+        window.location.reload();
+        throw new Error('Session expired. Please log in again.');
+    }
   
     const contentType = response.headers.get("content-type");
     if (!response.ok) {
@@ -73,7 +77,6 @@ const fetchMikrotikData = async <T>(router: RouterConfig, path: string, options:
     if (contentType && contentType.includes("application/json")) {
         return response.json() as Promise<T>;
     }
-    // Handle text responses, e.g., for file content
     return response.text() as unknown as Promise<T>;
 };
 
@@ -96,7 +99,7 @@ export const getRouterNtp = (router: RouterConfigWithId): Promise<NtpSettings> =
 
 export const setRouterNtp = (router: RouterConfigWithId, settings: NtpSettings): Promise<{ message: string }> => {
     return fetchMikrotikData<{ message: string }>(router, '/system/ntp/client', {
-        method: 'POST', // Use POST for setting data
+        method: 'POST',
         body: JSON.stringify(settings),
     });
 };

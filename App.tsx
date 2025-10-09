@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -19,6 +17,9 @@ import { Inventory } from './components/Inventory.tsx';
 import { Company } from './components/Company.tsx';
 import { Terminal } from './components/Terminal.tsx';
 import { Loader } from './components/Loader.tsx';
+import { Login } from './components/Login.tsx';
+import { Register } from './components/Register.tsx';
+import { AuthLayout } from './components/AuthLayout.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -26,6 +27,7 @@ import { useExpensesData } from './hooks/useExpensesData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
+import { useAuth } from './contexts/AuthContext.tsx';
 import type { View } from './types.ts';
 
 const useMediaQuery = (query: string): boolean => {
@@ -42,11 +44,9 @@ const useMediaQuery = (query: string): boolean => {
     const mediaQuery = window.matchMedia(query);
     const handleChange = () => setMatches(mediaQuery.matches);
     
-    // Listen for changes
     try {
         mediaQuery.addEventListener('change', handleChange);
     } catch (e) {
-        // For older browsers
         mediaQuery.addListener(handleChange);
     }
 
@@ -54,7 +54,6 @@ const useMediaQuery = (query: string): boolean => {
        try {
             mediaQuery.removeEventListener('change', handleChange);
         } catch (e) {
-            // For older browsers
             mediaQuery.removeListener(handleChange);
         }
     };
@@ -79,12 +78,10 @@ const AppContent: React.FC = () => {
 
   const appIsLoading = isLoadingRouters || isLoadingSales || isLoadingInventory || isLoadingCompany || isLoadingLocalization || isLoadingExpenses;
 
-  // Effect to manage sidebar visibility based on screen size
   useEffect(() => {
     setIsSidebarOpen(isLargeScreen);
   }, [isLargeScreen]);
 
-  // Close sidebar on view change on mobile
   useEffect(() => {
     if (!isLargeScreen) {
         setIsSidebarOpen(false);
@@ -92,14 +89,12 @@ const AppContent: React.FC = () => {
   }, [currentView, isLargeScreen]);
 
   useEffect(() => {
-    // This effect runs once after the initial data has loaded
     if (!appIsLoading && routers.length > 0 && !selectedRouterId) {
         setSelectedRouterId(routers[0].id);
     }
   }, [appIsLoading, routers, selectedRouterId]);
 
   useEffect(() => {
-    // This effect ensures a router is always selected if possible
     if (!selectedRouterId && routers.length > 0) {
       setSelectedRouterId(routers[0].id);
     }
@@ -175,7 +170,6 @@ const AppContent: React.FC = () => {
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
       />
-       {/* Mobile sidebar overlay */}
       {isSidebarOpen && !isLargeScreen && (
         <div 
           className="fixed inset-0 bg-black/60 z-40 lg:hidden"
@@ -203,13 +197,45 @@ const AppContent: React.FC = () => {
   );
 };
 
+const AppRouter: React.FC = () => {
+    const { user, isLoading, hasUsers } = useAuth();
+    const [showLogin, setShowLogin] = useState(true);
+
+    useEffect(() => {
+        if (!isLoading) {
+            setShowLogin(hasUsers);
+        }
+    }, [isLoading, hasUsers]);
+
+    if (isLoading) {
+        return (
+            <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
+                <Loader />
+            </div>
+        );
+    }
+
+    if (!user) {
+        return (
+            <AuthLayout>
+                {showLogin ? (
+                    <Login onSwitchToRegister={() => setShowLogin(false)} />
+                ) : (
+                    <Register onSwitchToLogin={() => setShowLogin(true)} />
+                )}
+            </AuthLayout>
+        );
+    }
+
+    return <AppContent />;
+};
+
 const App: React.FC = () => (
   <ThemeProvider>
     <LocalizationProvider>
-      <AppContent />
+      <AppRouter />
     </LocalizationProvider>
   </ThemeProvider>
 );
-
 
 export default App;

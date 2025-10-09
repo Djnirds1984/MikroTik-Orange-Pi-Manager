@@ -1,15 +1,23 @@
 import type { PanelHostStatus, PanelNtpStatus } from '../types.ts';
+import { getAuthHeader } from './databaseService.ts';
+
 
 const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T> => {
-    // The panel API is on port 3001
     const apiBaseUrl = ``;
     const response = await fetch(`${apiBaseUrl}${path}`, {
         headers: {
             'Content-Type': 'application/json',
+            ...getAuthHeader(),
             ...options.headers,
         },
         ...options,
     });
+    
+    if (response.status === 401) {
+        localStorage.removeItem('authToken');
+        window.location.reload();
+        throw new Error('Session expired. Please log in again.');
+    }
   
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
@@ -20,7 +28,6 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         return null as T;
     }
 
-    // Handle non-JSON responses for download
     const contentType = response.headers.get('content-type');
     if (contentType && !contentType.includes('application/json')) {
         return response.blob() as unknown as Promise<T>;
