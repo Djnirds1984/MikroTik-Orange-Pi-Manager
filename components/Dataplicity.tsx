@@ -3,6 +3,7 @@ import { getDataplicityStatus, streamInstallDataplicity, streamUninstallDataplic
 import type { DataplicityStatus } from '../types.ts';
 import { Loader } from './Loader.tsx';
 import { DataplicityIcon, ExclamationTriangleIcon, CheckCircleIcon, TrashIcon } from '../constants.tsx';
+import { SudoInstructionBox } from './SudoInstructionBox.tsx';
 
 const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
     const logContainerRef = useRef<HTMLDivElement>(null);
@@ -111,12 +112,14 @@ export const Dataplicity: React.FC = () => {
                 );
             case 'not_installed':
                 return (
-                    <div className="text-center space-y-4">
-                        <p className="text-slate-500 dark:text-slate-400">Dataplicity agent is not installed on this panel host.</p>
-                        <button onClick={handleInstall} className="px-5 py-2.5 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold text-white">
-                           Install Dataplicity
-                        </button>
-                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">Note: This requires passwordless `sudo` permissions for the panel's user.</p>
+                    <div className="space-y-6">
+                        <div className="text-center">
+                            <p className="text-slate-500 dark:text-slate-400">Dataplicity agent is not installed on this panel host.</p>
+                            <button onClick={handleInstall} className="mt-4 px-5 py-2.5 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold text-white">
+                               Install Dataplicity
+                            </button>
+                        </div>
+                        <SudoInstructionBox />
                     </div>
                 );
             default:

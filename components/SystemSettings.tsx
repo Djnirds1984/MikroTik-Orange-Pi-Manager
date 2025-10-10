@@ -8,6 +8,7 @@ import { getPanelSettings, savePanelSettings } from '../services/databaseService
 import { createDatabaseBackup, listDatabaseBackups, deleteDatabaseBackup, getPanelNtpStatus, togglePanelNtp } from '../services/panelService.ts';
 import { Loader } from './Loader.tsx';
 import { KeyIcon, CogIcon, PowerIcon, RouterIcon, CircleStackIcon, ArrowPathIcon, TrashIcon } from '../constants.tsx';
+import { SudoInstructionBox } from './SudoInstructionBox.tsx';
 
 // --- Icon Components ---
 const SunIcon: React.FC<{ className?: string }> = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" /></svg>;
@@ -121,15 +122,20 @@ const TimeSyncManager: React.FC<{ selectedRouter: RouterConfigWithId | null }> =
             <div>
                 <h4 className="font-semibold text-lg text-slate-800 dark:text-slate-200 mb-2">Panel Host NTP</h4>
                 {isNtpLoading ? <div className="flex justify-center"><Loader /></div> : ntpError ? <p className="text-red-500 text-sm mb-2">{ntpError}</p> :
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <div>
-                            <p className="font-medium text-slate-700 dark:text-slate-300">Automatic Time Sync (timedatectl)</p>
-                            <p className="text-xs text-slate-500">Keep the panel server's time accurate.</p>
+                    <>
+                        <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div>
+                                <p className="font-medium text-slate-700 dark:text-slate-300">Automatic Time Sync (timedatectl)</p>
+                                <p className="text-xs text-slate-500">Keep the panel server's time accurate.</p>
+                            </div>
+                            <button onClick={handleTogglePanelNtp} disabled={isNtpSaving || panelNtpStatus === null} className={`px-4 py-2 text-sm font-semibold rounded-lg w-28 text-white ${panelNtpStatus?.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
+                                {isNtpSaving ? <Loader /> : panelNtpStatus?.enabled ? 'Disable' : 'Enable'}
+                            </button>
                         </div>
-                        <button onClick={handleTogglePanelNtp} disabled={isNtpSaving || panelNtpStatus === null} className={`px-4 py-2 text-sm font-semibold rounded-lg w-28 text-white ${panelNtpStatus?.enabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} disabled:opacity-50`}>
-                            {isNtpSaving ? <Loader /> : panelNtpStatus?.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                    </div>
+                         <div className="mt-4">
+                            <SudoInstructionBox />
+                        </div>
+                    </>
                 }
             </div>
             

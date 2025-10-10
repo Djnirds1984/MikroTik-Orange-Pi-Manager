@@ -4,6 +4,7 @@ import { getZeroTierStatus, joinZeroTierNetwork, leaveZeroTierNetwork, setZeroTi
 import { Loader } from './Loader.tsx';
 import { TrashIcon, ZeroTierIcon, ExclamationTriangleIcon, CheckCircleIcon } from '../constants.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
+import { SudoInstructionBox } from './SudoInstructionBox.tsx';
 
 // --- Local Components ---
 const LogViewer: React.FC<{ logs: string[] }> = ({ logs }) => {
@@ -252,7 +253,9 @@ export const ZeroTier: React.FC = () => {
                         </button>
                     </div>
                 )}
-                 <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 text-center">Note: The automatic installer requires the panel's user to have passwordless `sudo` permissions.</p>
+                <div className="mt-6">
+                    <SudoInstructionBox />
+                </div>
             </div>
         );
     }
@@ -309,6 +312,10 @@ export const ZeroTier: React.FC = () => {
                     <button onClick={() => setIsModalOpen(true)} className="bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-2 px-4 rounded-lg self-start sm:self-center">
                         Join Network
                     </button>
+                </div>
+                
+                <div className="p-4 rounded-lg bg-slate-50 dark:bg-slate-900/50">
+                    <SudoInstructionBox />
                 </div>
 
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
