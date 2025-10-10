@@ -82,5 +82,27 @@
         "interface": "Interface",
         "default_profile": "Default na Profile",
         "authentication": "Pagpapatunay"
+    },
+    "ngrok": {
+        "title": "Ngrok Remote Access",
+        "step1_title": "Hakbang 1: I-configure ang Ngrok",
+        "step1_desc": "Pumunta sa iyong Ngrok Dashboard para makuha ang iyong Authtoken. Pagkatapos, tukuyin kung anong local port ang gusto mong i-expose.",
+        "authtoken": "Ngrok Authtoken",
+        "protocol": "Protocol",
+        "http": "HTTP (para sa mga Web Server)",
+        "tcp": "TCP (para sa iba pang serbisyo)",
+        "local_port": "Local Port",
+        "save_settings": "I-save ang mga Setting",
+        "step2_title": "Hakbang 2: Pamahalaan ang Serbisyo at Suriin ang Katayuan",
+        "step2_desc": "Gamitin ang mga buton sa ibaba para kontrolin ang serbisyo ng Ngrok. Ang 'Install' ay magda-download ng Ngrok, gagawa ng persistent na serbisyo batay sa iyong mga setting sa itaas, at sisimulan ito.",
+        "current_status": "Kasalukuyang Katayuan",
+        "public_url": "Pampublikong URL",
+        "status_active": "AKTIBO",
+        "status_inactive": "HINDI AKTIBO",
+        "status_not_installed": "HINDI NA-INSTALL",
+        "reinstall": "I-install Muli / I-configure Muli",
+        "stop": "Itigil",
+        "restart": "I-restart",
+        "uninstall": "I-uninstall"
     }
 }

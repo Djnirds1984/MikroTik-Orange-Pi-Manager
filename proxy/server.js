@@ -18,6 +18,8 @@ const PORT = 3001;
 const DB_PATH = path.join(__dirname, 'panel.db');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
+const NGROK_CONFIG_PATH = path.join(__dirname, 'ngrok-config.json');
+const NGROK_BINARY_PATH = '/usr/local/bin/ngrok';
 const SECRET_KEY = process.env.JWT_SECRET || 'a-very-weak-secret-key-for-dev-only';
 
 app.use(express.json({ limit: '5mb' }));
@@ -990,6 +992,150 @@ const runCommandStream = (command, res, options = {}) => {
 };
 
 const runCommand = (command) => runCommandStream(command, null);
+
+// --- Ngrok Endpoints ---
+const ngrokApi = express.Router();
+ngrokApi.use(protect);
+
+ngrokApi.get('/status', async (req, res) => {
+    try {
+        const installed = fs.existsSync(NGROK_BINARY_PATH);
+        let active = false;
+        let url = null;
+        let config = null;
+
+        if (installed) {
+            const statusOutput = await runSudo('systemctl is-active ngrok.service').catch(() => 'inactive');
+            active = statusOutput.trim() === 'active';
+            
+            if (active) {
+                try {
+                    const agentResponse = await new Promise((resolve, reject) => {
+                         // Use native http to avoid adding axios dependency here
+                        const http = require('http');
+                        http.get('http://127.0.0.1:4040/api/tunnels', (resp) => {
+                            let data = '';
+                            resp.on('data', (chunk) => data += chunk);
+                            resp.on('end', () => resolve(JSON.parse(data)));
+                        }).on("error", (err) => reject(err));
+                    });
+                    const tunnels = agentResponse.tunnels;
+                    if (tunnels && tunnels.length > 0) {
+                        url = tunnels[0].public_url;
+                    }
+                } catch (e) {
+                    console.warn("Could not connect to Ngrok agent API:", e.message);
+                }
+            }
+        }
+        
+        try {
+            const savedConfig = await fsPromises.readFile(NGROK_CONFIG_PATH, 'utf-8');
+            config = JSON.parse(savedConfig);
+        } catch (e) { /* config file might not exist, which is fine */ }
+
+        res.json({ installed, active, url, config });
+    } catch (e) {
+        res.status(500).json({ message: e.message, code: 'SUDO_ERROR' });
+    }
+});
+
+ngrokApi.post('/settings', async (req, res) => {
+    try {
+        await fsPromises.writeFile(NGROK_CONFIG_PATH, JSON.stringify(req.body, null, 2));
+        res.json({ message: 'Settings saved.' });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+ngrokApi.post('/control/:action', async (req, res) => {
+    const { action } = req.params;
+    if (!['stop', 'start', 'restart'].includes(action)) {
+        return res.status(400).json({ message: 'Invalid action.' });
+    }
+    try {
+        await runSudo(`systemctl ${action} ngrok.service`);
+        res.json({ message: `Ngrok service ${action}ed.` });
+    } catch (e) {
+        res.status(500).json({ message: e.message, code: 'SUDO_ERROR' });
+    }
+});
+
+const createStreamHandler = (commandGenerator) => (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    const run = async () => {
+        try {
+            const commands = await commandGenerator(req);
+            for (const { cmd, msg } of commands) {
+                send({ log: msg });
+                await runCommandStream(cmd, res);
+            }
+            send({ status: 'success', log: 'Operation completed successfully.' });
+        } catch (e) {
+            send({ status: 'error', log: e.message, isError: true });
+        } finally {
+            send({ status: 'finished' });
+            res.end();
+        }
+    };
+    run();
+};
+
+ngrokApi.get('/install', createStreamHandler(async (req) => {
+    const config = JSON.parse(await fsPromises.readFile(NGROK_CONFIG_PATH, 'utf-8'));
+    if (!config.authtoken) throw new Error('Authtoken is not set.');
+    
+    const arch = os.arch() === 'arm64' ? 'arm64' : 'arm';
+    const url = `https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-${arch}.tgz`;
+    const user = os.userInfo().username;
+    
+    const serviceFileContent = `[Unit]
+Description=Ngrok Tunnel Service
+After=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/ngrok ${config.proto || 'http'} ${config.port || 80}
+Restart=always
+RestartSec=10
+User=${user}
+
+[Install]
+WantedBy=multi-user.target
+`;
+    await fsPromises.writeFile('/tmp/ngrok.service', serviceFileContent);
+
+    return [
+        { cmd: 'sudo systemctl stop ngrok.service', msg: 'Stopping existing service (if any)...' },
+        { cmd: `curl -L ${url} -o /tmp/ngrok.tgz`, msg: `Downloading Ngrok for ${arch}...` },
+        { cmd: 'tar -xzf /tmp/ngrok.tgz -C /tmp', msg: 'Extracting archive...'},
+        { cmd: 'sudo mv /tmp/ngrok /usr/local/bin/ngrok', msg: 'Moving binary to /usr/local/bin...'},
+        { cmd: 'sudo chmod +x /usr/local/bin/ngrok', msg: 'Setting executable permissions...'},
+        { cmd: `/usr/local/bin/ngrok config add-authtoken ${config.authtoken}`, msg: 'Configuring authtoken...'},
+        { cmd: 'sudo mv /tmp/ngrok.service /etc/systemd/system/ngrok.service', msg: 'Creating systemd service...'},
+        { cmd: 'sudo systemctl daemon-reload', msg: 'Reloading systemd...'},
+        { cmd: 'sudo systemctl enable ngrok.service', msg: 'Enabling service to start on boot...'},
+        { cmd: 'sudo systemctl start ngrok.service', msg: 'Starting Ngrok service...'}
+    ];
+}));
+
+ngrokApi.get('/uninstall', createStreamHandler(async (req) => {
+    return [
+        { cmd: 'sudo systemctl stop ngrok.service', msg: 'Stopping service...' },
+        { cmd: 'sudo systemctl disable ngrok.service', msg: 'Disabling service...' },
+        { cmd: 'sudo rm /etc/systemd/system/ngrok.service', msg: 'Removing service file...' },
+        { cmd: 'sudo systemctl daemon-reload', msg: 'Reloading systemd...' },
+        { cmd: `sudo rm ${NGROK_BINARY_PATH}`, msg: 'Deleting ngrok binary...' },
+        { cmd: `rm ${NGROK_CONFIG_PATH}`, msg: 'Deleting config file...' }
+    ];
+}));
+
+app.use('/api/ngrok', ngrokApi);
+
 
 app.get('/api/current-version', protect, async (req, res) => {
     try {

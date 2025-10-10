@@ -467,3 +467,14 @@ export interface MikroTikLogEntry {
     topics: string;
     message: string;
 }
+
+export interface NgrokStatus {
+    installed: boolean;
+    active: boolean;
+    url?: string;
+    config?: {
+        authtoken: string;
+        proto: string;
+        port: number;
+    };
+}

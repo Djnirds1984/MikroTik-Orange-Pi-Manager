@@ -82,5 +82,27 @@
         "interface": "Interface",
         "default_profile": "Perfil Padrão",
         "authentication": "Autenticação"
+    },
+    "ngrok": {
+        "title": "Acesso Remoto com Ngrok",
+        "step1_title": "Passo 1: Configurar o Ngrok",
+        "step1_desc": "Vá para o seu Painel do Ngrok para obter seu Authtoken. Em seguida, especifique qual porta local você deseja expor.",
+        "authtoken": "Authtoken do Ngrok",
+        "protocol": "Protocolo",
+        "http": "HTTP (para Servidores Web)",
+        "tcp": "TCP (para outros serviços)",
+        "local_port": "Porta Local",
+        "save_settings": "Salvar Configurações",
+        "step2_title": "Passo 2: Gerenciar Serviço e Verificar Status",
+        "step2_desc": "Use os botões abaixo para controlar o serviço Ngrok. 'Instalar' fará o download do Ngrok, criará um serviço persistente com base em suas configurações e o iniciará.",
+        "current_status": "Status Atual",
+        "public_url": "URL Pública",
+        "status_active": "ATIVO",
+        "status_inactive": "INATIVO",
+        "status_not_installed": "NÃO INSTALADO",
+        "reinstall": "Reinstalar / Reconfigurar",
+        "stop": "Parar",
+        "restart": "Reiniciar",
+        "uninstall": "Desinstalar"
     }
 }
