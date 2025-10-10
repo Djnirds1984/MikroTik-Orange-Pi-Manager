@@ -51,7 +51,9 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [interfaces, setInterfaces] = useState<InterfaceWithHistory[]>([]);
     const [pppoeCount, setPppoeCount] = useState<number>(0);
-    const [selectedChartInterface, setSelectedChartInterface] = useState<string | null>(null);
+    const [selectedChartInterface1, setSelectedChartInterface1] = useState<string | null>(null);
+    const [selectedChartInterface2, setSelectedChartInterface2] = useState<string | null>(null);
+
 
     // Host States
     const [hostStatus, setHostStatus] = useState<PanelHostStatus | null>(null);
@@ -97,7 +99,8 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
             setError(null);
             setShowFixer(false);
             setInterfaces([]);
-            setSelectedChartInterface(null);
+            setSelectedChartInterface1(null);
+            setSelectedChartInterface2(null);
             setPppoeCount(0);
         }
 
@@ -162,14 +165,23 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
     
     // --- Memos and Effects for UI ---
     
-    const etherInterfaces = useMemo(() => interfaces.filter(i => i.type.startsWith('ether')), [interfaces]);
-    const chartData = useMemo(() => interfaces.find(i => i.name === selectedChartInterface), [interfaces, selectedChartInterface]);
+    const selectableInterfaces = useMemo(() => 
+        interfaces.filter(i => i.type.startsWith('ether') || i.type === 'bridge'), 
+        [interfaces]
+    );
+    const chartData1 = useMemo(() => interfaces.find(i => i.name === selectedChartInterface1), [interfaces, selectedChartInterface1]);
+    const chartData2 = useMemo(() => interfaces.find(i => i.name === selectedChartInterface2), [interfaces, selectedChartInterface2]);
 
     useEffect(() => {
-        if (!selectedChartInterface && etherInterfaces.length > 0) {
-            setSelectedChartInterface(etherInterfaces[0].name);
+        if (selectableInterfaces.length > 0) {
+            if (!selectedChartInterface1) {
+                setSelectedChartInterface1(selectableInterfaces[0].name);
+            }
+            if (!selectedChartInterface2) {
+                setSelectedChartInterface2(selectableInterfaces[1]?.name || selectableInterfaces[0].name);
+            }
         }
-    }, [etherInterfaces, selectedChartInterface]);
+    }, [selectableInterfaces, selectedChartInterface1, selectedChartInterface2]);
 
 
     // --- Render Logic ---
@@ -252,30 +264,60 @@ export const Dashboard: React.FC<{ selectedRouter: RouterConfigWithId | null }> 
                  </div>
             </div>
             
-            {selectedRouter && chartData && etherInterfaces.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
-                    <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
-                        <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Live Interface Traffic</h4>
-                        <select
-                            value={selectedChartInterface || ''}
-                            onChange={(e) => setSelectedChartInterface(e.target.value)}
-                            className="mt-2 sm:mt-0 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white"
-                            aria-label="Select interface to view traffic"
-                        >
-                            {etherInterfaces.map(iface => (
-                                <option key={iface.name} value={iface.name}>{iface.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div>
-                        <div className="flex justify-between text-sm mb-2">
-                            <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData.rxRate)}</span></p>
-                            <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData.txRate)}</span></p>
+            {selectedRouter && selectableInterfaces.length > 0 && (
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {chartData1 && (
+                        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
+                                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Live Interface Traffic 1</h4>
+                                <select
+                                    value={selectedChartInterface1 || ''}
+                                    onChange={(e) => setSelectedChartInterface1(e.target.value)}
+                                    className="mt-2 sm:mt-0 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white"
+                                    aria-label="Select interface 1 to view traffic"
+                                >
+                                    {selectableInterfaces.map(iface => (
+                                        <option key={iface.name} value={iface.name}>{iface.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData1.rxRate)}</span></p>
+                                    <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData1.txRate)}</span></p>
+                                </div>
+                                <div className="h-64">
+                                <Chart trafficHistory={chartData1.trafficHistory} />
+                                </div>
+                            </div>
                         </div>
-                        <div className="h-64">
-                           <Chart trafficHistory={chartData.trafficHistory} />
+                    )}
+                     {chartData2 && (
+                        <div className="bg-white dark:bg-slate-800 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4">
+                                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-lg">Live Interface Traffic 2</h4>
+                                <select
+                                    value={selectedChartInterface2 || ''}
+                                    onChange={(e) => setSelectedChartInterface2(e.target.value)}
+                                    className="mt-2 sm:mt-0 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md py-2 px-3 text-slate-900 dark:text-white"
+                                    aria-label="Select interface 2 to view traffic"
+                                >
+                                    {selectableInterfaces.map(iface => (
+                                        <option key={iface.name} value={iface.name}>{iface.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <p>RX: <span className="font-semibold text-green-600 dark:text-green-400">{formatBps(chartData2.rxRate)}</span></p>
+                                    <p>TX: <span className="font-semibold text-sky-600 dark:text-sky-400">{formatBps(chartData2.txRate)}</span></p>
+                                </div>
+                                <div className="h-64">
+                                <Chart trafficHistory={chartData2.trafficHistory} />
+                                </div>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
         </div>
