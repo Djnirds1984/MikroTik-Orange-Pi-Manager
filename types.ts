@@ -307,6 +307,7 @@ export interface ZeroTierStatusResponse {
 export interface DataplicityStatus {
     installed: boolean;
     url: string | null;
+    email: string | null;
 }
 
 export interface PanelHostStatus {

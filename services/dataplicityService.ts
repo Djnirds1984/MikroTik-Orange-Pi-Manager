@@ -46,11 +46,9 @@ interface StreamCallbacks {
     onClose?: () => void;
 }
 
-const streamEvents = async (url: string, callbacks: StreamCallbacks) => {
+const streamEvents = async (url: string, options: RequestInit, callbacks: StreamCallbacks) => {
     try {
-        const response = await fetch(url, {
-            headers: getAuthHeader()
-        });
+        const response = await fetch(url, options);
 
         if (response.status === 401) {
             localStorage.removeItem('authToken');
@@ -93,5 +91,20 @@ const streamEvents = async (url: string, callbacks: StreamCallbacks) => {
 };
 
 export const getDataplicityStatus = () => fetchData<DataplicityStatus>('/api/dataplicity/status');
-export const streamInstallDataplicity = (callbacks: StreamCallbacks) => streamEvents('/api/dataplicity/install', callbacks);
-export const streamUninstallDataplicity = (callbacks: StreamCallbacks) => streamEvents('/api/dataplicity/uninstall', callbacks);
+
+export const streamInstallDataplicity = (email: string, password: string, callbacks: StreamCallbacks) => {
+    const options = {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+        body: JSON.stringify({ email, password }),
+    };
+    streamEvents('/api/dataplicity/install', options, callbacks);
+};
+
+export const streamUninstallDataplicity = (callbacks: StreamCallbacks) => {
+    const options = {
+        method: 'GET',
+        headers: getAuthHeader(),
+    };
+    streamEvents('/api/dataplicity/uninstall', options, callbacks);
+};

@@ -678,22 +678,18 @@ app.get('/api/zt/install', protect, (req, res) => {
 
 // --- Dataplicity Endpoints ---
 
-app.get('/api/dataplicity/status', protect, (req, res) => {
-    exec('echo $HOME', (err, stdout) => {
-        if (err) {
-            return res.status(500).json({ message: 'Could not determine home directory.' });
-        }
-        const homeDir = stdout.trim();
+app.get('/api/dataplicity/status', protect, async (req, res) => {
+    try {
+        const homeDir = (await new Promise((resolve, reject) => {
+            exec('echo $HOME', (err, stdout) => err ? reject(err) : resolve(stdout.trim()));
+        }));
+        
         const confPath = path.join(homeDir, '.dataplicity', 'dataplicity.conf');
+        const emailRow = await db.get("SELECT value FROM panel_settings WHERE key = 'dataplicityEmail'");
+        const email = emailRow ? JSON.parse(emailRow.value) : null;
 
-        fs.readFile(confPath, 'utf-8', (readErr, fileContent) => {
-            if (readErr) {
-                if (readErr.code === 'ENOENT') {
-                    return res.json({ installed: false, url: null });
-                }
-                return res.status(500).json({ message: readErr.message });
-            }
-
+        try {
+            const fileContent = await fs.promises.readFile(confPath, 'utf-8');
             const conf = fileContent.split('\n').reduce((acc, line) => {
                 const [key, value] = line.split('=');
                 if (key && value) acc[key.trim()] = value.trim();
@@ -701,27 +697,52 @@ app.get('/api/dataplicity/status', protect, (req, res) => {
             }, {});
 
             if (conf.device_id) {
-                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io` });
+                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io`, email });
             } else {
-                res.json({ installed: true, url: null }); // Installed but misconfigured
+                res.json({ installed: true, url: null, email });
             }
-        });
-    });
+        } catch (readErr) {
+            if (readErr.code === 'ENOENT') {
+                return res.json({ installed: false, url: null, email: null });
+            }
+            throw readErr;
+        }
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
-app.get('/api/dataplicity/install', protect, (req, res) => {
+app.post('/api/dataplicity/install', protect, (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    
-    const child = exec('curl -s https://www.dataplicity.com/install.py | sudo python3');
+
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+    const { email, password } = req.body;
+    if (!email || !password) {
+        send({ status: 'error', message: 'Email and password are required.' });
+        return res.end();
+    }
+
+    // Use environment variables and `sudo -E` for safer credential passing
+    const command = `curl -s https://www.dataplicity.com/install.py | sudo -E python3 -u - --email="$DATAPLICITY_EMAIL" --password="$DATAPLICITY_PASSWORD"`;
+    const child = exec(command, {
+        env: { ...process.env, DATAPLICITY_EMAIL: email, DATAPLICITY_PASSWORD: password }
+    });
 
     child.stdout.on('data', log => send({ log }));
     child.stderr.on('data', log => send({ log, isError: true }));
-    child.on('close', code => {
-        if (code !== 0) {
-            send({ status: 'error', message: 'Installation script failed.' });
+    child.on('close', async (code) => {
+        if (code === 0) {
+            try {
+                await db.run("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('dataplicityEmail', ?)", JSON.stringify(email));
+                send({ log: 'Installation successful. Email saved.' });
+            } catch(dbErr) {
+                 send({ log: `Installation script finished, but failed to save email to database: ${dbErr.message}`, isError: true });
+            }
+        } else {
+            send({ status: 'error', message: 'Installation script failed with a non-zero exit code. Check logs for details.' });
         }
         send({ status: 'finished' });
         res.end();
@@ -736,8 +757,15 @@ app.get('/api/dataplicity/uninstall', protect, (req, res) => {
 
     child.stdout.on('data', log => send({ log }));
     child.stderr.on('data', log => send({ log, isError: true }));
-    child.on('close', code => {
-        if (code !== 0) {
+    child.on('close', async (code) => {
+        if (code === 0) {
+            try {
+                await db.run("DELETE FROM panel_settings WHERE key = 'dataplicityEmail'");
+                send({ log: 'Uninstallation successful. Email removed.' });
+            } catch (dbErr) {
+                send({ log: `Uninstallation script finished, but failed to remove email from database: ${dbErr.message}`, isError: true });
+            }
+        } else {
             send({ status: 'error', message: 'Uninstallation script failed.' });
         }
         send({ status: 'finished' });
