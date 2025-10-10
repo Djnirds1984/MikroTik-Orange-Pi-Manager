@@ -3,10 +3,10 @@ import { useAuth } from '../contexts/AuthContext.tsx';
 import { Loader } from './Loader.tsx';
 
 interface LoginProps {
-    onSwitchToRegister: () => void;
+    onSwitchToForgotPassword: () => void;
 }
 
-export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
+export const Login: React.FC<LoginProps> = ({ onSwitchToForgotPassword }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const { login, error, isLoading } = useAuth();
@@ -64,9 +64,8 @@ export const Login: React.FC<LoginProps> = ({ onSwitchToRegister }) => {
                 </div>
             </form>
             <p className="mt-4 text-center text-sm text-slate-600 dark:text-slate-400">
-                Don't have an account?{' '}
-                <button onClick={onSwitchToRegister} className="font-medium text-[--color-primary-600] hover:text-[--color-primary-500]">
-                    Register here
+                <button onClick={onSwitchToForgotPassword} className="font-medium text-[--color-primary-600] hover:text-[--color-primary-500]">
+                    Forgot Password?
                 </button>
             </p>
         </div>

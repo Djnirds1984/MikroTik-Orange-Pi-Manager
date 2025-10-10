@@ -20,6 +20,7 @@ import { Terminal } from './components/Terminal.tsx';
 import { Loader } from './components/Loader.tsx';
 import { Login } from './components/Login.tsx';
 import { Register } from './components/Register.tsx';
+import { ForgotPassword } from './components/ForgotPassword.tsx';
 import { AuthLayout } from './components/AuthLayout.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
@@ -202,11 +203,15 @@ const AppContent: React.FC = () => {
 
 const AppRouter: React.FC = () => {
     const { user, isLoading, hasUsers } = useAuth();
-    const [showLogin, setShowLogin] = useState(true);
+    const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
 
     useEffect(() => {
         if (!isLoading) {
-            setShowLogin(hasUsers);
+            if (!hasUsers) {
+                setAuthView('register');
+            } else {
+                setAuthView('login');
+            }
         }
     }, [isLoading, hasUsers]);
 
@@ -221,11 +226,9 @@ const AppRouter: React.FC = () => {
     if (!user) {
         return (
             <AuthLayout>
-                {showLogin ? (
-                    <Login onSwitchToRegister={() => setShowLogin(false)} />
-                ) : (
-                    <Register onSwitchToLogin={() => setShowLogin(true)} />
-                )}
+                {authView === 'login' && <Login onSwitchToForgotPassword={() => setAuthView('forgot')} />}
+                {authView === 'register' && <Register />}
+                {authView === 'forgot' && <ForgotPassword onSwitchToLogin={() => setAuthView('login')} />}
             </AuthLayout>
         );
     }

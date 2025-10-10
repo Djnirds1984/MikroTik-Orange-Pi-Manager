@@ -6,6 +6,11 @@ interface User {
     username: string;
 }
 
+interface SecurityQuestion {
+    question: string;
+    answer: string;
+}
+
 interface AuthContextType {
     user: User | null;
     token: string | null;
@@ -13,8 +18,11 @@ interface AuthContextType {
     hasUsers: boolean;
     error: string | null;
     login: (username: string, password: string) => Promise<void>;
-    register: (username: string, password: string) => Promise<void>;
+    register: (username: string, password: string, securityQuestions: SecurityQuestion[]) => Promise<void>;
     logout: () => void;
+    getSecurityQuestions: (username: string) => Promise<string[]>;
+    resetPassword: (username: string, answers: string[], newPassword: string) => Promise<{ success: boolean; message: string }>;
+    clearError: () => void;
 }
 
 // Create the context with a default undefined value
@@ -27,6 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const [hasUsers, setHasUsers] = useState(true); // Assume users exist initially
     const [error, setError] = useState<string | null>(null);
+
+    const clearError = () => setError(null);
 
     const checkHasUsers = useCallback(async () => {
         try {
@@ -106,7 +116,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const login = (username: string, password: string) => handleAuth('/api/auth/login', { username, password });
-    const register = (username: string, password: string) => handleAuth('/api/auth/register', { username, password });
+    const register = (username: string, password: string, securityQuestions: SecurityQuestion[]) => handleAuth('/api/auth/register', { username, password, securityQuestions });
+    
+    const getSecurityQuestions = async (username: string): Promise<string[]> => {
+        try {
+            const response = await fetch(`/api/auth/security-questions/${encodeURIComponent(username)}`);
+            if (!response.ok) {
+                throw new Error("Could not fetch security questions.");
+            }
+            const data = await response.json();
+            return data.questions || [];
+        } catch (e) {
+            console.error("Failed to get security questions", e);
+            setError((e as Error).message);
+            return [];
+        }
+    };
+
+    const resetPassword = async (username: string, answers: string[], newPassword: string): Promise<{ success: boolean; message: string }> => {
+        setError(null);
+        setIsLoading(true);
+        try {
+             const response = await fetch('/api/auth/reset-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, answers, newPassword }),
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                throw new Error(data.message || 'An error occurred.');
+            }
+            return { success: true, message: data.message };
+        } catch (e) {
+             setError((e as Error).message);
+             return { success: false, message: (e as Error).message };
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const logout = async () => {
         setError(null);
@@ -125,7 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('authToken');
     };
 
-    const value = { user, token, isLoading, hasUsers, error, login, register, logout };
+    const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError };
 
     return (
         <AuthContext.Provider value={value}>

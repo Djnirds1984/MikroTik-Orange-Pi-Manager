@@ -216,6 +216,22 @@ async function initDb() {
             await db.exec('PRAGMA user_version = 9;');
             user_version = 9;
         }
+        
+        if (user_version < 10) {
+            console.log('Applying migration v10 (Add user security questions)...');
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS user_security_questions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    question TEXT NOT NULL,
+                    answer TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                );
+            `);
+            await db.exec('PRAGMA user_version = 10;');
+            user_version = 10;
+        }
+
 
     } catch (err) {
         console.error('Failed to initialize database:', err);
@@ -236,23 +252,46 @@ authRouter.get('/has-users', async (req, res) => {
 });
 
 authRouter.post('/register', async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-        return res.status(400).json({ message: 'Username and password are required.' });
+    const { username, password, securityQuestions } = req.body;
+    if (!username || !password || !securityQuestions || securityQuestions.length < 3) {
+        return res.status(400).json({ message: 'Username, password, and three security questions are required.' });
     }
+    
     try {
+        const row = await db.get("SELECT COUNT(*) as count FROM users");
+        if (row.count > 0) {
+            return res.status(403).json({ message: 'Registration is only allowed for the first administrator account.' });
+        }
+
+        await db.exec('BEGIN TRANSACTION;');
+
         const hashedPassword = await bcrypt.hash(password, 10);
-        const user = {
-            id: `user_${Date.now()}`,
-            username,
-        };
+        const userId = `user_${Date.now()}`;
+        const user = { id: userId, username };
 
         await db.run('INSERT INTO users (id, username, password) VALUES (?, ?, ?)', user.id, user.username, hashedPassword);
 
+        for (const qa of securityQuestions) {
+            if (qa.question && qa.answer) {
+                const normalizedAnswer = qa.answer.trim().toLowerCase();
+                const hashedAnswer = await bcrypt.hash(normalizedAnswer, 10);
+                await db.run(
+                    'INSERT INTO user_security_questions (id, user_id, question, answer) VALUES (?, ?, ?, ?)',
+                    `sq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    userId,
+                    qa.question,
+                    hashedAnswer
+                );
+            }
+        }
+        
+        await db.exec('COMMIT;');
+        
         const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
         res.status(201).json({ token, user });
 
     } catch (e) {
+        await db.exec('ROLLBACK;');
         if (e.message.includes('UNIQUE constraint failed')) {
             return res.status(409).json({ message: 'Username already exists.' });
         }
@@ -277,6 +316,63 @@ authRouter.post('/login', async (req, res) => {
 
         const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
         res.json({ token, user: { id: user.id, username: user.username } });
+
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+authRouter.get('/security-questions/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        const user = await db.get('SELECT id FROM users WHERE username = ?', username);
+        if (!user) {
+            // To prevent username enumeration, we send back an empty array even if the user doesn't exist.
+            // The frontend should check for an empty array and show a generic error.
+            return res.json({ questions: [] });
+        }
+        const questions = await db.all('SELECT question FROM user_security_questions WHERE user_id = ? ORDER BY id', user.id);
+        res.json({ questions: questions.map(q => q.question) });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+authRouter.post('/reset-password', async (req, res) => {
+    const { username, answers, newPassword } = req.body;
+    if (!username || !answers || !newPassword || !Array.isArray(answers) || answers.length === 0) {
+        return res.status(400).json({ message: 'Username, answers, and new password are required.' });
+    }
+    try {
+        const user = await db.get('SELECT id FROM users WHERE username = ?', username);
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid username or answers.' });
+        }
+
+        const storedAnswers = await db.all('SELECT answer FROM user_security_questions WHERE user_id = ? ORDER BY id', user.id);
+
+        if (answers.length !== storedAnswers.length) {
+            return res.status(401).json({ message: 'Invalid username or answers.' });
+        }
+
+        let allAnswersMatch = true;
+        for (let i = 0; i < answers.length; i++) {
+            const normalizedAnswer = (answers[i] || '').trim().toLowerCase();
+            const isMatch = await bcrypt.compare(normalizedAnswer, storedAnswers[i].answer);
+            if (!isMatch) {
+                allAnswersMatch = false;
+                break;
+            }
+        }
+
+        if (!allAnswersMatch) {
+            return res.status(401).json({ message: 'Invalid username or answers.' });
+        }
+
+        const hashedNewPassword = await bcrypt.hash(newPassword, 10);
+        await db.run('UPDATE users SET password = ? WHERE id = ?', hashedNewPassword, user.id);
+        
+        res.json({ message: 'Password has been reset successfully.' });
 
     } catch (e) {
         res.status(500).json({ message: e.message });
