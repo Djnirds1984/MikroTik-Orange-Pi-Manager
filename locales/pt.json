@@ -17,7 +17,8 @@
         "zerotier": "ZeroTier",
         "company": "Empresa",
         "system_settings": "Configurações do Sistema",
-        "updater": "Atualizador"
+        "updater": "Atualizador",
+        "super_router": "Super Roteador"
     },
     "titles": {
         "dashboard": "Painel",
@@ -33,7 +34,8 @@
         "zerotier": "Gerenciamento de ZeroTier",
         "company": "Configurações da Empresa",
         "system": "Configurações do Sistema",
-        "updater": "Atualizador do Painel"
+        "updater": "Atualizador do Painel",
+        "super_router": "Configuração do Roteador Host"
     },
     "topbar": {
         "add_router_title": "Vá para a página de Roteadores para adicionar um novo roteador",

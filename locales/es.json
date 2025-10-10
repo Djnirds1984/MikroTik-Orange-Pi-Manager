@@ -17,7 +17,8 @@
         "zerotier": "ZeroTier",
         "company": "Empresa",
         "system_settings": "Configuración del Sistema",
-        "updater": "Actualizador"
+        "updater": "Actualizador",
+        "super_router": "Super Router"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -33,7 +34,8 @@
         "zerotier": "Gestión de ZeroTier",
         "company": "Configuración de la Empresa",
         "system": "Configuración del Sistema",
-        "updater": "Actualizador del Panel"
+        "updater": "Actualizador del Panel",
+        "super_router": "Configuración del Router Anfitrión"
     },
     "topbar": {
         "add_router_title": "Ir a la página de Routers para añadir un nuevo router",

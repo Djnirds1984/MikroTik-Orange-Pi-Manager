@@ -22,6 +22,7 @@ import { Login } from './components/Login.tsx';
 import { Register } from './components/Register.tsx';
 import { ForgotPassword } from './components/ForgotPassword.tsx';
 import { AuthLayout } from './components/AuthLayout.tsx';
+import { SuperRouter } from './components/SuperRouter.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -158,6 +159,8 @@ const AppContent: React.FC = () => {
           return <SystemSettings selectedRouter={selectedRouter} />;
       case 'updater':
         return <Updater />;
+      case 'super_router':
+        return <SuperRouter />;
       default:
         return <Dashboard selectedRouter={selectedRouter} />;
     }

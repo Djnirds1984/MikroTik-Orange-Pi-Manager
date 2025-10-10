@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export type View =
@@ -17,6 +16,7 @@ export type View =
   | 'company'
   | 'system'
   | 'updater'
+  | 'super_router'
   | 'help';
 
 export interface RouterConfig {
@@ -442,4 +442,20 @@ export interface NewVersionInfo {
 export interface DataplicityStatus {
     installed: boolean;
     url?: string;
+}
+
+export interface HostInterface {
+    name: string;
+    ip4: string;
+    mac: string;
+}
+
+export interface HostNetworkConfig {
+    ipForwarding: boolean;
+    interfaces: HostInterface[];
+    wanInterface: string | null;
+    lanInterface: string | null;
+    lanIp: string | null;
+    natActive: boolean;
+    dnsmasqActive: boolean;
 }

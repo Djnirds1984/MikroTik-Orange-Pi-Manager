@@ -17,7 +17,8 @@
         "zerotier": "ZeroTier",
         "company": "Kumpanya",
         "system_settings": "Mga Setting ng System",
-        "updater": "Updater"
+        "updater": "Updater",
+        "super_router": "Super Router"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -33,7 +34,8 @@
         "zerotier": "Pamamahala ng ZeroTier",
         "company": "Mga Setting ng Kumpanya",
         "system": "Mga Setting ng System",
-        "updater": "Panel Updater"
+        "updater": "Panel Updater",
+        "super_router": "Pagsasaayos ng Host Router"
     },
     "topbar": {
         "add_router_title": "Pumunta sa pahina ng Mga Router para magdagdag ng bagong router",

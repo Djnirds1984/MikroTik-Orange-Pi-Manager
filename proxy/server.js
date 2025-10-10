@@ -10,6 +10,8 @@ const fsExtra = require('fs-extra');
 const tar = require('tar');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const os = require('os');
+const fsPromises = require('fs').promises;
 
 const app = express();
 const PORT = 3001;
@@ -692,6 +694,149 @@ app.get('/api/zt/install', protect, (req, res) => {
         send({ status: 'finished' });
         res.end();
     });
+});
+
+// --- Host Router Endpoints ---
+const runSudo = (command) => new Promise((resolve, reject) => {
+    exec(`sudo ${command}`, (err, stdout, stderr) => {
+        if (err) {
+            console.error(`Sudo error for command "${command}": ${stderr}`);
+            if (stderr.includes("sudo: a terminal is required") || stderr.includes("sudo: a password is required")) {
+                return reject(new Error('Passwordless sudo is not configured correctly for the panel user.'));
+            }
+            return reject(new Error(stderr || err.message));
+        }
+        resolve(stdout);
+    });
+});
+
+app.get('/api/host/network-config', protect, async (req, res) => {
+    try {
+        // 1. Get interfaces
+        const rawIfaces = os.networkInterfaces();
+        const interfaces = Object.entries(rawIfaces).map(([name, details]) => {
+            const ipv4 = details.find(d => d.family === 'IPv4' && !d.internal);
+            return {
+                name,
+                ip4: ipv4 ? `${ipv4.address}/${ipv4.netmask}` : 'N/A',
+                mac: ipv4 ? ipv4.mac : 'N/A'
+            };
+        }).filter(iface => iface.mac !== '00:00:00:00:00:00' && iface.name !== 'lo');
+
+        // 2. Check IP forwarding
+        const ipForwarding = await fsPromises.readFile('/proc/sys/net/ipv4/ip_forward', 'utf-8');
+
+        // 3. Check for our specific NAT rule
+        const iptablesRules = await runSudo('iptables-save').catch(() => '');
+        const natActive = iptablesRules.includes('-A POSTROUTING -m comment --comment "super-router-nat" -j MASQUERADE');
+        
+        // 4. Check dnsmasq status
+        const dnsmasqStatus = await runSudo('systemctl is-active dnsmasq').catch(() => 'inactive');
+
+        // 5. Try to read our saved config
+        const configPath = path.join(__dirname, 'super-router.json');
+        let savedConfig = {};
+        try {
+            const file = await fsPromises.readFile(configPath, 'utf-8');
+            savedConfig = JSON.parse(file);
+        } catch (e) { /* file doesn't exist, that's fine */ }
+
+        res.json({
+            ipForwarding: ipForwarding.trim() === '1',
+            interfaces,
+            natActive,
+            dnsmasqActive: dnsmasqStatus.trim() === 'active',
+            ...savedConfig
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+app.post('/api/host/apply-network-config', protect, async (req, res) => {
+    const { wan, lan, lanIp } = req.body;
+    if (!wan || !lan || !lanIp) {
+        return res.status(400).json({ message: 'WAN interface, LAN interface, and LAN IP are required.' });
+    }
+
+    try {
+        const lanIpParts = lanIp.split('/'); // e.g., '192.168.100.1/24'
+        const lanAddress = lanIpParts[0];
+
+        // 1. Configure interfaces
+        await runSudo(`ip addr flush dev ${lan}`);
+        await runSudo(`ip addr add ${lanIp} dev ${lan}`);
+        await runSudo(`ip link set dev ${lan} up`);
+        // We assume WAN is DHCP
+        await runSudo(`dhclient -r ${wan}`).catch(e => console.warn(`Could not release DHCP on ${wan}: ${e.message}`));
+        await runSudo(`dhclient ${wan}`).catch(e => console.warn(`Could not get DHCP on ${wan}: ${e.message}`));
+
+        // 2. Enable IP Forwarding
+        await runSudo('sysctl -w net.ipv4.ip_forward=1');
+
+        // 3. Set up NAT
+        await runSudo('iptables -t nat -F POSTROUTING'); // Flush old rules to prevent duplicates
+        await runSudo(`iptables -t nat -A POSTROUTING -o ${wan} -j MASQUERADE -m comment --comment "super-router-nat"`);
+
+        // 4. Configure and start dnsmasq for DHCP on LAN
+        const lanSubnetStart = lanAddress.substring(0, lanAddress.lastIndexOf('.')) + '.100';
+        const lanSubnetEnd = lanAddress.substring(0, lanAddress.lastIndexOf('.')) + '.200';
+        const dnsmasqConf = `
+interface=${lan}
+dhcp-range=${lanSubnetStart},${lanSubnetEnd},12h
+dhcp-option=option:router,${lanAddress}
+dhcp-option=option:dns-server,8.8.8.8,1.1.1.1
+log-dhcp
+`;
+        await fsPromises.writeFile('/tmp/dnsmasq.conf.super-router', dnsmasqConf);
+        await runSudo(`mv /tmp/dnsmasq.conf.super-router /etc/dnsmasq.d/super-router.conf`);
+        await runSudo('systemctl restart dnsmasq');
+        
+        // 5. Save config for status check
+        const configPath = path.join(__dirname, 'super-router.json');
+        const configToSave = { wanInterface: wan, lanInterface: lan, lanIp };
+        await fsPromises.writeFile(configPath, JSON.stringify(configToSave, null, 2));
+
+        res.json({ message: 'Router configuration applied successfully! Please test your network.' });
+    } catch (e) {
+        res.status(500).json({ message: `Failed to apply configuration: ${e.message}` });
+    }
+});
+
+app.post('/api/host/revert-network-config', protect, async (req, res) => {
+    try {
+        const configPath = path.join(__dirname, 'super-router.json');
+        let savedConfig = {};
+        try {
+            const file = await fsPromises.readFile(configPath, 'utf-8');
+            savedConfig = JSON.parse(file);
+        } catch (e) { 
+            return res.status(404).json({ message: 'No saved configuration found to revert.' });
+        }
+        
+        const { wanInterface, lanInterface } = savedConfig;
+        
+        await runSudo('systemctl stop dnsmasq').catch(e => console.warn(e.message));
+        await runSudo('rm /etc/dnsmasq.d/super-router.conf').catch(e => console.warn(e.message));
+        
+        if (wanInterface) {
+            await runSudo(`iptables -t nat -D POSTROUTING -o ${wanInterface} -j MASQUERADE -m comment --comment "super-router-nat"`).catch(e => console.warn(e.message));
+        }
+
+        await runSudo('sysctl -w net.ipv4.ip_forward=0');
+
+        if (lanInterface) {
+            await runSudo(`ip addr flush dev ${lanInterface}`).catch(e => console.warn(e.message));
+            await runSudo(`dhclient ${lanInterface}`).catch(e => console.warn(`Could not get DHCP on ${lanInterface}: ${e.message}`));
+        }
+
+        await fsPromises.unlink(configPath);
+        
+        res.json({ message: 'Attempted to revert router configuration. You may need to reboot for settings to fully restore.' });
+
+    } catch (e) {
+        res.status(500).json({ message: `Failed to revert configuration: ${e.message}` });
+    }
 });
 
 // --- AI Fixer ---
