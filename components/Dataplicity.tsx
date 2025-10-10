@@ -65,6 +65,7 @@ export const Dataplicity: React.FC = () => {
                 }
             },
             onClose: () => {
+                // Check status again after a delay to ensure it's not an error state
                 if (status !== 'error') {
                     setTimeout(fetchData, 1000); 
                 }
@@ -91,7 +92,7 @@ export const Dataplicity: React.FC = () => {
                     }
                 },
                 onClose: () => {
-                    if (status !== 'error') {
+                     if (status !== 'error') {
                         setTimeout(fetchData, 1000); 
                     }
                 },
