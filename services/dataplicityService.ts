@@ -92,11 +92,11 @@ const streamEvents = async (url: string, options: RequestInit, callbacks: Stream
 
 export const getDataplicityStatus = () => fetchData<DataplicityStatus>('/api/dataplicity/status');
 
-export const streamInstallDataplicity = (email: string, password: string, callbacks: StreamCallbacks) => {
+export const streamInstallDataplicity = (command: string, callbacks: StreamCallbacks) => {
     const options = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ command }),
     };
     streamEvents('/api/dataplicity/install', options, callbacks);
 };

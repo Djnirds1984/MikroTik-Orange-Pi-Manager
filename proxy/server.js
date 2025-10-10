@@ -685,8 +685,6 @@ app.get('/api/dataplicity/status', protect, async (req, res) => {
         }));
         
         const confPath = path.join(homeDir, '.dataplicity', 'dataplicity.conf');
-        const emailRow = await db.get("SELECT value FROM panel_settings WHERE key = 'dataplicityEmail'");
-        const email = emailRow ? JSON.parse(emailRow.value) : null;
 
         try {
             const fileContent = await fs.promises.readFile(confPath, 'utf-8');
@@ -697,9 +695,9 @@ app.get('/api/dataplicity/status', protect, async (req, res) => {
             }, {});
 
             if (conf.device_id) {
-                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io`, email });
+                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io`, email: null });
             } else {
-                res.json({ installed: true, url: null, email });
+                res.json({ installed: true, url: null, email: null });
             }
         } catch (readErr) {
             if (readErr.code === 'ENOENT') {
@@ -719,30 +717,36 @@ app.post('/api/dataplicity/install', protect, (req, res) => {
 
     const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-    const { email, password } = req.body;
-    if (!email || !password) {
-        send({ status: 'error', message: 'Email and password are required.' });
-        return res.end();
-    }
+    const { command } = req.body;
 
-    // Use environment variables and `sudo -E` for safer credential passing
-    const command = `curl -s https://www.dataplicity.com/install.py | sudo -E python3 -u - --email="$DATAPLICITY_EMAIL" --password="$DATAPLICITY_PASSWORD"`;
-    const child = exec(command, {
-        env: { ...process.env, DATAPLICITY_EMAIL: email, DATAPLICITY_PASSWORD: password }
-    });
+    // Basic validation
+    if (!command || typeof command !== 'string' || !command.trim().startsWith('curl')) {
+        send({ status: 'error', message: 'Invalid command. Please paste the full command from the Dataplicity website.' });
+        send({ status: 'finished' });
+        res.end();
+        return;
+    }
+    
+    // A slightly stronger security check to prevent arbitrary command execution
+    if (!command.includes('dataplicity.com/install.py') || !command.includes('sudo')) {
+        send({ status: 'error', message: 'The provided command does not appear to be a valid Dataplicity installation script.' });
+        send({ status: 'finished' });
+        res.end();
+        return;
+    }
+    
+    send({ log: `Executing command...` });
+
+    const child = exec(command);
 
     child.stdout.on('data', log => send({ log }));
     child.stderr.on('data', log => send({ log, isError: true }));
     child.on('close', async (code) => {
         if (code === 0) {
-            try {
-                await db.run("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('dataplicityEmail', ?)", JSON.stringify(email));
-                send({ log: 'Installation successful. Email saved.' });
-            } catch(dbErr) {
-                 send({ log: `Installation script finished, but failed to save email to database: ${dbErr.message}`, isError: true });
-            }
+             send({ log: 'Installation script finished successfully.' });
+             send({ status: 'success' });
         } else {
-            send({ status: 'error', message: 'Installation script failed with a non-zero exit code. Check logs for details.' });
+            send({ status: 'error', message: 'Installation script failed. Please check the logs and ensure sudo permissions are correct.' });
         }
         send({ status: 'finished' });
         res.end();
@@ -759,12 +763,8 @@ app.get('/api/dataplicity/uninstall', protect, (req, res) => {
     child.stderr.on('data', log => send({ log, isError: true }));
     child.on('close', async (code) => {
         if (code === 0) {
-            try {
-                await db.run("DELETE FROM panel_settings WHERE key = 'dataplicityEmail'");
-                send({ log: 'Uninstallation successful. Email removed.' });
-            } catch (dbErr) {
-                send({ log: `Uninstallation script finished, but failed to remove email from database: ${dbErr.message}`, isError: true });
-            }
+            send({ log: 'Uninstallation script finished successfully.' });
+            send({ status: 'success' });
         } else {
             send({ status: 'error', message: 'Uninstallation script failed.' });
         }
