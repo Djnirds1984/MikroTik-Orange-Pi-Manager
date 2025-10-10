@@ -716,12 +716,14 @@ app.get('/api/host/network-config', protect, async (req, res) => {
         const rawIfaces = os.networkInterfaces();
         const interfaces = Object.entries(rawIfaces).map(([name, details]) => {
             const ipv4 = details.find(d => d.family === 'IPv4' && !d.internal);
+            // Find the mac from any of the interface's addresses, as it can be on IPv6 etc.
+            const mac = details.find(d => d.mac)?.mac || 'N/A';
             return {
                 name,
                 ip4: ipv4 ? `${ipv4.address}/${ipv4.netmask}` : 'N/A',
-                mac: ipv4 ? ipv4.mac : 'N/A'
+                mac: mac
             };
-        }).filter(iface => iface.mac !== '00:00:00:00:00:00' && iface.name !== 'lo');
+        }).filter(iface => iface.name !== 'lo');
 
         // 2. Check IP forwarding
         const ipForwarding = await fsPromises.readFile('/proc/sys/net/ipv4/ip_forward', 'utf-8');

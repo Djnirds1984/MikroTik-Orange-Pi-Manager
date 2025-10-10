@@ -72,7 +72,12 @@ export const SuperRouter: React.FC = () => {
     }, [fetchData]);
 
     const physicalInterfaces = useMemo(() => {
-        return config?.interfaces.filter(i => !i.name.startsWith('veth') && !i.name.startsWith('br-') && !i.name.startsWith('docker')) || [];
+        return config?.interfaces.filter(i => 
+            !i.name.startsWith('veth') && 
+            !i.name.startsWith('br-') && 
+            !i.name.startsWith('docker') &&
+            !i.name.startsWith('zt')) // Filter out ZeroTier interfaces
+        || [];
     }, [config]);
 
     const handleApply = async () => {
