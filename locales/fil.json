@@ -18,7 +18,8 @@
         "company": "Kumpanya",
         "system_settings": "Mga Setting ng System",
         "updater": "Updater",
-        "super_router": "Super Router"
+        "super_router": "Super Router",
+        "logs": "Mga Log ng System"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -35,7 +36,8 @@
         "company": "Mga Setting ng Kumpanya",
         "system": "Mga Setting ng System",
         "updater": "Panel Updater",
-        "super_router": "Pagsasaayos ng Host Router"
+        "super_router": "Pagsasaayos ng Host Router",
+        "logs": "Tingnan ang Log"
     },
     "topbar": {
         "add_router_title": "Pumunta sa pahina ng Mga Router para magdagdag ng bagong router",

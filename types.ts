@@ -17,6 +17,7 @@ export type View =
   | 'system'
   | 'updater'
   | 'super_router'
+  | 'logs'
   | 'help';
 
 export interface RouterConfig {
@@ -458,4 +459,11 @@ export interface HostNetworkConfig {
     lanIp: string | null;
     natActive: boolean;
     dnsmasqActive: boolean;
+}
+
+export interface MikroTikLogEntry {
+    id: string;
+    time: string;
+    topics: string;
+    message: string;
 }

@@ -389,6 +389,14 @@ app.post('/mt-api/:routerId/ppp/process-payment', getRouterConfig, async (req, r
     });
 });
 
+// Custom endpoint for router logs
+app.get('/mt-api/:routerId/log', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { data } = await req.routerInstance.get('/log');
+        return data;
+    });
+});
+
 
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {

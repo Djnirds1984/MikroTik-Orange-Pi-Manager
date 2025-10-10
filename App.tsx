@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -23,6 +24,7 @@ import { Register } from './components/Register.tsx';
 import { ForgotPassword } from './components/ForgotPassword.tsx';
 import { AuthLayout } from './components/AuthLayout.tsx';
 import { SuperRouter } from './components/SuperRouter.tsx';
+import { Logs } from './components/Logs.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -161,6 +163,8 @@ const AppContent: React.FC = () => {
         return <Updater />;
       case 'super_router':
         return <SuperRouter />;
+      case 'logs':
+        return <Logs selectedRouter={selectedRouter} />;
       default:
         return <Dashboard selectedRouter={selectedRouter} />;
     }

@@ -19,21 +19,29 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         throw new Error('Session expired. Please log in again.');
     }
   
+    const contentType = response.headers.get("content-type");
     if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'An unknown API error occurred.' }));
-        throw new Error(errorData.message);
+        let errorMsg = `Request failed with status ${response.status}`;
+        if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMsg = errorData.message || errorMsg;
+        } else {
+            const textError = await response.text();
+            if (textError) errorMsg = textError;
+        }
+        throw new Error(errorMsg);
     }
     
     if (response.status === 204) { // No Content
         return null as T;
     }
 
-    const contentType = response.headers.get('content-type');
-    if (contentType && !contentType.includes('application/json')) {
-        return response.blob() as unknown as Promise<T>;
+    if (contentType && contentType.includes("application/json")) {
+        return response.json() as Promise<T>;
     }
-
-    return response.json() as Promise<T>;
+    
+    // This will handle the text/plain response for logs
+    return response.text() as unknown as Promise<T>;
 };
 
 export const getPanelHostStatus = (): Promise<PanelHostStatus> => {
@@ -67,4 +75,9 @@ export const deleteDatabaseBackup = (backupFile: string): Promise<{ message: str
         method: 'POST',
         body: JSON.stringify({ backupFile }),
     });
+};
+
+// --- Host Logs ---
+export const getHostLog = (type: 'panel-ui' | 'panel-api' | 'nginx-access' | 'nginx-error'): Promise<string> => {
+    return fetchData<string>(`/api/host/logs?type=${type}`);
 };

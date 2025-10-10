@@ -31,6 +31,7 @@ import type {
     PppServer,
     PppServerData,
     FirewallRule,
+    MikroTikLogEntry,
 } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
@@ -314,3 +315,8 @@ const firewallApi = <T extends FirewallRule, U extends FirewallRuleData>(type: R
 export const { get: getFirewallFilter, add: addFirewallFilter, update: updateFirewallFilter, delete: deleteFirewallFilter } = firewallApi<FirewallFilterRule, FirewallRuleData>('filter');
 export const { get: getFirewallNat, add: addFirewallNat, update: updateFirewallNat, delete: deleteFirewallNat } = firewallApi<FirewallNatRule, FirewallRuleData>('nat');
 export const { get: getFirewallMangle, add: addFirewallMangle, update: updateFirewallMangle, delete: deleteFirewallMangle } = firewallApi<FirewallMangleRule, FirewallRuleData>('mangle');
+
+// --- Logs ---
+export const getRouterLogs = (router: RouterConfigWithId): Promise<MikroTikLogEntry[]> => {
+    return fetchMikrotikData<MikroTikLogEntry[]>(router, '/log');
+};

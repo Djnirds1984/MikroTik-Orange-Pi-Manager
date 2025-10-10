@@ -18,7 +18,8 @@
         "company": "Empresa",
         "system_settings": "Configurações do Sistema",
         "updater": "Atualizador",
-        "super_router": "Super Roteador"
+        "super_router": "Super Roteador",
+        "logs": "Logs do Sistema"
     },
     "titles": {
         "dashboard": "Painel",
@@ -35,7 +36,8 @@
         "company": "Configurações da Empresa",
         "system": "Configurações do Sistema",
         "updater": "Atualizador do Painel",
-        "super_router": "Configuração do Roteador Host"
+        "super_router": "Configuração do Roteador Host",
+        "logs": "Visualizador de Logs"
     },
     "topbar": {
         "add_router_title": "Vá para a página de Roteadores para adicionar um novo roteador",

@@ -841,6 +841,50 @@ app.post('/api/host/revert-network-config', protect, async (req, res) => {
     }
 });
 
+// --- Host Logs ---
+app.get('/api/host/logs', protect, async (req, res) => {
+    const { type } = req.query;
+    const lines = '150';
+    let command;
+    let logPath;
+
+    switch (type) {
+        case 'panel-ui':
+            command = `sudo pm2 logs mikrotik-manager --lines ${lines} --nostream`;
+            break;
+        case 'panel-api':
+            command = `sudo pm2 logs mikrotik-api-backend --lines ${lines} --nostream`;
+            break;
+        case 'nginx-access':
+            logPath = '/var/log/nginx/access.log';
+            command = `sudo tail -n ${lines} ${logPath}`;
+            break;
+        case 'nginx-error':
+            logPath = '/var/log/nginx/error.log';
+            command = `sudo tail -n ${lines} ${logPath}`;
+            break;
+        default:
+            return res.status(400).json({ message: 'Invalid log type specified.' });
+    }
+
+    exec(command, (err, stdout, stderr) => {
+        if (err) {
+            let errMsg = stderr || err.message;
+            if (errMsg.includes("sudo: a terminal is required") || errMsg.includes("sudo: a password is required")) {
+                errMsg = 'Passwordless sudo is not configured correctly for the panel user to run `pm2` and `tail` commands.';
+            } else if (logPath && (errMsg.includes('No such file or directory') || errMsg.includes('cannot open'))) {
+                 errMsg = `Log file not found at ${logPath}. Is Nginx installed and logging to the default location?`;
+            } else if (errMsg.includes('command not found')) {
+                errMsg = `The command required to fetch logs was not found. Ensure 'pm2' and 'tail' are installed and in the system's PATH.`;
+            }
+            console.error(`Log fetch error for "${type}": ${stderr}`);
+            return res.status(500).type('text/plain').send(errMsg);
+        }
+        res.type('text/plain').send(stdout || `Log is empty.`);
+    });
+});
+
+
 // --- AI Fixer ---
 app.get('/api/fixer/file-content', protect, async (req, res) => {
     try {
