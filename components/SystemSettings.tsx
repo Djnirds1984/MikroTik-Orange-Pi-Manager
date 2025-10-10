@@ -4,10 +4,11 @@ import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useTheme } from '../contexts/ThemeContext.tsx';
 import { initializeAiClient } from '../services/geminiService.ts';
 import { rebootRouter, syncTimeToRouter } from '../services/mikrotikService.ts';
-import { getPanelSettings, savePanelSettings } from '../services/databaseService.ts';
+import { getPanelSettings, savePanelSettings, getAuthHeader } from '../services/databaseService.ts';
 import { createDatabaseBackup, listDatabaseBackups, deleteDatabaseBackup, getPanelNtpStatus, togglePanelNtp } from '../services/panelService.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
 import { Loader } from './Loader.tsx';
-import { KeyIcon, CogIcon, PowerIcon, RouterIcon, CircleStackIcon, ArrowPathIcon, TrashIcon } from '../constants.tsx';
+import { KeyIcon, CogIcon, PowerIcon, RouterIcon, CircleStackIcon, ArrowPathIcon, TrashIcon, UsersIcon } from '../constants.tsx';
 import { SudoInstructionBox } from './SudoInstructionBox.tsx';
 
 // --- Icon Components ---
@@ -293,11 +294,13 @@ const DatabaseManager: React.FC = () => {
 // --- Main Component ---
 export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const { language, currency, setLanguage, setCurrency } = useLocalization();
+    const { logout } = useAuth();
     const [localSettings, setLocalSettings] = useState({ language, currency });
     const [isPanelSettingsSaving, setIsPanelSettingsSaving] = useState(false);
     
     const [apiKey, setApiKey] = useState('');
     const [isKeySaving, setIsKeySaving] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
     
     useEffect(() => {
         setLocalSettings({ language, currency });
@@ -373,6 +376,29 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
         }
     };
 
+    const handleResetCredentials = async () => {
+        const confirmation = "Are you sure you want to reset all admin credentials? This will delete all user accounts and force a new administrator registration on the next page load. This action cannot be undone.";
+        if (window.confirm(confirmation)) {
+            setIsResetting(true);
+            try {
+                const response = await fetch('/api/auth/reset-all', {
+                    method: 'POST',
+                    headers: getAuthHeader(),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to reset credentials.');
+                }
+                alert('All user credentials have been reset. You will now be logged out.');
+                logout(); // This will clear local storage and reload the page
+            } catch (err) {
+                alert(`Error: ${(err as Error).message}`);
+            } finally {
+                setIsResetting(false);
+            }
+        }
+    };
+
     return (
         <div className="max-w-4xl mx-auto space-y-8">
             <SettingsCard title="Panel Settings" icon={<CogIcon className="w-6 h-6" />}>
@@ -425,6 +451,26 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
 
             <SettingsCard title="Time Synchronization" icon={<ClockIcon className="w-6 h-6" />}>
                 <TimeSyncManager selectedRouter={selectedRouter} />
+            </SettingsCard>
+
+            <SettingsCard title="Account Reset" icon={<UsersIcon className="w-6 h-6" />}>
+                <div className="space-y-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                        This will delete all user accounts and security questions from the panel's database.
+                        The panel will return to its initial setup state, prompting for a new administrator account to be created.
+                        This is useful if you are selling or transferring ownership of this panel.
+                    </p>
+                    <div className="flex items-center justify-between p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700">
+                        <div>
+                            <p className="font-semibold text-red-800 dark:text-red-300">Reset All Credentials</p>
+                            <p className="text-sm text-red-600 dark:text-red-400">This action cannot be undone.</p>
+                        </div>
+                        <button onClick={handleResetCredentials} disabled={isResetting} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50">
+                            {isResetting && <Loader />}
+                            {isResetting ? 'Resetting...' : 'Reset Now'}
+                        </button>
+                    </div>
+                </div>
             </SettingsCard>
 
             {selectedRouter && (

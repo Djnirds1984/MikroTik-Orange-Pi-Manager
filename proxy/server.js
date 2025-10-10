@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -395,6 +394,16 @@ const protect = (req, res, next) => {
         res.status(401).json({ message: 'Not authenticated, no token provided.' });
     }
 };
+
+authRouter.post('/reset-all', protect, async (req, res) => {
+    try {
+        // Since user_security_questions has ON DELETE CASCADE, deleting from users is sufficient.
+        await db.exec('DELETE FROM users');
+        res.json({ message: 'All user credentials have been reset.' });
+    } catch (e) {
+        res.status(500).json({ message: `Failed to reset credentials: ${e.message}` });
+    }
+});
 
 authRouter.get('/status', protect, (req, res) => {
     res.json(req.user);
