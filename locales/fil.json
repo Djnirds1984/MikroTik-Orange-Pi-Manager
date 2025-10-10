@@ -15,7 +15,6 @@
         "inventory": "Imbentaryo",
         "hotspot": "Hotspot",
         "zerotier": "ZeroTier",
-        "dataplicity": "Dataplicity",
         "company": "Kumpanya",
         "system_settings": "Mga Setting ng System",
         "updater": "Updater"
@@ -32,7 +31,6 @@
         "inventory": "Stock at Imbentaryo",
         "hotspot": "Pamamahala ng Hotspot",
         "zerotier": "Pamamahala ng ZeroTier",
-        "dataplicity": "Dataplicity Remote Access",
         "company": "Mga Setting ng Kumpanya",
         "system": "Mga Setting ng System",
         "updater": "Panel Updater"

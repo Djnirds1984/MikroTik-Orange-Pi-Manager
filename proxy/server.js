@@ -1,3 +1,4 @@
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -611,15 +612,23 @@ app.use('/api/db', protect, dbRouter);
 const ztCli = (command) => new Promise((resolve, reject) => {
     exec(`sudo zerotier-cli -j ${command}`, (error, stdout, stderr) => {
         if (error) {
-             if (stderr.includes("zerotier-cli: missing authentication token")) {
+            const errMsg = stderr || error.message;
+            if (errMsg.includes("sudo: a terminal is required") || errMsg.includes("sudo: a password is required")) {
+                return reject({ status: 403, code: 'SUDO_PASSWORD_REQUIRED', message: 'Passwordless sudo is not configured correctly for the panel user.' });
+            }
+            if (stderr.includes("zerotier-cli: missing authentication token")) {
                 return reject({ status: 500, code: 'ZEROTIER_SERVICE_DOWN', message: 'ZeroTier service is not running or token is missing.' });
             }
-             if (error.message.includes('No such file or directory')) {
+            if (error.message.includes('No such file or directory')) {
                 return reject({ status: 404, code: 'ZEROTIER_NOT_INSTALLED', message: 'zerotier-cli not found.' });
             }
-            return reject({ status: 500, message: stderr || error.message });
+            return reject({ status: 500, message: errMsg });
         }
-        resolve(JSON.parse(stdout));
+        try {
+            resolve(JSON.parse(stdout));
+        } catch (parseError) {
+            reject({ status: 500, message: `Failed to parse zerotier-cli output: ${stdout}` });
+        }
     });
 });
 
@@ -675,104 +684,6 @@ app.get('/api/zt/install', protect, (req, res) => {
         res.end();
     });
 });
-
-// --- Dataplicity Endpoints ---
-
-app.get('/api/dataplicity/status', protect, async (req, res) => {
-    try {
-        const homeDir = (await new Promise((resolve, reject) => {
-            exec('echo $HOME', (err, stdout) => err ? reject(err) : resolve(stdout.trim()));
-        }));
-        
-        const confPath = path.join(homeDir, '.dataplicity', 'dataplicity.conf');
-
-        try {
-            const fileContent = await fs.promises.readFile(confPath, 'utf-8');
-            const conf = fileContent.split('\n').reduce((acc, line) => {
-                const [key, value] = line.split('=');
-                if (key && value) acc[key.trim()] = value.trim();
-                return acc;
-            }, {});
-
-            if (conf.device_id) {
-                res.json({ installed: true, url: `https://${conf.device_id}.dataplicity.io`, email: null });
-            } else {
-                res.json({ installed: true, url: null, email: null });
-            }
-        } catch (readErr) {
-            if (readErr.code === 'ENOENT') {
-                return res.json({ installed: false, url: null, email: null });
-            }
-            throw readErr;
-        }
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
-app.post('/api/dataplicity/install', protect, (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-
-    const { command } = req.body;
-
-    // Basic validation
-    if (!command || typeof command !== 'string' || !command.trim().startsWith('curl')) {
-        send({ status: 'error', message: 'Invalid command. Please paste the full command from the Dataplicity website.' });
-        send({ status: 'finished' });
-        res.end();
-        return;
-    }
-    
-    // A slightly stronger security check to prevent arbitrary command execution
-    if (!command.includes('dataplicity.com/install.py') || !command.includes('sudo')) {
-        send({ status: 'error', message: 'The provided command does not appear to be a valid Dataplicity installation script.' });
-        send({ status: 'finished' });
-        res.end();
-        return;
-    }
-    
-    send({ log: `Executing command...` });
-
-    const child = exec(command);
-
-    child.stdout.on('data', log => send({ log }));
-    child.stderr.on('data', log => send({ log, isError: true }));
-    child.on('close', async (code) => {
-        if (code === 0) {
-             send({ log: 'Installation script finished successfully.' });
-             send({ status: 'success' });
-        } else {
-            send({ status: 'error', message: 'Installation script failed. Please check the logs and ensure sudo permissions are correct.' });
-        }
-        send({ status: 'finished' });
-        res.end();
-    });
-});
-
-app.get('/api/dataplicity/uninstall', protect, (req, res) => {
-    res.setHeader('Content-Type', 'text/event-stream');
-    const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-    
-    const child = exec('curl -s https://www.dataplicity.com/uninstall.py | sudo python3');
-
-    child.stdout.on('data', log => send({ log }));
-    child.stderr.on('data', log => send({ log, isError: true }));
-    child.on('close', async (code) => {
-        if (code === 0) {
-            send({ log: 'Uninstallation script finished successfully.' });
-            send({ status: 'success' });
-        } else {
-            send({ status: 'error', message: 'Uninstallation script failed.' });
-        }
-        send({ status: 'finished' });
-        res.end();
-    });
-});
-
 
 // --- AI Fixer ---
 app.get('/api/fixer/file-content', protect, async (req, res) => {

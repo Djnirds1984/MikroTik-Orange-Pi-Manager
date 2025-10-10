@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export type View =
@@ -13,7 +14,6 @@ export type View =
   | 'inventory'
   | 'hotspot'
   | 'zerotier'
-  | 'dataplicity'
   | 'company'
   | 'system'
   | 'updater'
@@ -304,12 +304,6 @@ export interface ZeroTierStatusResponse {
     networks: ZeroTierNetwork[];
 }
 
-export interface DataplicityStatus {
-    installed: boolean;
-    url: string | null;
-    email: string | null;
-}
-
 export interface PanelHostStatus {
     cpuUsage: number;
     memory: {
@@ -443,4 +437,9 @@ export interface NewVersionInfo {
     title: string;
     description: string;
     changelog: string;
+}
+// FIX: Added missing DataplicityStatus interface.
+export interface DataplicityStatus {
+    installed: boolean;
+    url?: string;
 }

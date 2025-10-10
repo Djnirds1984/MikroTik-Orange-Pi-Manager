@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const EXAMPLE_PROMPTS = [
@@ -234,8 +235,10 @@ export const CodeBracketIcon: React.FC<{ className?: string }> = ({ className })
     </svg>
 );
 
+// FIX: Added missing DataplicityIcon.
 export const DataplicityIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15a4.5 4.5 0 004.5 4.5H18a3.75 3.75 0 001.332-7.257 3 3 0 00-3.758-3.848 5.25 5.25 0 00-10.233 2.33A4.5 4.5 0 002.25 15z" />
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" opacity=".3"/>
+        <path d="M12 6c-3.31 0-6 2.69-6 6s2.69 6 6 6h2v-2h-2c-2.21 0-4-1.79-4-4s1.79-4 4-4h2V6h-2z"/>
     </svg>
 );

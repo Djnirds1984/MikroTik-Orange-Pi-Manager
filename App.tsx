@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -8,7 +9,6 @@ import { Updater } from './components/Updater.tsx';
 import { Pppoe } from './components/Pppoe.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
-import { Dataplicity } from './components/Dataplicity.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
@@ -152,8 +152,6 @@ const AppContent: React.FC = () => {
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
-      case 'dataplicity':
-          return <Dataplicity />;
       case 'company':
           return <Company settings={companySettings} onSave={updateCompanySettings} />;
       case 'system':

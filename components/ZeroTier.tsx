@@ -95,7 +95,7 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: () => void; disabled?
 
 // --- Main Component ---
 export const ZeroTier: React.FC = () => {
-    const [status, setStatus] = useState<'loading' | 'ready' | 'not_installed' | 'service_down' | 'error' | 'installing' | 'install_success'>('loading');
+    const [status, setStatus] = useState<'loading' | 'ready' | 'not_installed' | 'service_down' | 'error' | 'installing' | 'install_success' | 'sudo_error'>('loading');
     const [data, setData] = useState<{ info: ZeroTierInfo; networks: ZeroTierNetwork[] } | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
@@ -113,7 +113,9 @@ export const ZeroTier: React.FC = () => {
         } catch (err) {
             const error = err as any;
             console.error("Failed to fetch ZeroTier status:", error);
-            if (error?.data?.code === 'ZEROTIER_NOT_INSTALLED') {
+            if (error?.data?.code === 'SUDO_PASSWORD_REQUIRED') {
+                setStatus('sudo_error');
+            } else if (error?.data?.code === 'ZEROTIER_NOT_INSTALLED') {
                 setStatus('not_installed');
             } else if (error?.data?.code === 'ZEROTIER_SERVICE_DOWN') {
                 setStatus('service_down');
@@ -215,6 +217,28 @@ export const ZeroTier: React.FC = () => {
             <div className="flex flex-col items-center justify-center h-64">
                 <Loader />
                 <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching ZeroTier status from panel host...</p>
+            </div>
+        );
+    }
+
+    if (status === 'sudo_error') {
+        return (
+            <div className="bg-white dark:bg-slate-800 border border-amber-300 dark:border-amber-700/50 rounded-lg p-8 max-w-3xl mx-auto">
+                <div className="text-center">
+                    <ExclamationTriangleIcon className="w-16 h-16 text-amber-500 mx-auto mb-4" />
+                    <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">Sudo Permission Error</h2>
+                    <p className="mt-2 text-slate-500 dark:text-slate-400">The panel requires passwordless `sudo` access to manage ZeroTier but was prompted for a password.</p>
+                </div>
+                
+                <div className="my-6">
+                    <SudoInstructionBox />
+                </div>
+                
+                <div className="mt-6 text-center">
+                    <button onClick={fetchData} className="px-5 py-2.5 bg-[--color-primary-600] hover:bg-[--color-primary-500] rounded-lg font-semibold text-white">
+                        Re-check Status
+                    </button>
+                </div>
             </div>
         );
     }
