@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -12,7 +13,7 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
-import { VoucherHotspot } from './components/VoucherHotspot.tsx';
+import { PanelHotspot } from './components/VoucherHotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
@@ -155,8 +156,8 @@ const AppContent: React.FC = () => {
                  />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
-      case 'voucher_hotspot':
-          return <VoucherHotspot selectedRouter={selectedRouter} />;
+      case 'panel_hotspot':
+          return <PanelHotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
       case 'company':

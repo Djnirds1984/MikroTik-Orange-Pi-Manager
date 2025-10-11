@@ -209,14 +209,14 @@ const SetupGuide: React.FC = () => {
 };
 
 // --- Main Component ---
-export const VoucherHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const [activeTab, setActiveTab] = useState<'dashboard' | 'vouchers' | 'plans' | 'setup'>('setup');
 
     if (!selectedRouter) {
         return (
             <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                 <RouterIcon className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4" />
-                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Voucher Hotspot System</h2>
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Panel Hotspot System</h2>
                 <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router to manage its voucher system.</p>
             </div>
         );
@@ -225,7 +225,7 @@ export const VoucherHotspot: React.FC<{ selectedRouter: RouterConfigWithId | nul
     return (
         <div className="space-y-6">
             <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
-                <ReceiptPercentIcon className="w-8 h-8"/> Voucher Hotspot
+                <ReceiptPercentIcon className="w-8 h-8"/> Panel Hotspot
             </h2>
 
             <div className="border-b border-slate-200 dark:border-slate-700">

@@ -12,7 +12,7 @@ export type View =
   | 'sales'
   | 'inventory'
   | 'hotspot'
-  | 'voucher_hotspot'
+  | 'panel_hotspot'
   | 'zerotier'
   | 'company'
   | 'system'
