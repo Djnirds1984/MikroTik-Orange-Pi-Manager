@@ -1,26 +1,8 @@
-import React from 'react';
 
-export type View =
-  | 'dashboard'
-  | 'scripting'
-  | 'routers'
-  | 'network'
-  | 'terminal'
-  | 'pppoe'
-  | 'users'
-  | 'billing'
-  | 'sales'
-  | 'inventory'
-  | 'hotspot'
-  | 'panel_hotspot'
-  | 'zerotier'
-  | 'company'
-  | 'system'
-  | 'updater'
-  | 'super_router'
-  | 'logs'
-  | 'help';
+// App structure
+export type View = 'dashboard' | 'scripting' | 'routers' | 'network' | 'terminal' | 'pppoe' | 'billing' | 'sales' | 'inventory' | 'hotspot' | 'panel_hotspot' | 'zerotier' | 'company' | 'system' | 'updater' | 'super_router' | 'logs';
 
+// Router configuration
 export interface RouterConfig {
   name: string;
   host: string;
@@ -28,161 +10,173 @@ export interface RouterConfig {
   password?: string;
   port: number;
 }
-
 export interface RouterConfigWithId extends RouterConfig {
   id: string;
 }
 
-export interface SystemInfo {
-  boardName: string;
-  version: string;
-  cpuLoad: number;
-  uptime: string;
-  memoryUsage: number;
-  totalMemory: string;
+// Updater types
+export interface VersionInfo {
+    title: string;
+    hash: string;
+    description?: string;
+}
+export interface NewVersionInfo extends VersionInfo {
+    changelog: string;
 }
 
-export interface Interface {
-  name: string;
-  type: string;
-  rxRate: number;
-  txRate: number;
+// AI Service types
+export interface AIFixResponse {
+  explanation: string;
+  fixedCode: string;
+}
+export interface ChatMessage {
+  role: 'user' | 'model';
+  content: string;
 }
 
-export interface TrafficHistoryPoint {
-  name: string;
-  rx: number;
-  tx: number;
+// Hotspot types
+export interface HotspotSetupParams {
+    hotspotInterface: string;
+    localAddress: string;
+    addressPool: string;
+    sslCertificate: string;
+    dnsServers: string;
+    dnsName: string;
+    hotspotUser: string;
+    hotspotPass: string;
 }
-
-export interface InterfaceWithHistory extends Interface {
-  trafficHistory: TrafficHistoryPoint[];
-}
-
-export interface HotspotActiveUser {
+export interface HotspotServer {
   id: string;
-  user: string;
-  address: string;
-  macAddress: string;
-  uptime: string;
-  bytesIn: number;
-  bytesOut: number;
-  comment: string;
+  name: string;
+  interface: string;
+  'address-pool': string;
+  profile: string;
+  disabled: boolean;
+  comment?: string;
 }
-
-export interface HotspotHost {
-    id: string;
-    macAddress: string;
-    address: string;
-    toAddress: string;
-    authorized: boolean;
-    bypassed: boolean;
-    comment?: string;
-}
-
-export interface HotspotProfile {
-    id: string;
-    name: string;
-    'hotspot-address'?: string;
-    'dns-name'?: string;
-    'html-directory'?: string;
-    'rate-limit'?: string;
-    'login-by'?: string;
-}
-
-export type HotspotProfileData = Omit<HotspotProfile, 'id'>;
-
 export interface HotspotUserProfile {
     id: string;
     name: string;
-    'rate-limit'?: string;
-    'session-timeout'?: string;
-    'shared-users'?: string;
-    'address-pool'?: string;
+    'shared-users': string | number;
+    'rate-limit': string;
 }
-
-export type HotspotUserProfileData = Omit<HotspotUserProfile, 'id'>;
-
 export interface HotspotUser {
-  id: string; // .id from MT
+  id: string;
+  server: string;
   name: string;
-  password?: string;
   profile: string;
   uptime: string;
   'bytes-in': number;
   'bytes-out': number;
   comment?: string;
-  disabled: string; // 'true' | 'false'
-  'limit-uptime'?: string;
+  disabled: boolean;
+}
+export interface HotspotActiveUser {
+    id: string;
+    server: string;
+    user: string;
+    address: string;
+    'mac-address': string;
+    uptime: string;
+    'session-time-left': string;
+    'bytes-in': number;
+    'bytes-out': number;
+}
+export interface HotspotHost {
+    id: string;
+    'mac-address': string;
+    address: string;
+    'to-address': string;
+    server: string;
+    comment?: string;
+    authorized: boolean;
+    bypassed: boolean;
+}
+// For voucher system
+export interface HotspotUserData {
+    name: string;
+    password?: string;
+    profile: string;
+    server?: string;
+    'limit-uptime'?: string;
+    comment?: string;
+    disabled?: 'true' | 'false';
 }
 
-export type HotspotUserData = Omit<HotspotUser, 'id' | 'uptime' | 'bytes-in' | 'bytes-out'>;
-
-
+// MikroTik general types
+export interface SystemResource {
+  uptime: string;
+  version: string;
+  'cpu-load': number;
+  'free-memory': number;
+  'total-memory': number;
+  'free-hdd-space': number;
+  'total-hdd-space': number;
+}
+export interface RouterboardInfo {
+  model: string;
+  'serial-number': string;
+  'current-firmware': string;
+}
+export interface Interface {
+  '.id': string;
+  name: string;
+  type: string;
+  'mac-address': string;
+  running: boolean;
+  disabled: boolean;
+  comment?: string;
+  'rx-byte': number;
+  'tx-byte': number;
+}
+export interface TrafficHistoryPoint {
+    rx: number;
+    tx: number;
+    timestamp: number;
+}
+export interface SslCertificate {
+  '.id': string;
+  name: string;
+  issuer: string;
+  'expires-after': string;
+  trusted: boolean;
+}
 export interface PppProfile {
-    id: string;
+    '.id': string;
     name: string;
     'local-address'?: string;
     'remote-address'?: string;
     'rate-limit'?: string;
+    comment?: string;
 }
-
-export type PppProfileData = Omit<PppProfile, 'id'>;
-
-export interface PppServer {
-    id: string;
+export interface PppSecret {
+    '.id': string;
     name: string;
-    'service-name': string;
-    interface: string;
-    'default-profile': string;
-    authentication: string; // "pap,chap,mschap1,mschap2"
-    disabled: string; // 'true' or 'false'
+    service: string;
+    profile: string;
+    'last-logged-out'?: string;
+    disabled: boolean;
+    comment?: string;
+    customer?: Customer | null;
 }
-
-export type PppServerData = {
-    'service-name': string;
-    interface: string;
-    'default-profile': string;
-    authentication: ('pap' | 'chap' | 'mschap1' | 'mschap2')[];
-    disabled?: 'true' | 'false';
-};
-
-export interface IpPool {
-    id: string;
+export interface PppActiveConnection {
+    '.id': string;
     name: string;
-    ranges: string;
-}
-
-export interface IpAddress {
-    id: string;
+    service: string;
     address: string;
-    interface: string;
-    disabled: string;
+    uptime: string;
+}
+export interface DhcpLease {
+    '.id': string;
+    address: string;
+    'mac-address': string;
+    server: string;
+    status: string;
+    'expires-after': string;
+    comment?: string;
 }
 
-export interface IpRoute {
-    id: string;
-    'dst-address': string;
-    gateway?: string;
-    distance: string;
-    // FIX: Changed boolean types to string to match MikroTik API response format.
-    active: string;
-    disabled: string;
-    comment?: string;
-    static: string;
-    dynamic: string;
-    connected: string;
-}
-
-export type IpRouteData = {
-    'dst-address': string;
-    gateway?: string;
-    distance?: string;
-    comment?: string;
-    disabled?: 'true' | 'false';
-};
-
-
+// Billing and Sales
 export interface BillingPlan {
     name: string;
     price: number;
@@ -190,80 +184,28 @@ export interface BillingPlan {
     pppoeProfile: string;
     description: string;
     currency: string;
-    routerId?: string;
 }
-
 export interface BillingPlanWithId extends BillingPlan {
     id: string;
-}
-
-export interface VoucherPlan {
     routerId: string;
-    name: string;
-    duration_minutes: number;
-    price: number;
-    currency: string;
-    mikrotik_profile_name: string;
 }
-
-export interface VoucherPlanWithId extends VoucherPlan {
-    id: string;
-}
-
-
-export interface PppSecret {
-    id: string;
-    name: string;
-    service: string;
-    profile: string;
-    comment: string;
-    disabled: string;
-    'last-logged-out'?: string;
-    password?: string;
-    customer?: Customer; // Link to customer data
-}
-
-export type PppSecretData = Omit<PppSecret, 'id' | 'last-logged-out' | 'customer'>;
-
-export interface PppActiveConnection {
-    id: string;
-    name: string;
-    service: string;
-    'caller-id': string;
-    address: string;
-    uptime: string;
-}
-
-export interface NtpSettings {
-    enabled: boolean;
-    primaryNtp: string;
-    secondaryNtp: string;
-}
-
-export interface VlanInterface {
-    id: string;
-    name: string;
-    'vlan-id': string;
-    interface: string;
-}
-
 export interface SaleRecord {
     id: string;
+    routerId: string;
+    routerName?: string;
     date: string;
-    clientName: string; // This will be the customer's full name
+    clientName: string;
     planName: string;
     planPrice: number;
     discountAmount: number;
     finalAmount: number;
-    routerName: string;
     currency: string;
-    routerId?: string;
-    // New fields for receipt
     clientAddress?: string;
     clientContact?: string;
     clientEmail?: string;
 }
 
+// Inventory and Expenses
 export interface InventoryItem {
     id: string;
     name: string;
@@ -272,7 +214,6 @@ export interface InventoryItem {
     serialNumber?: string;
     dateAdded: string;
 }
-
 export interface ExpenseRecord {
     id: string;
     date: string;
@@ -281,7 +222,7 @@ export interface ExpenseRecord {
     amount: number;
 }
 
-
+// Company & Panel Settings
 export interface CompanySettings {
     companyName?: string;
     address?: string;
@@ -289,222 +230,121 @@ export interface CompanySettings {
     email?: string;
     logoBase64?: string;
 }
-
-export interface ChatMessage {
-  role: 'user' | 'model';
-  content: string;
+export interface PanelSettings {
+    language: 'en' | 'es' | 'fil';
+    currency: 'USD' | 'EUR' | 'PHP';
 }
 
-export interface AIFixResponse {
-  explanation: string;
-  fixedCode: string;
+// Customers
+export interface Customer {
+    id: string;
+    routerId: string;
+    username: string; // This links to pppoe secret name
+    fullName: string;
+    address: string;
+    contactNumber: string;
+    email: string;
 }
 
+// Voucher Hotspot
+export interface VoucherPlan {
+    name: string;
+    duration_minutes: number;
+    price: number;
+    currency: string;
+    mikrotik_profile_name: string;
+}
+export interface VoucherPlanWithId extends VoucherPlan {
+    id: string;
+    routerId: string;
+}
+
+
+// ZeroTier types from ZeroTierPanelService
+export interface ZeroTierNetwork {
+    nwid: string;
+    name: string;
+    status: string;
+    type: string;
+    mac: string;
+    assignedAddresses: string[];
+    allowManaged: boolean;
+    allowGlobal: boolean;
+    allowDefault: boolean;
+}
 export interface ZeroTierInfo {
     address: string;
-    clock: number;
+    online: boolean;
+    version: string;
     config: {
         settings: {
             portMappingEnabled: boolean;
-            primaryPort: number;
         }
     };
-    online: boolean;
-    version: string;
 }
-
-export interface ZeroTierNetwork {
-    allowDefault: boolean;
-    allowGlobal: boolean;
-    allowManaged: boolean;
-    assignedAddresses: string[];
-    bridge: boolean;
-    mac: string;
-    mtu: number;
-    name: string;
-    netconfRevision: number;
-    nwid: string;
-    portDeviceName: string;
-    portError: number;
-    status: string;
-    type: string;
-}
-
 export interface ZeroTierStatusResponse {
     info: ZeroTierInfo;
     networks: ZeroTierNetwork[];
 }
 
-export interface PanelHostStatus {
-    cpuUsage: number;
-    memory: {
-        total: string;
-        free: string;
-        used: string;
-        percent: number;
-    };
-    disk: {
-        total: string;
-        used: string;
-        free: string;
-        percent: number;
-    };
-}
-
-export interface PanelSettings {
-    language: 'en' | 'fil' | 'es' | 'pt';
-    currency: 'USD' | 'PHP' | 'EUR' | 'BRL';
-}
-
-export interface PanelNtpStatus {
-    enabled: boolean;
-}
-
-export interface Customer {
-    id: string;
-    username: string; // pppoe username
-    routerId: string; // router this customer belongs to
-    fullName?: string;
-    address?: string;
-    contactNumber?: string;
-    email?: string;
-}
-
-export interface WanRoute {
-    id: string;
-    gateway: string;
-    distance: string;
-    checkGateway: string;
-    // FIX: Changed boolean types to string to match MikroTik API response format.
-    active: string;
-    disabled: string;
-    comment?: string;
-}
-
-export interface FailoverStatus {
-    enabled: boolean;
-}
-
-// --- Firewall Types ---
-export interface FirewallRuleBase {
-    '.id': string; // MikroTik API uses .id
-    id: string; // We map .id to id for easier use
-    chain: string;
-    action: string;
-    comment?: string;
-    disabled: string; // 'true' or 'false'
-    invalid: string;
-    dynamic: string;
-    bytes: number;
-    packets: number;
-}
-
-export interface FirewallFilterRule extends FirewallRuleBase {
-    'src-address'?: string;
-    'dst-address'?: string;
-    protocol?: string;
-    'src-port'?: string;
-    'dst-port'?: string;
-    'in-interface'?: string;
-    'out-interface'?: string;
-    'connection-state'?: string;
-}
-
-export interface FirewallNatRule extends FirewallRuleBase {
-    'src-address'?: string;
-    'dst-address'?: string;
-    protocol?: string;
-    'src-port'?: string;
-    'dst-port'?: string;
-    'in-interface'?: string;
-    'out-interface'?: string;
-    'to-addresses'?: string;
-    'to-ports'?: string;
-}
-
-export interface FirewallMangleRule extends FirewallRuleBase {
-    'src-address'?: string;
-    'dst-address'?: string;
-    'new-routing-mark'?: string;
-    passthrough: string; // 'true' or 'false'
-    protocol?: string;
-}
-
-export type FirewallRule = FirewallFilterRule | FirewallNatRule | FirewallMangleRule;
-
-// Data types for POST/PATCH requests
-export type FirewallFilterRuleData = Partial<Omit<FirewallFilterRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
-export type FirewallNatRuleData = Partial<Omit<FirewallNatRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
-export type FirewallMangleRuleData = Partial<Omit<FirewallMangleRule, 'id' | '.id' | 'invalid' | 'dynamic' | 'bytes' | 'packets'>>;
-export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | FirewallMangleRuleData;
-
-// --- Hotspot Setup Types ---
-export interface SslCertificate {
-    id: string;
-    name: string;
-    'key-usage': string;
-    trusted: string;
-    'expires-after': string;
-}
-
-export interface HotspotSetupParams {
-    hotspotInterface: string;
-    localAddress: string;
-    addressPool: string;
-    sslCertificate: string; // 'none' or certificate name
-    dnsServers: string;
-    dnsName: string;
-    hotspotUser: string;
-    hotspotPass: string;
-}
-
-export interface VersionInfo {
-    title: string;
-    description: string;
-    hash?: string;
-}
-
-export interface NewVersionInfo {
-    title: string;
-    description: string;
-    changelog: string;
-}
-// FIX: Added missing DataplicityStatus interface.
+// Dataplicity
 export interface DataplicityStatus {
-    installed: boolean;
-    url?: string;
-}
-
-export interface HostInterface {
-    name: string;
-    ip4: string;
-    mac: string;
-}
-
-export interface HostNetworkConfig {
-    ipForwarding: boolean;
-    interfaces: HostInterface[];
-    wanInterface: string | null;
-    lanInterface: string | null;
-    lanIp: string | null;
-    natActive: boolean;
-    dnsmasqActive: boolean;
-}
-
-export interface MikroTikLogEntry {
-    id: string;
-    time: string;
-    topics: string;
-    message: string;
-}
-
-export interface NgrokStatus {
     installed: boolean;
     active: boolean;
     url?: string;
-    config?: {
-        authtoken: string;
-        proto: string;
-        port: number;
-    };
+    config?: any;
+}
+
+// Host Status types
+export interface PanelHostStatus {
+  cpuUsage: number;
+  memory: {
+    total: string;
+    used: string;
+    free: string;
+    percent: number;
+  };
+  disk: {
+    total: string;
+    used: string;
+    free: string;
+    percent: number;
+  };
+}
+export interface PanelNtpStatus {
+    enabled: boolean;
+    synchronized: boolean;
+    time: string;
+    timezone: string;
+}
+export interface HostNetworkConfig {
+    interfaces: { name: string; mac: string; ip: string | null }[];
+    ipForwarding: boolean;
+    natActive: boolean;
+    dnsmasqActive: boolean;
+    wanInterface: string | null;
+    lanInterface: string | null;
+    lanIp: string | null;
+}
+
+// Firewall
+export interface FirewallRule {
+    '.id': string;
+    chain: string;
+    action: string;
+    protocol?: string;
+    'src-address'?: string;
+    'dst-address'?: string;
+    'dst-port'?: string;
+    comment?: string;
+    disabled: boolean;
+    dynamic: boolean;
+    invalid: boolean;
+}
+
+// Logs
+export interface LogEntry {
+    time: string;
+    topics: string;
+    message: string;
 }

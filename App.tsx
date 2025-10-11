@@ -1,7 +1,4 @@
 
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -13,7 +10,8 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
-import { PanelHotspot } from './components/VoucherHotspot.tsx';
+// FIX: Corrected component name from PanelHotspot to VoucherHotspot, assuming it's for voucher management. The component file is VoucherHotspot.tsx.
+import { PanelHotspot as VoucherHotspot } from './components/VoucherHotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
@@ -157,7 +155,7 @@ const AppContent: React.FC = () => {
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'panel_hotspot':
-          return <PanelHotspot selectedRouter={selectedRouter} />;
+          return <VoucherHotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
       case 'company':
