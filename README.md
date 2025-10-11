@@ -2,7 +2,7 @@
 
 A modern, responsive web dashboard for managing your MikroTik routers, specifically designed to be lightweight enough to run on an Orange Pi or similar single-board computer. It features a real-time monitoring dashboard and a powerful AI Script Assistant powered by the Google Gemini API.
 
-![Screenshot of the MikroTik Orange Pi Manager Dashboard](./screenshot.png)
+![Screenshot of the MikroTik Orange Pi Manager Dashboard](./screenshot.png) <!-- Assuming a screenshot will be added later -->
 
 ## Features
 
@@ -11,9 +11,7 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 -   **AI Script Assistant:** Describe a networking task in plain English (e.g., "Block Facebook for the guest network"), and the AI will generate the corresponding RouterOS terminal script.
 -   **PPPoE Management:** Full CRUD management for PPPoE profiles and users (secrets).
 -   **Billing System:** Create billing plans and process payments for PPPoE users, with automated scheduler integration for managing expired accounts.
--   **Network Management:** View and manage IP addresses, routes, and firewall rules.
 -   **ZeroTier Management:** Join, leave, enable, and disable ZeroTier networks directly from the UI.
--   **Remote Access:** Integrated management for Ngrok and Dataplicity to easily access your panel from anywhere.
 -   **Updater:** A one-click updater to fetch the latest version of the panel from your GitHub repository, including automatic backups and rollback functionality.
 -   **Responsive Design:** A clean, modern UI that works on both desktop and mobile browsers.
 
@@ -28,7 +26,7 @@ This two-process model provides a robust separation of concerns, ensuring the ap
 
 ### Tech Stack
 
--   **Frontend:** React 19, TypeScript, Vite, Tailwind CSS, Recharts
+-   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
 -   **Backend:** Node.js, Express.js, Axios (for MikroTik REST API)
 -   **Database:** SQLite (`@vscode/sqlite3`)
 -   **AI:** Google Gemini API (`@google/genai`)
@@ -56,19 +54,13 @@ This new, more reliable method starts each server as a separate, named process.
 2. **Install Dependencies for Both Servers:**
    ```bash
    # Install for UI Server
-   npm install
+   npm install --prefix proxy
    
    # Install for API Backend Server
    npm install --prefix api-backend
    ```
 
-3. **Build the Frontend:**
-   Before starting, you need to build the React application.
-   ```bash
-   npm run build
-   ```
-
-4. **Start the Application with PM2:**
+3. **Start the Application with PM2:**
    **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running these commands.**
    ```bash
    # First, stop and delete any old running processes to ensure a clean start
@@ -82,13 +74,13 @@ This new, more reliable method starts each server as a separate, named process.
    pm2 start ./api-backend/server.js --name mikrotik-api-backend
    ```
 
-5. **Check the status:**
+4. **Check the status:**
    ```bash
    pm2 list
    # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
    ```
    
-6. **Access the application:**
+5. **Access the application:**
    Open your web browser and navigate to **`http://localhost:3001`**. The UI served from port 3001 will automatically communicate with the backend on port 3002.
 
 ---
@@ -129,27 +121,12 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
     ```bash
     cd /var/www/html/MikroTik-Orange-Pi-Manager
     ```
-    
-2.  **Pull Latest Changes:**
-    If you're updating an existing installation, pull the latest code from GitHub.
-    ```bash
-    git pull
-    ```
 
-3.  **Install/Update Dependencies:**
+2.  **Install/Update Dependencies:**
     Run these commands to ensure all necessary packages for both servers are installed.
     ```bash
-    # Install/update frontend dependencies
-    npm install
-    
-    # Install/update backend dependencies
+    npm install --prefix proxy
     npm install --prefix api-backend
-    ```
-    
-4.  **Build the Frontend:**
-    This compiles the React application into static files that can be served.
-    ```bash
-    npm run build
     ```
 
 ### **Step 3: Start and Manage the Application with PM2**
