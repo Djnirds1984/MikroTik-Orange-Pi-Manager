@@ -1,14 +1,20 @@
-// src/contexts/AuthContext.tsx
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import type { User } from '../types'; // Assuming you'll have a User type in types.ts
+
+// This will be declared in types.ts, but we can define it here for context
+export interface User {
+    id: number;
+    username: string;
+}
 
 interface AuthContextType {
     user: User | null;
     isLoading: boolean;
     hasUsers: boolean;
+    error: string | null;
     login: (username: string, password: string) => Promise<void>;
     logout: () => Promise<void>;
     register: (username: string, password: string) => Promise<void>;
+    clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,43 +23,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [hasUsers, setHasUsers] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
+    const clearError = () => setError(null);
+    
     const handleApiError = async (response: Response): Promise<string> => {
+        if (response.status === 504) {
+            return 'The API server is not responding. Please ensure it is running correctly.';
+        }
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
             const errorData = await response.json();
             return errorData.message || 'An unknown error occurred.';
         }
-        // If it's not JSON, it might be a server error page (HTML) or plain text
         const errorText = await response.text();
-        // Return the first line or a snippet of the error
         return errorText.split('\n')[0] || 'Could not connect to the server.';
     };
 
     useEffect(() => {
         const checkSession = async () => {
             setIsLoading(true);
+            setError(null);
             try {
-                // First, check if any users exist to guide the UI (register vs login)
                 const hasUsersRes = await fetch('/api/auth/has-users');
-                if (hasUsersRes.ok) {
-                    const data = await hasUsersRes.json();
-                    setHasUsers(data.hasUsers);
-                } else {
-                    // Assume users exist if this check fails, to be safe
-                    setHasUsers(true);
+                if (!hasUsersRes.ok) {
+                    throw new Error(await handleApiError(hasUsersRes));
                 }
+                const hasUsersData = await hasUsersRes.json();
+                setHasUsers(hasUsersData.hasUsers);
 
-                // Then, check for an active session
                 const sessionRes = await fetch('/api/auth/check-session');
                 if (sessionRes.ok) {
-                    const data = await sessionRes.json();
-                    setUser(data.user);
+                    const sessionData = await sessionRes.json();
+                    setUser(sessionData.user);
                 } else {
                     setUser(null);
                 }
-            } catch (error) {
-                console.error('Failed to check session:', error);
+            } catch (err) {
+                console.error('Failed to check session:', err);
+                setError(err.message || 'An error occurred during session check.');
                 setUser(null);
             } finally {
                 setIsLoading(false);
@@ -64,6 +72,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, []);
 
     const login = async (username: string, password: string) => {
+        clearError();
         const response = await fetch('/api/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -75,6 +84,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setUser(data.user);
         } else {
             const errorMessage = await handleApiError(response);
+            setError(errorMessage);
             throw new Error(errorMessage);
         }
     };
@@ -85,6 +95,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     const register = async (username: string, password: string) => {
+        clearError();
         const response = await fetch('/api/auth/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -94,15 +105,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (response.ok) {
             const data = await response.json();
             setUser(data.user);
-            setHasUsers(true); // After first registration, this should be true
+            setHasUsers(true);
         } else {
             const errorMessage = await handleApiError(response);
+            setError(errorMessage);
             throw new Error(errorMessage);
         }
     };
 
     return (
-        <AuthContext.Provider value={{ user, isLoading, hasUsers, login, logout, register }}>
+        <AuthContext.Provider value={{ user, isLoading, hasUsers, error, login, logout, register, clearError }}>
             {children}
         </AuthContext.Provider>
     );
@@ -115,11 +127,3 @@ export const useAuth = (): AuthContextType => {
     }
     return context;
 };
-
-// Add a basic User type to types.ts if it's not there
-declare module '../types' {
-    export interface User {
-        id: number;
-        username: string;
-    }
-}
