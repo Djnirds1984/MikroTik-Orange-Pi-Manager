@@ -22,7 +22,6 @@ const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
 const NGROK_CONFIG_PATH = path.join(__dirname, 'ngrok-config.json');
 const NGROK_BINARY_PATH = '/usr/local/bin/ngrok';
 const SECRET_KEY = process.env.JWT_SECRET || 'a-very-weak-secret-key-for-dev-only';
-const LICENSE_SECRET_KEY = process.env.LICENSE_SECRET || 'a-very-secret-license-key-that-should-be-in-env-file';
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ limit: '5mb' })); // For AI fixer
@@ -236,23 +235,6 @@ async function initDb() {
             `);
             await db.exec('PRAGMA user_version = 10;');
             user_version = 10;
-        }
-
-        if (user_version < 11) {
-            console.log('Applying migration v11 (Add voucher plans table)...');
-            await db.exec(`
-                CREATE TABLE IF NOT EXISTS voucher_plans (
-                    id TEXT PRIMARY KEY,
-                    routerId TEXT NOT NULL,
-                    name TEXT NOT NULL,
-                    duration_minutes INTEGER NOT NULL,
-                    price REAL NOT NULL,
-                    currency TEXT NOT NULL,
-                    mikrotik_profile_name TEXT NOT NULL
-                );
-            `);
-            await db.exec('PRAGMA user_version = 11;');
-            user_version = 11;
         }
 
 
@@ -487,15 +469,34 @@ app.get('/api/host-status', protect, (req, res) => {
     }).catch(err => res.status(500).json({ message: err.message }));
 });
 
+// FIX: Update Panel NTP Status endpoint to return full status object.
 // Panel NTP Status
 app.get('/api/system/host-ntp-status', protect, (req, res) => {
-    exec("timedatectl status | grep 'NTP service:'", (err, stdout, stderr) => {
+    exec("timedatectl status", (err, stdout, stderr) => {
         if (err) {
             console.error("Failed to get NTP status:", stderr);
             return res.status(500).json({ message: "Could not retrieve NTP status from host. 'timedatectl' may not be available." });
         }
-        const enabled = stdout.includes('active');
-        res.json({ enabled });
+        
+        const lines = stdout.split('\n');
+        const data = {};
+        
+        const getValue = (line) => line.split(':').slice(1).join(':').trim();
+
+        lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('NTP service:')) {
+                data.enabled = trimmedLine.includes('active');
+            } else if (trimmedLine.startsWith('System clock synchronized:')) {
+                data.synchronized = trimmedLine.includes('yes');
+            } else if (trimmedLine.startsWith('Local time:')) {
+                data.time = getValue(trimmedLine);
+            } else if (trimmedLine.startsWith('Time zone:')) {
+                data.timezone = getValue(trimmedLine);
+            }
+        });
+        
+        res.json(data);
     });
 });
 
@@ -513,100 +514,12 @@ app.post('/api/system/host-ntp/toggle', protect, (req, res) => {
     });
 });
 
-// --- License Endpoints ---
-const getHardwareId = () => {
-    const interfaces = os.networkInterfaces();
-    // Prioritize ethernet interfaces
-    const ethInterfaces = Object.keys(interfaces).filter(name => name.startsWith('eth') || name.startsWith('en'));
-    const preferredInterfaces = ethInterfaces.length > 0 ? ethInterfaces : Object.keys(interfaces);
-
-    for (const name of preferredInterfaces) {
-        for (const iface of interfaces[name]) {
-            // Find the first non-internal IPv4 MAC address
-            if (iface.family === 'IPv4' && !iface.internal) {
-                // Standardize MAC address format
-                return iface.mac.replace(/:/g, '').toUpperCase();
-            }
-        }
-    }
-    // Fallback for systems with no clear primary interface (e.g. containers or unusual naming)
-    try {
-        const hostname = os.hostname();
-        // Use a more robust hash of multiple system properties
-        const machineId = os.platform() + os.arch() + hostname;
-        return crypto.createHash('sha1').update(machineId).digest('hex').substring(0, 12).toUpperCase();
-    } catch(e) {
-        return 'UNKNOWN_HWID';
-    }
-};
-
-const licenseRouter = express.Router();
-licenseRouter.use(protect); // All license routes require authentication
-
-licenseRouter.get('/hwid', (req, res) => {
-    res.json({ hwid: getHardwareId() });
-});
-
-licenseRouter.get('/status', async (req, res) => {
-    try {
-        const row = await db.get("SELECT value FROM panel_settings WHERE key = 'licenseKey'");
-        if (!row || !row.value) {
-            return res.json({ isValid: false, message: 'No license key found.' });
-        }
-        const licenseKey = JSON.parse(row.value);
-        
-        jwt.verify(licenseKey, LICENSE_SECRET_KEY, (err, decoded) => {
-            if (err) {
-                return res.json({ isValid: false, message: `License invalid: ${err.message}` });
-            }
-
-            if (decoded.hwid !== getHardwareId()) {
-                return res.json({ isValid: false, message: 'License is for a different machine.' });
-            }
-            
-            const expiryDate = new Date(decoded.exp * 1000).toISOString();
-            res.json({ isValid: true, expiryDate });
-        });
-    } catch (e) {
-        res.status(500).json({ isValid: false, message: e.message });
-    }
-});
-
-licenseRouter.post('/activate', async (req, res) => {
-    const { key } = req.body;
-    if (!key) {
-        return res.status(400).json({ isValid: false, message: 'License key is required.' });
-    }
-
-    try {
-        jwt.verify(key, LICENSE_SECRET_KEY, async (err, decoded) => {
-            if (err) {
-                return res.status(401).json({ isValid: false, message: `License key invalid: ${err.message}` });
-            }
-
-            if (decoded.hwid !== getHardwareId()) {
-                return res.status(401).json({ isValid: false, message: `License key is for a different machine. Expected HWID: ${getHardwareId()}, Key HWID: ${decoded.hwid}` });
-            }
-            
-            await db.run("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('licenseKey', ?)", JSON.stringify(key));
-
-            const expiryDate = new Date(decoded.exp * 1000).toISOString();
-            res.json({ isValid: true, expiryDate, message: 'License activated successfully!' });
-        });
-    } catch (e) {
-         res.status(500).json({ isValid: false, message: e.message });
-    }
-});
-app.use('/api/license', licenseRouter);
-
-
 // Generic Database API
 const tableMap = {
     'sales': 'sales_records',
     'billing-plans': 'billing_plans',
     'company-settings': 'company_settings',
     'panel-settings': 'panel_settings',
-    'voucher-plans': 'voucher_plans'
 };
 
 const dbRouter = express.Router();

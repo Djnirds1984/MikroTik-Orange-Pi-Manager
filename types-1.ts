@@ -12,7 +12,6 @@ export type View =
   | 'sales'
   | 'inventory'
   | 'hotspot'
-  // FIX: Uncomment 'panel_hotspot' as the component is now available.
   | 'panel_hotspot'
   | 'zerotier'
   | 'company'
@@ -34,38 +33,6 @@ export interface RouterConfigWithId extends RouterConfig {
   id: string;
 }
 
-// FIX: Added missing SystemResource interface.
-export interface SystemResource {
-  '.id'?: string;
-  id?: string;
-  uptime: string;
-  version: string;
-  'build-time'?: string;
-  'free-memory': number;
-  'total-memory': number;
-  cpu?: string;
-  'cpu-count'?: number;
-  'cpu-frequency'?: string;
-  'cpu-load': number;
-  'free-hdd-space': number;
-  'total-hdd-space': number;
-  'architecture-name'?: string;
-  'board-name': string;
-  platform?: string;
-}
-
-// FIX: Added missing RouterboardInfo interface.
-export interface RouterboardInfo {
-  '.id'?: string;
-  id?: string;
-  routerboard: string;
-  model: string;
-  'serial-number': string;
-  'firmware-type'?: string;
-  'current-firmware': string;
-  'upgrade-firmware'?: string;
-}
-
 export interface SystemInfo {
   boardName: string;
   version: string;
@@ -75,27 +42,17 @@ export interface SystemInfo {
   totalMemory: string;
 }
 
-// FIX: Added missing properties to the Interface type.
 export interface Interface {
-  '.id': string;
-  id: string;
   name: string;
   type: string;
-  comment?: string;
-  disabled: string; // 'true' or 'false'
-  running: string; // 'true' or 'false'
-  'mac-address': string;
-  'rx-byte': number;
-  'tx-byte': number;
   rxRate: number;
   txRate: number;
 }
 
-// FIX: Corrected TrafficHistoryPoint to use timestamp and remove name.
 export interface TrafficHistoryPoint {
+  name: string;
   rx: number;
   tx: number;
-  timestamp: number;
 }
 
 export interface InterfaceWithHistory extends Interface {
@@ -103,28 +60,23 @@ export interface InterfaceWithHistory extends Interface {
 }
 
 export interface HotspotActiveUser {
-  '.id': string;
   id: string;
   user: string;
   address: string;
-  'mac-address': string;
+  macAddress: string;
   uptime: string;
-  'bytes-in': string;
-  'bytes-out': string;
-  'session-time-left'?: string;
+  bytesIn: number;
+  bytesOut: number;
   comment: string;
 }
 
-// FIX: Corrected HotspotHost properties to match API response.
 export interface HotspotHost {
-    '.id': string;
     id: string;
-    'mac-address': string;
+    macAddress: string;
     address: string;
-    'to-address': string;
-    authorized: string;
-    bypassed: string;
-    server: string;
+    toAddress: string;
+    authorized: boolean;
+    bypassed: boolean;
     comment?: string;
 }
 
@@ -141,7 +93,6 @@ export interface HotspotProfile {
 export type HotspotProfileData = Omit<HotspotProfile, 'id'>;
 
 export interface HotspotUserProfile {
-    '.id': string;
     id: string;
     name: string;
     'rate-limit'?: string;
@@ -154,7 +105,6 @@ export type HotspotUserProfileData = Omit<HotspotUserProfile, 'id'>;
 
 
 export interface PppProfile {
-    '.id': string;
     id: string;
     name: string;
     'local-address'?: string;
@@ -247,7 +197,6 @@ export interface VoucherPlanWithId extends VoucherPlan {
 
 
 export interface PppSecret {
-    '.id': string;
     id: string;
     name: string;
     service: string;
@@ -262,7 +211,6 @@ export interface PppSecret {
 export type PppSecretData = Omit<PppSecret, 'id' | 'last-logged-out' | 'customer'>;
 
 export interface PppActiveConnection {
-    '.id': string;
     id: string;
     name: string;
     service: string;
@@ -393,12 +341,8 @@ export interface PanelSettings {
     currency: 'USD' | 'PHP' | 'EUR' | 'BRL';
 }
 
-// FIX: Added missing properties to PanelNtpStatus.
 export interface PanelNtpStatus {
     enabled: boolean;
-    synchronized?: boolean;
-    time?: string;
-    timezone?: string;
 }
 
 export interface Customer {
@@ -481,7 +425,6 @@ export type FirewallRuleData = FirewallFilterRuleData | FirewallNatRuleData | Fi
 
 // --- Hotspot Setup Types ---
 export interface SslCertificate {
-    '.id': string;
     id: string;
     name: string;
     'key-usage': string;
@@ -549,59 +492,4 @@ export interface NgrokStatus {
         proto: string;
         port: number;
     };
-}
-
-// FIX: Added missing HotspotUser interface.
-export interface HotspotUser {
-  '.id': string;
-  id: string;
-  name: string;
-  server?: string;
-  profile: string;
-  'limit-uptime'?: string;
-  uptime?: string;
-  comment?: string;
-  disabled: string;
-}
-
-// FIX: Added missing HotspotUserData interface.
-export interface HotspotUserData {
-    name: string;
-    password?: string;
-    server?: string;
-    profile: string;
-    'limit-uptime'?: string;
-    comment?: string;
-    disabled?: 'false' | 'true';
-}
-
-// FIX: Added missing DhcpLease interface.
-export interface DhcpLease {
-    '.id': string;
-    id: string;
-    address: string;
-    'mac-address': string;
-    server: string;
-    status: string;
-    'expires-after'?: string;
-}
-
-// FIX: Added missing LogEntry interface.
-export interface LogEntry {
-    '.id': string;
-    id: string;
-    time: string;
-    topics: string;
-    message: string;
-}
-
-// FIX: Added missing HotspotServer interface.
-export interface HotspotServer {
-    '.id': string;
-    id: string;
-    name: string;
-    interface: string;
-    'address-pool': string;
-    profile: string;
-    disabled: string;
 }

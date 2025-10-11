@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -11,7 +13,6 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
-// FIX: The file './components/VoucherHotspot.tsx' was not provided. Uncomment the line below when it is available.
 import { PanelHotspot } from './components/VoucherHotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
@@ -155,8 +156,6 @@ const AppContent: React.FC = () => {
                  />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
-      // FIX: The file 'components/VoucherHotspot.tsx' which contains 'PanelHotspot' was not provided.
-      // Uncomment the case below when the file is available.
       case 'panel_hotspot':
           return <PanelHotspot selectedRouter={selectedRouter} />;
       case 'zerotier':

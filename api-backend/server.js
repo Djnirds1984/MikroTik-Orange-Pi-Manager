@@ -397,52 +397,6 @@ app.get('/mt-api/:routerId/log', getRouterConfig, async (req, res) => {
     });
 });
 
-// Custom endpoint for Panel Hotspot Smart Installer
-app.post('/mt-api/:routerId/hotspot/panel-setup', getRouterConfig, async (req, res) => {
-    await handleApiRequest(req, res, async () => {
-        const { routerId } = req.params;
-        const { panelHostname } = req.body;
-
-        if (!panelHostname) {
-            throw new Error("panelHostname is required.");
-        }
-
-        // 1. Configure Walled Garden
-        const { data: walledGardenEntries } = await req.routerInstance.get('/ip/hotspot/walled-garden/ip');
-        const existingEntry = Array.isArray(walledGardenEntries) && walledGardenEntries.find(e => e['dst-host'] === panelHostname);
-        
-        if (!existingEntry) {
-            await req.routerInstance.put('/ip/hotspot/walled-garden/ip', {
-                action: 'accept',
-                'dst-host': panelHostname,
-                comment: 'Panel Hotspot Login'
-            });
-        }
-
-        // Helper to create or update a file
-        const upsertFile = async (fullPath, content) => {
-            const { data: files } = await req.routerInstance.get(`/file?name=${encodeURIComponent(fullPath)}`);
-            const existingFile = Array.isArray(files) && files.find(f => f.name === fullPath);
-            if (existingFile) {
-                await req.routerInstance.patch(`/file/${existingFile['.id']}`, { contents: content });
-            } else {
-                await req.routerInstance.post('/file', { name: fullPath, contents: content });
-            }
-        };
-
-        // 2. Create/Update login.html
-        const loginHtmlContent = `<html><head><title>Redirecting...</title><meta http-equiv="refresh" content="0;url=http://${panelHostname}:3001/hotspot-login?mac=$(mac-esc)&ip=$(ip-esc)&link-login-only=$(link-login-only-esc)&router_id=${routerId}"></head><body><p>Please wait...</p></body></html>`;
-        await upsertFile('hotspot/login.html', loginHtmlContent);
-        
-        // 3. Create/Update alogin.html
-        const aloginHtmlContent = `<html><head><title>Logging in...</title></head><body><form name="login" action="$(link-login-only)" method="post"><input type="hidden" name="username" value="$(username)"><input type="hidden" name="password" value="$(password)"></form><script>document.login.submit();</script></body></html>`;
-        await upsertFile('hotspot/alogin.html', aloginHtmlContent);
-
-        return { message: "Panel Hotspot configured successfully on the router!" };
-    });
-});
-
-
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
     await handleApiRequest(req, res, async () => {
