@@ -18,10 +18,6 @@ import { Inventory } from './Inventory.tsx';
 import { Company } from './Company.tsx';
 import { Terminal } from './Terminal.tsx';
 import { Loader } from './Loader.tsx';
-import { Login } from './Login.tsx';
-import { Register } from './Register.tsx';
-import { ForgotPassword } from './ForgotPassword.tsx';
-import { AuthLayout } from './AuthLayout.tsx';
 import { SuperRouter } from './SuperRouter.tsx';
 import { Logs } from './Logs.tsx';
 import { useRouters } from '../hooks/useRouters.ts';
@@ -30,10 +26,9 @@ import { useInventoryData } from '../hooks/useInventoryData.ts';
 import { useExpensesData } from '../hooks/useExpensesData.ts';
 import { useCompanySettings } from '../hooks/useCompanySettings.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
-import { useAuth } from '../contexts/AuthContext.tsx';
 import type { View } from '../types.ts';
 
-const useMediaQuery = (query: string): boolean => {
+export const useMediaQuery = (query: string): boolean => {
   const getMatches = (query: string): boolean => {
     if (typeof window !== 'undefined') {
       return window.matchMedia(query).matches;
@@ -50,6 +45,7 @@ const useMediaQuery = (query: string): boolean => {
     try {
         mediaQuery.addEventListener('change', handleChange);
     } catch (e) {
+        // FIX: Fallback for older browsers.
         mediaQuery.addListener(handleChange);
     }
 
@@ -57,6 +53,7 @@ const useMediaQuery = (query: string): boolean => {
        try {
             mediaQuery.removeEventListener('change', handleChange);
         } catch (e) {
+            // FIX: Fallback for older browsers.
             mediaQuery.removeListener(handleChange);
         }
     };
@@ -65,7 +62,7 @@ const useMediaQuery = (query: string): boolean => {
   return matches;
 };
 
-const MainApp: React.FC = () => {
+export const AppContent: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const isLargeScreen = useMediaQuery('(min-width: 1024px)');
   const [isSidebarOpen, setIsSidebarOpen] = useState(isLargeScreen);
@@ -204,39 +201,4 @@ const MainApp: React.FC = () => {
       <Help currentView={currentView} selectedRouter={selectedRouter} />
     </div>
   );
-};
-
-export const AppContent: React.FC = () => {
-    const { user, isLoading, hasUsers } = useAuth();
-    const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
-
-    useEffect(() => {
-        if (!isLoading) {
-            if (!hasUsers) {
-                setAuthView('register');
-            } else {
-                setAuthView('login');
-            }
-        }
-    }, [isLoading, hasUsers]);
-
-    if (isLoading) {
-        return (
-            <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
-                <Loader />
-            </div>
-        );
-    }
-
-    if (!user) {
-        return (
-            <AuthLayout>
-                {authView === 'login' && <Login onSwitchToForgotPassword={() => setAuthView('forgot')} />}
-                {authView === 'register' && <Register />}
-                {authView === 'forgot' && <ForgotPassword onSwitchToLogin={() => setAuthView('login')} />}
-            </AuthLayout>
-        );
-    }
-
-    return <MainApp />;
 };
