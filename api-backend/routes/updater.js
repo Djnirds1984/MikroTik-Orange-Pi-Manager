@@ -23,7 +23,7 @@ const execPromise = (command, options = {}) => {
         exec(command, options, (error, stdout, stderr) => {
             if (error) {
                 console.error(`Error executing: ${command}\n${stderr}`);
-                return reject(error);
+                return reject(new Error(stderr || error.message));
             }
             resolve(stdout.trim());
         });
@@ -47,39 +47,45 @@ router.get('/status', async (req, res) => {
     }
 });
 
+const streamLog = (res, message) => {
+    res.write(`${message}\n`);
+};
+
 router.post('/update', async (req, res) => {
-    // Stream response back to client
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.write('Starting update process...\n');
+    streamLog(res, 'Starting update process...');
 
     try {
         const backupFileName = `backup-update-${new Date().toISOString().replace(/:/g, '-')}.tar.gz`;
         const backupPath = path.join(backupsDir, backupFileName);
 
-        res.write(`Creating backup at ${backupPath}...\n`);
-        // Note: Excluding node_modules and other large/unnecessary dirs
-        const tarCommand = `tar --exclude='./.git' --exclude='./api-backend/node_modules' --exclude='./proxy/node_modules' --exclude='./node_modules' --exclude='./api-backend/sessions' -czf ${backupPath} .`;
+        streamLog(res, `Creating backup at ${backupPath}...`);
+        const tarCommand = `tar --exclude='./.git' --exclude='./api-backend/node_modules' --exclude='./proxy/node_modules' --exclude='./node_modules' --exclude='./api-backend/sessions' --exclude='./api-backend/mikrotik_manager.db' -czf ${backupPath} .`;
         await execPromise(tarCommand, { cwd: projectRoot });
-        res.write('Backup created successfully.\n');
+        streamLog(res, 'Backup created successfully.');
         
-        res.write('Pulling latest changes from git...\n');
+        streamLog(res, 'Pulling latest changes from git...');
         await execPromise('git pull', { cwd: projectRoot });
-        res.write('Git pull successful.\n');
+        streamLog(res, 'Git pull successful.');
 
-        res.write('Installing frontend dependencies...\n');
+        streamLog(res, 'Installing frontend dependencies...');
         await execPromise('npm install', { cwd: projectRoot });
-        res.write('Frontend dependencies installed.\n');
+        streamLog(res, 'Frontend dependencies installed.');
         
-        res.write('Installing backend dependencies...\n');
+        streamLog(res, 'Installing backend dependencies...');
         await execPromise('npm install', { cwd: path.join(projectRoot, 'api-backend') });
-        res.write('Backend dependencies installed.\n');
+        streamLog(res, 'Backend dependencies installed.');
+        
+        streamLog(res, 'Installing proxy dependencies...');
+        await execPromise('npm install', { cwd: path.join(projectRoot, 'proxy') });
+        streamLog(res, 'Proxy dependencies installed.');
 
-        res.write('Building frontend application...\n');
+        streamLog(res, 'Building frontend application...');
         await execPromise('npm run build', { cwd: projectRoot });
-        res.write('Frontend build complete.\n');
+        streamLog(res, 'Frontend build complete.');
 
-        res.write('Update complete. Restarting application in 5 seconds...\n');
+        streamLog(res, 'Update complete. Restarting application in 5 seconds...');
         setTimeout(() => {
             exec('pm2 restart all', (err) => {
                 if (err) console.error("Failed to restart pm2", err);
@@ -88,8 +94,7 @@ router.post('/update', async (req, res) => {
         res.end();
 
     } catch (error) {
-        res.write(`\n--- UPDATE FAILED ---\n`);
-        res.write(error.message);
+        streamLog(res, `\n--- UPDATE FAILED ---\n${error.message}`);
         res.end();
     }
 });
@@ -103,14 +108,17 @@ router.get('/backups', (req, res) => {
         const backups = files
             .filter(file => file.endsWith('.tar.gz'))
             .map(file => {
-                const stats = fs.statSync(path.join(backupsDir, file));
-                return {
-                    name: file,
-                    size: stats.size,
-                    date: stats.mtime,
-                };
+                try {
+                    const stats = fs.statSync(path.join(backupsDir, file));
+                    return {
+                        name: file,
+                        size: stats.size,
+                        date: stats.mtime,
+                    };
+                } catch (e) { return null; }
             })
-            .sort((a, b) => b.date - a.date);
+            .filter(Boolean)
+            .sort((a, b) => b.date.getTime() - a.date.getTime());
         res.json(backups);
     });
 });
@@ -128,31 +136,34 @@ router.post('/restore', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
-    res.write(`Starting restore from ${backupName}...\n`);
+    streamLog(res, `Starting restore from ${backupName}...`);
 
     try {
+        streamLog(res, `Restoring files from backup...`);
         const restoreCommand = `tar -xzf ${backupPath} -C ${projectRoot}`;
         await execPromise(restoreCommand);
-        res.write('Files restored successfully.\n');
+        streamLog(res, 'Files restored successfully.');
         
-        res.write('Re-installing dependencies...\n');
+        streamLog(res, 'Re-installing dependencies...');
         await execPromise('npm install', { cwd: projectRoot });
         await execPromise('npm install', { cwd: path.join(projectRoot, 'api-backend') });
-        res.write('Dependencies installed.\n');
+        await execPromise('npm install', { cwd: path.join(projectRoot, 'proxy') });
+        streamLog(res, 'Dependencies installed.');
         
-        res.write('Re-building frontend...\n');
+        streamLog(res, 'Re-building frontend...');
         await execPromise('npm run build', { cwd: projectRoot });
-        res.write('Build complete.\n');
+        streamLog(res, 'Build complete.');
         
-        res.write('Restore complete. Restarting application in 5 seconds...\n');
+        streamLog(res, 'Restore complete. Restarting application in 5 seconds...');
         setTimeout(() => {
-            exec('pm2 restart all');
+            exec('pm2 restart all', (err) => {
+                if (err) console.error("Failed to restart pm2", err);
+            });
         }, 5000);
         res.end();
 
     } catch (error) {
-        res.write(`\n--- RESTORE FAILED ---\n`);
-        res.write(error.message);
+        streamLog(res, `\n--- RESTORE FAILED ---\n${error.message}`);
         res.end();
     }
 });

@@ -17,11 +17,14 @@ router.get('/system/host-status', async (req, res) => {
         
         exec('df -h /', (error, stdout, stderr) => {
             if (error) {
-                console.error(`exec error: ${error}`);
+                console.error(`exec error getting disk usage: ${error}`);
                 return res.status(500).json({ message: "Failed to get disk usage" });
             }
             
-            const lines = stdout.trim().split('\\n');
+            const lines = stdout.trim().split('\n');
+            if (lines.length < 2) {
+                 return res.status(500).json({ message: "Could not parse disk usage output." });
+            }
             const parts = lines[1].split(/\s+/);
             const disk = {
                 total: parts[1],
@@ -63,11 +66,11 @@ router.get('/system/company-settings', (req, res) => {
 
 router.post('/system/company-settings', (req, res) => {
     const settings = req.body;
-    const stmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (?, ?)');
     db.serialize(() => {
-        for (const key in settings) {
-            stmt.run(key, settings[key]);
-        }
+        const stmt = db.prepare('INSERT OR REPLACE INTO company_settings (key, value) VALUES (?, ?)');
+        Object.entries(settings).forEach(([key, value]) => {
+            stmt.run(key, value);
+        });
         stmt.finalize((err) => {
             if (err) {
                 return res.status(500).json({ message: 'Failed to save settings' });
@@ -81,8 +84,8 @@ router.post('/system/company-settings', (req, res) => {
 router.get('/system/sales/:routerId', (req, res) => {
     const { routerId } = req.params;
     const query = routerId === 'all' 
-      ? 'SELECT * FROM sales' 
-      : 'SELECT * FROM sales WHERE routerId = ?';
+      ? 'SELECT * FROM sales ORDER BY date DESC' 
+      : 'SELECT * FROM sales WHERE routerId = ? ORDER BY date DESC';
     const params = routerId === 'all' ? [] : [routerId];
 
     db.all(query, params, (err, rows) => {
@@ -120,7 +123,7 @@ router.delete('/system/sales/clear/:routerId', (req, res) => {
 
 // --- Inventory ---
 router.get('/system/inventory', (req, res) => {
-    db.all('SELECT * FROM inventory', [], (err, rows) => {
+    db.all('SELECT * FROM inventory ORDER BY dateAdded DESC', [], (err, rows) => {
         if (err) return res.status(500).json({ message: 'Database error' });
         res.json(rows);
     });
@@ -150,7 +153,7 @@ router.delete('/system/inventory/:id', (req, res) => {
 
 // --- Expenses ---
 router.get('/system/expenses', (req, res) => {
-    db.all('SELECT * FROM expenses', [], (err, rows) => {
+    db.all('SELECT * FROM expenses ORDER BY date DESC', [], (err, rows) => {
         if (err) return res.status(500).json({ message: 'Database error' });
         res.json(rows);
     });

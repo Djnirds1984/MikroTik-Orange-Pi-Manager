@@ -22,7 +22,7 @@ export const getRouterConfig = (routerId) => {
 
 export const mikrotikApi = async (routerConfig, method, path, data = null) => {
     const { host, user, password, port } = routerConfig;
-    const protocol = port === 443 ? 'https' : 'http';
+    const protocol = port === 443 || port === 8443 ? 'https' : 'http';
     const url = `${protocol}://${host}:${port}/rest${path}`;
 
     try {
@@ -43,7 +43,7 @@ export const mikrotikApi = async (routerConfig, method, path, data = null) => {
     } catch (error) {
         console.error(`MikroTik API Error (${method} ${path}):`, error.response?.data || error.message);
         const status = error.response?.status || 500;
-        const message = error.response?.data?.message || `Failed to communicate with router at ${host}.`;
+        const message = error.response?.data?.message || `Failed to communicate with router at ${host}. Check connection and credentials.`;
         throw { status, message };
     }
 };

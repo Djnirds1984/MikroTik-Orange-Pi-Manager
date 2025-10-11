@@ -19,9 +19,27 @@ router.get('/routers', (req, res) => {
     });
 });
 
+// GET a single router (to get password for connection test)
+router.get('/routers/:id', (req, res) => {
+    db.get("SELECT * FROM routers WHERE id = ?", [req.params.id], (err, row) => {
+        if (err) {
+            res.status(500).json({ "error": err.message });
+            return;
+        }
+        if (!row) {
+            return res.status(404).json({ message: "Router not found" });
+        }
+        res.json(row);
+    });
+});
+
+
 // POST a new router
 router.post('/routers', (req, res) => {
     const { name, host, user, password, port } = req.body;
+    if (!name || !host || !user || !port) {
+        return res.status(400).json({ message: "Name, host, user, and port are required." });
+    }
     const newRouter = { id: uuidv4(), name, host, user, password, port };
 
     const sql = 'INSERT INTO routers (id, name, host, user, password, port) VALUES (?,?,?,?,?,?)';
@@ -40,32 +58,34 @@ router.patch('/routers/:id', (req, res) => {
     const { name, host, user, password, port } = req.body;
     const { id } = req.params;
 
-    // Build query dynamically
-    const fields = [];
-    const params = [];
+    db.get('SELECT * FROM routers WHERE id = ?', [id], (err, router) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!router) return res.status(404).json({ message: "Router not found." });
 
-    if (name) { fields.push('name = ?'); params.push(name); }
-    if (host) { fields.push('host = ?'); params.push(host); }
-    if (user) { fields.push('user = ?'); params.push(user); }
-    if (password) { fields.push('password = ?'); params.push(password); }
-    if (port) { fields.push('port = ?'); params.push(port); }
+        const fields = [];
+        const params = [];
+        
+        // Only update fields that are explicitly provided
+        if (name !== undefined) { fields.push('name = ?'); params.push(name); }
+        if (host !== undefined) { fields.push('host = ?'); params.push(host); }
+        if (user !== undefined) { fields.push('user = ?'); params.push(user); }
+        if (password !== undefined) { fields.push('password = ?'); params.push(password); }
+        if (port !== undefined) { fields.push('port = ?'); params.push(port); }
 
-    if (fields.length === 0) {
-        return res.status(400).json({ message: "No fields to update provided." });
-    }
-
-    params.push(id);
-    const sql = `UPDATE routers SET ${fields.join(', ')} WHERE id = ?`;
-
-    db.run(sql, params, function (err) {
-        if (err) {
-            res.status(400).json({ "error": err.message });
-            return;
+        if (fields.length === 0) {
+            return res.status(400).json({ message: "No fields to update provided." });
         }
-        if (this.changes === 0) {
-            return res.status(404).json({ message: "Router not found." });
-        }
-        res.json({ message: "Router updated successfully", changes: this.changes });
+
+        params.push(id);
+        const sql = `UPDATE routers SET ${fields.join(', ')} WHERE id = ?`;
+
+        db.run(sql, params, function (err) {
+            if (err) {
+                res.status(400).json({ "error": err.message });
+                return;
+            }
+            res.json({ message: "Router updated successfully" });
+        });
     });
 });
 
@@ -75,7 +95,7 @@ router.delete('/routers/:id', (req, res) => {
     const { id } = req.params;
     db.run('DELETE FROM routers WHERE id = ?', id, function (err) {
         if (err) {
-            res.status(400).json({ "error": res.message });
+            res.status(400).json({ "error": err.message });
             return;
         }
          if (this.changes === 0) {

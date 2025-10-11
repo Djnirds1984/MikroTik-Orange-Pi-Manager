@@ -10,7 +10,7 @@ export const isAuthenticated = (req, res, next) => {
     if (req.session.userId) {
         next();
     } else {
-        res.status(401).json({ message: 'Unauthorized' });
+        res.status(401).json({ message: 'Unauthorized. Please log in.' });
     }
 };
 
@@ -19,7 +19,7 @@ export const isAuthenticated = (req, res, next) => {
 router.get('/auth/has-users', (req, res) => {
     db.get('SELECT COUNT(*) as count FROM users', [], (err, row) => {
         if (err) {
-            return res.status(500).json({ message: 'Database error' });
+            return res.status(500).json({ message: 'Database error checking for users.' });
         }
         res.json({ hasUsers: row.count > 0 });
     });
@@ -34,10 +34,10 @@ router.post('/auth/register', (req, res) => {
 
     db.get('SELECT COUNT(*) as count FROM users', [], (err, row) => {
         if (err) {
-            return res.status(500).json({ message: 'Database error' });
+            return res.status(500).json({ message: 'Database error during registration check.' });
         }
         if (row.count > 0) {
-            return res.status(403).json({ message: 'Registration is not allowed' });
+            return res.status(403).json({ message: 'Registration is not allowed. An admin user already exists.' });
         }
 
         bcrypt.hash(password, saltRounds, (err, hash) => {
@@ -46,9 +46,10 @@ router.post('/auth/register', (req, res) => {
             }
             db.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hash], function (err) {
                 if (err) {
-                    return res.status(500).json({ message: 'Could not create user' });
+                    return res.status(500).json({ message: 'Could not create user. Username might be taken.' });
                 }
                 req.session.userId = this.lastID;
+                req.session.username = username;
                 res.status(201).json({ user: { id: this.lastID, username } });
             });
         });
@@ -60,14 +61,15 @@ router.post('/auth/login', (req, res) => {
     const { username, password } = req.body;
     db.get('SELECT * FROM users WHERE username = ?', [username], (err, user) => {
         if (err || !user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Invalid username or password' });
         }
         bcrypt.compare(password, user.password, (err, result) => {
             if (result) {
                 req.session.userId = user.id;
+                req.session.username = user.username;
                 res.json({ user: { id: user.id, username: user.username } });
             } else {
-                res.status(401).json({ message: 'Invalid credentials' });
+                res.status(401).json({ message: 'Invalid username or password' });
             }
         });
     });
@@ -89,7 +91,8 @@ router.get('/auth/check-session', (req, res) => {
     if (req.session.userId) {
         db.get('SELECT id, username FROM users WHERE id = ?', [req.session.userId], (err, user) => {
             if (err || !user) {
-                return res.status(404).json({ message: 'User not found' });
+                 req.session.destroy(() => {});
+                return res.status(401).json({ message: 'Session invalid. User not found.' });
             }
             res.json({ user });
         });
