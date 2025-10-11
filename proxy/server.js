@@ -216,7 +216,7 @@ app.get('*.tsx', async (req, res, next) => {
 
         const result = await esbuild.transform(source, {
             loader: 'tsx',
-            jsx: 'react-jsx',
+            jsx: 'transform',
             target: 'es2020'
         });
 
