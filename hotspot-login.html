@@ -19,14 +19,6 @@
     <script>
       tailwind.config = { darkMode: 'class' };
     </script>
-    <script type="importmap">
-      {
-        "imports": {
-          "react-dom/client": "https://esm.sh/react-dom@^19.1.1/client",
-          "react": "https://esm.sh/react@^19.1.1"
-        }
-      }
-    </script>
     <style>
       /* Matched styles from index.html for theme consistency */
       .theme-orange { --color-primary-500: #f97316; --color-primary-600: #ea580c; }
@@ -43,6 +35,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/hotspot-login.tsx"></script>
+    <script type="module" src="/src/hotspot-login.tsx"></script>
   </body>
 </html>
