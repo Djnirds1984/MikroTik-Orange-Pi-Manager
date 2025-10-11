@@ -12,6 +12,7 @@ export type View =
   | 'sales'
   | 'inventory'
   | 'hotspot'
+  | 'voucher_hotspot'
   | 'zerotier'
   | 'company'
   | 'system'
@@ -180,6 +181,20 @@ export interface BillingPlan {
 export interface BillingPlanWithId extends BillingPlan {
     id: string;
 }
+
+export interface VoucherPlan {
+    routerId: string;
+    name: string;
+    duration_minutes: number;
+    price: number;
+    currency: string;
+    mikrotik_profile_name: string;
+}
+
+export interface VoucherPlanWithId extends VoucherPlan {
+    id: string;
+}
+
 
 export interface PppSecret {
     id: string;

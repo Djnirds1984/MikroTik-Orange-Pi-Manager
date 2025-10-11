@@ -14,6 +14,7 @@
         "sales_report": "Sales Report",
         "inventory": "Stock & Inventory",
         "hotspot": "Hotspot",
+        "voucher_hotspot": "Voucher Hotspot",
         "zerotier": "ZeroTier",
         "company": "Company",
         "system_settings": "System Settings",
@@ -32,6 +33,7 @@
         "sales": "Sales Report",
         "inventory": "Stock & Inventory",
         "hotspot": "Hotspot Management",
+        "voucher_hotspot": "Voucher Hotspot System",
         "zerotier": "ZeroTier Management",
         "company": "Company Settings",
         "system": "System Settings",
@@ -48,8 +50,7 @@
     "common": {
         "cancel": "Cancel",
         "save": "Save",
-        "save_plan": "Save Plan",
-        "actions": "Actions"
+        "save_plan": "Save Plan"
     },
     "billing": {
         "add_new_plan": "Add New Plan",

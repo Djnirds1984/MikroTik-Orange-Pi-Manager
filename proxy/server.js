@@ -236,6 +236,23 @@ async function initDb() {
             user_version = 10;
         }
 
+        if (user_version < 11) {
+            console.log('Applying migration v11 (Add voucher plans table)...');
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS voucher_plans (
+                    id TEXT PRIMARY KEY,
+                    routerId TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    duration_minutes INTEGER NOT NULL,
+                    price REAL NOT NULL,
+                    currency TEXT NOT NULL,
+                    mikrotik_profile_name TEXT NOT NULL
+                );
+            `);
+            await db.exec('PRAGMA user_version = 11;');
+            user_version = 11;
+        }
+
 
     } catch (err) {
         console.error('Failed to initialize database:', err);
@@ -500,7 +517,8 @@ const tableMap = {
     'sales': 'sales_records',
     'billing-plans': 'billing_plans',
     'company-settings': 'company_settings',
-    'panel-settings': 'panel_settings'
+    'panel-settings': 'panel_settings',
+    'voucher-plans': 'voucher_plans'
 };
 
 const dbRouter = express.Router();
