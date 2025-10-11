@@ -313,6 +313,15 @@ export const runHotspotSetup = (router: RouterConfigWithId, params: HotspotSetup
     return fetchMikrotikData(router, '/hotspot/setup', { method: 'POST', body: JSON.stringify(params) });
 };
 
+export const runPanelHotspotSetup = (router: RouterConfigWithId): Promise<{ message: string }> => {
+    const panelHostname = window.location.hostname;
+    return fetchMikrotikData(router, '/hotspot/panel-setup', {
+        method: 'POST',
+        body: JSON.stringify({ panelHostname }),
+    });
+};
+
+
 // --- Firewall ---
 const firewallApi = <T extends FirewallRule, U extends FirewallRuleData>(type: RuleType) => ({
     get: (router: RouterConfigWithId): Promise<T[]> => fetchMikrotikData<T[]>(router, `/ip/firewall/${type}`),

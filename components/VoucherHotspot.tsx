@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, HotspotUserProfile, VoucherPlan, VoucherPlanWithId } from '../types.ts';
-import { getHotspotUserProfiles } from '../services/mikrotikService.ts';
+import { getHotspotUserProfiles, runPanelHotspotSetup } from '../services/mikrotikService.ts';
 import { useVoucherPlans } from '../hooks/useVoucherPlans.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { Loader } from './Loader.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
-import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon, CodeBracketIcon } from '../constants.tsx';
+import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon, CodeBracketIcon, CheckCircleIcon } from '../constants.tsx';
 import { HotspotEditor } from './HotspotEditor.tsx';
 
 // --- Reusable Components ---
@@ -140,13 +140,16 @@ const PlansManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ select
 
 
 // --- Setup Guide Sub-component ---
-const SetupGuide: React.FC = () => {
+const SetupGuide: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [installerStatus, setInstallerStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
+    const [installerMessage, setInstallerMessage] = useState('');
+
     const panelIp = window.location.hostname;
     const walledGardenScript = `/ip hotspot walled-garden ip add action=accept dst-host=${panelIp}`;
     const loginHtmlContent = `<html>
 <head>
     <title>Redirecting...</title>
-    <meta http-equiv="refresh" content="0;url=http://${panelIp}:3001/hotspot-login?mac=$(mac-esc)&ip=$(ip-esc)&link-login-only=$(link-login-only-esc)&router_id=<YOUR_ROUTER_ID>">
+    <meta http-equiv="refresh" content="0;url=http://${panelIp}:3001/hotspot-login?mac=$(mac-esc)&ip=$(ip-esc)&link-login-only=$(link-login-only-esc)&router_id=${selectedRouter.id}">
 </head>
 <body>
     <p>Please wait, you are being redirected to the login page...</p>
@@ -167,44 +170,69 @@ const SetupGuide: React.FC = () => {
 </body>
 </html>`;
 
+    const handleRunInstaller = async () => {
+        if (!window.confirm("This will automatically configure your router's Walled Garden and overwrite hotspot/login.html and hotspot/alogin.html. Are you sure you want to proceed?")) {
+            return;
+        }
+        setInstallerStatus('running');
+        setInstallerMessage('');
+        try {
+            const result = await runPanelHotspotSetup(selectedRouter);
+            setInstallerStatus('success');
+            setInstallerMessage(result.message);
+        } catch (err) {
+            setInstallerStatus('error');
+            setInstallerMessage((err as Error).message);
+        }
+    };
+
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
             <div className="p-6 bg-sky-50 dark:bg-sky-900/50 border border-sky-200 dark:border-sky-700 rounded-lg">
                 <h3 className="text-xl font-bold text-sky-800 dark:text-sky-200">Panel-Managed Hotspot Setup</h3>
-                <p className="mt-2 text-sky-700 dark:text-sky-300">This system allows your MikroTik Hotspot to use this panel as its login portal. Follow these steps carefully.</p>
+                <p className="mt-2 text-sky-700 dark:text-sky-300">This system allows your MikroTik Hotspot to use this panel as its login portal. Use the Smart Installer for a one-click setup, or follow the manual steps below.</p>
             </div>
             
+            {/* Smart Installer Section */}
             <div className="space-y-4">
-                <h4 className="text-lg font-semibold">Step 1: Configure Hotspot Server</h4>
-                <p>Ensure you have a working Hotspot server on your router. You can use the 'Server Setup' tab in the main Hotspot page, or WinBox's "Hotspot Setup" wizard. This process should create a server, IP pool, and user profile.</p>
-            </div>
-            
-            <div className="space-y-4">
-                <h4 className="text-lg font-semibold">Step 2: Configure Walled Garden</h4>
-                <p>You must allow users to access this panel *before* they log in. Run the following command in your MikroTik terminal. This command automatically uses your panel's current IP address.</p>
-                <CodeBlock script={walledGardenScript} />
-            </div>
-
-            <div className="space-y-4">
-                <h4 className="text-lg font-semibold">Step 3: Replace Hotspot Login Files</h4>
-                <p>You need to replace two files in your router's `hotspot` directory. You can do this using the "Login Page Editor" tab, WinBox's File list (drag and drop), or FTP.</p>
-                
-                <div className="p-4 border rounded-lg">
-                    <h5 className="font-semibold">A. `login.html` (The Redirect)</h5>
-                    <p className="text-sm text-slate-500 mb-2">Create a file named `login.html` with the content below. This will redirect users to the panel's login page. <strong className="text-red-500">IMPORTANT: You must replace `&lt;YOUR_ROUTER_ID&gt;` with your router's ID from the URL or "Routers" page.</strong></p>
-                    <CodeBlock script={loginHtmlContent} />
+                <h4 className="text-lg font-semibold">Smart Installer (Recommended)</h4>
+                <div className="p-4 border rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <p className="text-sm text-slate-600 dark:text-slate-300 flex-grow">Click this button to automatically configure the Walled Garden and upload the necessary `login.html` and `alogin.html` files to your router.</p>
+                    <button onClick={handleRunInstaller} disabled={installerStatus === 'running'} className="px-6 py-3 bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold rounded-lg disabled:opacity-50 flex items-center gap-2 w-full sm:w-auto justify-center">
+                        {installerStatus === 'running' && <Loader />}
+                        {installerStatus === 'running' ? 'Configuring...' : 'Run Smart Installer'}
+                    </button>
                 </div>
-                
-                <div className="p-4 border rounded-lg">
-                    <h5 className="font-semibold">B. `alogin.html` (The Authenticator)</h5>
-                    <p className="text-sm text-slate-500 mb-2">Create a file named `alogin.html` with this content. This is a helper file that the router uses in the background to complete the login process.</p>
-                    <CodeBlock script={aloginHtmlContent} />
-                </div>
+                {installerStatus === 'success' && (
+                    <div className="p-4 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-md flex items-center gap-3">
+                        <CheckCircleIcon className="w-6 h-6" />
+                        <div>
+                            <p className="font-bold">Success!</p>
+                            <p>{installerMessage}</p>
+                        </div>
+                    </div>
+                )}
+                {installerStatus === 'error' && <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-md">{installerMessage}</div>}
             </div>
             
-            <div className="p-6 bg-green-50 dark:bg-green-900/50 border border-green-200 dark:border-green-700 rounded-lg">
-                <h4 className="text-lg font-semibold text-green-800 dark:text-green-200">Setup Complete!</h4>
-                <p className="mt-2 text-green-700 dark:text-green-300">Once these steps are done, your hotspot is ready. You can now create Voucher Plans and generate vouchers for your users.</p>
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <h4 className="text-lg font-semibold mb-4">Manual Setup Guide</h4>
+                <div className="space-y-4">
+                    <p><strong className="font-semibold">Step 1: Configure Hotspot Server</strong><br/>Ensure you have a working Hotspot server on your router. You can use the 'Server Setup' tab in the main Hotspot page, or WinBox's "Hotspot Setup" wizard.</p>
+                    <p><strong className="font-semibold">Step 2: Configure Walled Garden</strong><br/>Run this command in your MikroTik terminal to allow users to access this panel before login.</p>
+                    <CodeBlock script={walledGardenScript} />
+                    <p><strong className="font-semibold">Step 3: Replace Hotspot Login Files</strong><br/>Use the "Login Page Editor" tab to create/update these two files in your router's `hotspot` directory.</p>
+                    <div className="p-4 border rounded-lg">
+                        <h5 className="font-semibold">A. `login.html` (The Redirect)</h5>
+                        <p className="text-sm text-slate-500 mb-2">This redirects users to the panel's login page.</p>
+                        <CodeBlock script={loginHtmlContent} />
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                        <h5 className="font-semibold">B. `alogin.html` (The Authenticator)</h5>
+                        <p className="text-sm text-slate-500 mb-2">This helper file completes the login process.</p>
+                        <CodeBlock script={aloginHtmlContent} />
+                    </div>
+                </div>
             </div>
         </div>
     );
@@ -232,7 +260,7 @@ export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null 
 
             <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="flex space-x-2 overflow-x-auto">
-                    <TabButton label="Setup Guide" isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
+                    <TabButton label="Smart Installer & Guide" isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
                     <TabButton label="Plans" isActive={activeTab === 'plans'} onClick={() => setActiveTab('plans')} />
                     <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5" />} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
                     <TabButton label="Vouchers" isActive={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
@@ -245,7 +273,7 @@ export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null 
                 {activeTab === 'vouchers' && <div className="text-center p-8 bg-slate-50 dark:bg-slate-800 rounded-lg">Voucher generation and management coming soon.</div>}
                 {activeTab === 'plans' && <PlansManager selectedRouter={selectedRouter} />}
                 {activeTab === 'editor' && <HotspotEditor selectedRouter={selectedRouter} />}
-                {activeTab === 'setup' && <SetupGuide />}
+                {activeTab === 'setup' && <SetupGuide selectedRouter={selectedRouter} />}
             </div>
         </div>
     );
