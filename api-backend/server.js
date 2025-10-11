@@ -426,7 +426,7 @@ app.post('/mt-api/:routerId/hotspot/panel-setup', getRouterConfig, async (req, r
             if (existingFile) {
                 await req.routerInstance.patch(`/file/${existingFile['.id']}`, { contents: content });
             } else {
-                await req.routerInstance.post('/file', { name: fullPath, contents: content });
+                await req.routerInstance.put('/file', { name: fullPath, contents: content });
             }
         };
 
