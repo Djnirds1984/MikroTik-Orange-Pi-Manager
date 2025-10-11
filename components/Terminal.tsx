@@ -1,9 +1,7 @@
-
 import React, { useEffect, useRef } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
 import { Terminal as XtermTerminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
-import 'xterm/css/xterm.css';
 
 export const Terminal: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const terminalRef = useRef<HTMLDivElement>(null);
