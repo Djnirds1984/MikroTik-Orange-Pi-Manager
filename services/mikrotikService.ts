@@ -287,13 +287,22 @@ export const deleteHotspotUserProfile = (router: RouterConfigWithId, profileId: 
 };
 
 export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => {
-    return fetchMikrotikData<any[]>(router, `/file?path=${encodeURIComponent(path)}`);
+    return fetchMikrotikData<any[]>(router, `/file?name=${encodeURIComponent(path)}`);
 };
 export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => {
-    return fetchMikrotikData<{ content: string }>(router, `/file/content?path=${encodeURIComponent(filePath)}`);
+    return fetchMikrotikData<{ content: string }>(router, `/file/print?file=${encodeURIComponent(filePath)}`);
 };
-export const saveHotspotFileContent = (router: RouterConfigWithId, filePath: string, content: string): Promise<any> => {
-    return fetchMikrotikData(router, `/file/content`, { method: 'POST', body: JSON.stringify({ path: filePath, content }) });
+export const saveHotspotFileContent = (router: RouterConfigWithId, fileId: string, content: string): Promise<any> => {
+    return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, { 
+        method: 'PATCH', 
+        body: JSON.stringify({ contents: content }) 
+    });
+};
+export const createHotspotFile = (router: RouterConfigWithId, fullPath: string, contents: string): Promise<any> => {
+    return fetchMikrotikData(router, '/file', {
+        method: 'POST',
+        body: JSON.stringify({ name: fullPath, contents }),
+    });
 };
 
 export const getSslCertificates = (router: RouterConfigWithId): Promise<SslCertificate[]> => {

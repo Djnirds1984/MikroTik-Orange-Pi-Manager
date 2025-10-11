@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
-import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent } from '../services/mikrotikService.ts';
+import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
 import { ExclamationTriangleIcon } from '../constants.tsx';
 
@@ -18,13 +18,16 @@ const FileIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [path, setPath] = useState<string[]>(['flash']);
+    const [path, setPath] = useState<string[]>(['hotspot']);
     const [files, setFiles] = useState<any[]>([]);
-    const [selectedFile, setSelectedFile] = useState<{ name: string; fullName: string } | null>(null);
+    const [selectedFile, setSelectedFile] = useState<any | null>(null);
     const [content, setContent] = useState('');
     const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error'>('loading_list');
     const [error, setError] = useState<string | null>(null);
     
+    const [fileToUpload, setFileToUpload] = useState<File | null>(null);
+    const uploadInputRef = useRef<HTMLInputElement>(null);
+
     const currentPath = path.join('/');
 
     const fetchFiles = useCallback(async (currentPath: string) => {
@@ -50,11 +53,11 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setError(null);
         setSelectedFile(file);
         try {
-            const { content } = await getHotspotFileContent(selectedRouter, file.fullName);
+            const { content } = await getHotspotFileContent(selectedRouter, file.name);
             setContent(content);
             setStatus('editing');
         } catch (err) {
-             setError(`Failed to load content for '${file.fullName}': ${(err as Error).message}`);
+             setError(`Failed to load content for '${file.name}': ${(err as Error).message}`);
              setStatus('error');
              setSelectedFile(null);
         }
@@ -73,13 +76,68 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setStatus('saving');
         setError(null);
         try {
-            await saveHotspotFileContent(selectedRouter, selectedFile.fullName, content);
+            await saveHotspotFileContent(selectedRouter, selectedFile.id, content);
             alert('File saved successfully!');
             setStatus('editing');
         } catch (err) {
-             setError(`Failed to save '${selectedFile.fullName}': ${(err as Error).message}`);
+             setError(`Failed to save '${selectedFile.name}': ${(err as Error).message}`);
              setStatus('error');
         }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            setFileToUpload(e.target.files[0]);
+        } else {
+            setFileToUpload(null);
+        }
+    };
+
+    const handleUpload = async () => {
+        if (!fileToUpload) {
+            alert("Please select a file to upload.");
+            return;
+        }
+
+        const fullPath = `${currentPath}/${fileToUpload.name}`;
+        const existingFile = files.find(f => f.name === fullPath);
+
+        if (existingFile && !window.confirm(`File "${fileToUpload.name}" already exists. Overwrite it?`)) {
+            return;
+        }
+        
+        setStatus('saving');
+        setError(null);
+
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const textContent = event.target?.result as string;
+                if (existingFile) {
+                    await saveHotspotFileContent(selectedRouter, existingFile.id, textContent);
+                } else {
+                    await createHotspotFile(selectedRouter, fullPath, textContent);
+                }
+
+                alert('File uploaded successfully!');
+                await fetchFiles(currentPath);
+                
+                setFileToUpload(null);
+                if (uploadInputRef.current) {
+                    uploadInputRef.current.value = "";
+                }
+                setStatus('browsing');
+            } catch (err) {
+                setError(`Upload failed: ${(err as Error).message}`);
+                setStatus('error');
+            }
+        };
+        reader.onerror = () => {
+            setError("Failed to read the selected file.");
+            setStatus('error');
+        };
+
+        reader.readAsText(fileToUpload);
     };
     
     if (status === 'editing' || status === 'saving') {
@@ -88,7 +146,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                 <div className="flex justify-between items-center">
                     <div>
                         <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Editing File</h3>
-                        <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.fullName}</p>
+                        <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
@@ -109,13 +167,30 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     return (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6">
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Hotspot File Browser</h3>
-            <div className="text-sm text-slate-500 dark:text-slate-400 font-mono mb-4 bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md">
-                {path.map((p, i) => (
-                    <span key={i}>
-                        <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
-                        {i < path.length - 1 && ' / '}
-                    </span>
-                ))}
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
+                <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
+                    {path.map((p, i) => (
+                        <span key={i}>
+                            <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
+                            {i < path.length - 1 && ' / '}
+                        </span>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <input 
+                        ref={uploadInputRef}
+                        type="file" 
+                        onChange={handleFileSelect}
+                        className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500"
+                    />
+                    <button 
+                        onClick={handleUpload} 
+                        disabled={!fileToUpload || status === 'saving'}
+                        className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50"
+                    >
+                        {status === 'saving' ? 'Uploading...' : 'Upload'}
+                    </button>
+                </div>
             </div>
 
             {status === 'loading_list' && <div className="flex justify-center p-8"><Loader /></div>}

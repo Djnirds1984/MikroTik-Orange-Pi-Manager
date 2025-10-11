@@ -5,18 +5,20 @@ import { useVoucherPlans } from '../hooks/useVoucherPlans.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { Loader } from './Loader.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
-import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon } from '../constants.tsx';
+import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon, CodeBracketIcon } from '../constants.tsx';
+import { HotspotEditor } from './HotspotEditor.tsx';
 
 // --- Reusable Components ---
-const TabButton: React.FC<{ label: string, isActive: boolean, onClick: () => void }> = ({ label, isActive, onClick }) => (
+const TabButton: React.FC<{ label: string, icon?: React.ReactNode, isActive: boolean, onClick: () => void }> = ({ label, icon, isActive, onClick }) => (
     <button
         onClick={onClick}
-        className={`px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors duration-200 focus:outline-none ${
+        className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 -mb-px transition-colors duration-200 focus:outline-none ${
             isActive
                 ? 'border-[--color-primary-500] text-[--color-primary-500] dark:text-[--color-primary-400]'
                 : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
         }`}
     >
+        {icon}
         {label}
     </button>
 );
@@ -185,7 +187,7 @@ const SetupGuide: React.FC = () => {
 
             <div className="space-y-4">
                 <h4 className="text-lg font-semibold">Step 3: Replace Hotspot Login Files</h4>
-                <p>You need to replace two files in your router's `hotspot` directory. You can do this using WinBox's File list (drag and drop) or FTP.</p>
+                <p>You need to replace two files in your router's `hotspot` directory. You can do this using the "Login Page Editor" tab, WinBox's File list (drag and drop), or FTP.</p>
                 
                 <div className="p-4 border rounded-lg">
                     <h5 className="font-semibold">A. `login.html` (The Redirect)</h5>
@@ -210,7 +212,7 @@ const SetupGuide: React.FC = () => {
 
 // --- Main Component ---
 export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'vouchers' | 'plans' | 'setup'>('setup');
+    const [activeTab, setActiveTab] = useState<'setup' | 'plans' | 'editor' | 'vouchers' | 'dashboard'>('setup');
 
     if (!selectedRouter) {
         return (
@@ -229,11 +231,12 @@ export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null 
             </h2>
 
             <div className="border-b border-slate-200 dark:border-slate-700">
-                <nav className="flex space-x-2">
-                    <TabButton label="Dashboard" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-                    <TabButton label="Vouchers" isActive={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
-                    <TabButton label="Plans" isActive={activeTab === 'plans'} onClick={() => setActiveTab('plans')} />
+                <nav className="flex space-x-2 overflow-x-auto">
                     <TabButton label="Setup Guide" isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
+                    <TabButton label="Plans" isActive={activeTab === 'plans'} onClick={() => setActiveTab('plans')} />
+                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5" />} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+                    <TabButton label="Vouchers" isActive={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
+                    <TabButton label="Dashboard" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
                 </nav>
             </div>
 
@@ -241,6 +244,7 @@ export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null 
                 {activeTab === 'dashboard' && <div className="text-center p-8 bg-slate-50 dark:bg-slate-800 rounded-lg">Dashboard coming soon.</div>}
                 {activeTab === 'vouchers' && <div className="text-center p-8 bg-slate-50 dark:bg-slate-800 rounded-lg">Voucher generation and management coming soon.</div>}
                 {activeTab === 'plans' && <PlansManager selectedRouter={selectedRouter} />}
+                {activeTab === 'editor' && <HotspotEditor selectedRouter={selectedRouter} />}
                 {activeTab === 'setup' && <SetupGuide />}
             </div>
         </div>
