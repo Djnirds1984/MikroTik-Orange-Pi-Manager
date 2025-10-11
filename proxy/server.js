@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const { open } = require('sqlite');
@@ -11,6 +10,7 @@ const tar = require('tar');
 const os = require('os');
 const { exec, spawn } = require('child_process');
 const util = require('util');
+const esbuild = require('esbuild');
 const execPromise = util.promisify(exec);
 
 
@@ -207,6 +207,31 @@ app.get('/api/host-status', authMiddleware, (req, res) => {
 
 // --- Static File Serving ---
 const projectRoot = path.join(__dirname, '..');
+
+// Middleware to compile .tsx files on the fly
+app.get('*.tsx', async (req, res, next) => {
+    try {
+        const filePath = path.join(projectRoot, req.path);
+        const source = await fs.readFile(filePath, 'utf-8');
+
+        const result = await esbuild.transform(source, {
+            loader: 'tsx',
+            jsx: 'react-jsx',
+            target: 'es2020'
+        });
+
+        res.set('Content-Type', 'application/javascript');
+        res.send(result.code);
+    } catch (error) {
+        if (error.code === 'ENOENT') {
+            return next(); // File not found, let other handlers take it
+        }
+        console.error(`Error compiling ${req.path}:`, error);
+        res.status(500).send(`// Compilation Error in ${req.path}:\n${error.message}`);
+    }
+});
+
+
 app.use(express.static(projectRoot));
 
 app.get('/hotspot-login', (req, res) => {
