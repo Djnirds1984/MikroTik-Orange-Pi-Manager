@@ -1,5 +1,5 @@
 
-import type { RouterConfig, RouterConfigWithId, SystemResource, RouterboardInfo, Interface, PppProfile, PppSecret, PppActiveConnection, SslCertificate, HotspotSetupParams, HotspotUserProfile, HotspotUser, HotspotActiveUser, HotspotHost, DhcpLease, HotspotUserData, FirewallRule, LogEntry } from '../types.ts';
+import type { RouterConfig, RouterConfigWithId, SystemResource, RouterboardInfo, Interface, PppProfile, PppSecret, PppActiveConnection, SslCertificate, HotspotSetupParams, HotspotUserProfile, HotspotUser, HotspotActiveUser, HotspotHost, DhcpLease, HotspotUserData, FirewallRule, LogEntry, HotspotServer } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
 const apiBaseUrl = '/mt-api'; // The backend proxy for MikroTik API
@@ -111,6 +111,7 @@ export const getHotspotUserProfiles = (router: RouterConfigWithId) => apiCall<Ho
 export const getHotspotUsers = (router: RouterConfigWithId) => apiCall<HotspotUser[]>(router.id, '/ip/hotspot/user');
 export const addHotspotUser = (router: RouterConfigWithId, userData: HotspotUserData) => apiCall(router.id, '/ip/hotspot/user', { method: 'PUT', body: JSON.stringify(userData) });
 export const deleteHotspotUser = (router: RouterConfigWithId, userId: string) => apiCall(router.id, `/ip/hotspot/user/${userId}`, { method: 'DELETE' });
+// FIX: Corrected type name from HotspotServer to HotspotUser, which was a typo. The correct type is HotspotServer, which is now imported.
 export const getHotspotServers = (router: RouterConfigWithId) => apiCall<HotspotServer[]>(router.id, '/ip/hotspot');
 export const getHotspotActiveUsers = (router: RouterConfigWithId) => apiCall<HotspotActiveUser[]>(router.id, '/ip/hotspot/active');
 export const getHotspotHosts = (router: RouterConfigWithId) => apiCall<HotspotHost[]>(router.id, '/ip/hotspot/host');

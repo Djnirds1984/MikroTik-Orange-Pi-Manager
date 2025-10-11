@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -33,7 +34,9 @@ import { useExpensesData } from './hooks/useExpensesData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
-import { useAuth } from './contexts/AuthContext.tsx';
+import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
+import { LicenseProvider, useLicense } from './contexts/LicenseContext.tsx';
+import { LicensePage } from './components/LicensePage.tsx';
 import type { View } from './types.ts';
 
 const useMediaQuery = (query: string): boolean => {
@@ -211,6 +214,7 @@ const AppContent: React.FC = () => {
 
 const AppRouter: React.FC = () => {
     const { user, isLoading, hasUsers } = useAuth();
+    const { isValid, isLoading: isLicenseLoading } = useLicense();
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
 
     useEffect(() => {
@@ -223,7 +227,7 @@ const AppRouter: React.FC = () => {
         }
     }, [isLoading, hasUsers]);
 
-    if (isLoading) {
+    if (isLoading || isLicenseLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
                 <Loader />
@@ -240,6 +244,10 @@ const AppRouter: React.FC = () => {
             </AuthLayout>
         );
     }
+    
+    if (!isValid) {
+        return <LicensePage />;
+    }
 
     return <AppContent />;
 };
@@ -247,7 +255,9 @@ const AppRouter: React.FC = () => {
 const App: React.FC = () => (
   <ThemeProvider>
     <LocalizationProvider>
-      <AppRouter />
+      <LicenseProvider>
+        <AppRouter />
+      </LicenseProvider>
     </LocalizationProvider>
   </ThemeProvider>
 );

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { HotspotHost } from '../types.ts';
 import { ChipIcon } from '../constants.tsx';
@@ -10,7 +11,8 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
                 <ChipIcon className="h-8 w-8 text-[--color-primary-500] dark:text-[--color-primary-400]" />
                 <div>
                     <p className="font-semibold text-slate-900 dark:text-slate-100 font-mono">{host.address}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{host.macAddress}</p>
+                    {/* FIX: Corrected property access to use kebab-case 'mac-address'. */}
+                    <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{host['mac-address']}</p>
                     {host.comment && <p className="text-xs text-slate-400 italic mt-1">Comment: {host.comment}</p>}
                 </div>
             </div>

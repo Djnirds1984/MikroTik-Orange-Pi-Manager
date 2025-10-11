@@ -12,6 +12,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const os = require('os');
 const fsPromises = require('fs').promises;
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3001;
@@ -21,6 +22,7 @@ const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
 const NGROK_CONFIG_PATH = path.join(__dirname, 'ngrok-config.json');
 const NGROK_BINARY_PATH = '/usr/local/bin/ngrok';
 const SECRET_KEY = process.env.JWT_SECRET || 'a-very-weak-secret-key-for-dev-only';
+const LICENSE_SECRET_KEY = process.env.LICENSE_SECRET || 'a-very-secret-license-key-that-should-be-in-env-file';
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ limit: '5mb' })); // For AI fixer
@@ -510,6 +512,84 @@ app.post('/api/system/host-ntp/toggle', protect, (req, res) => {
         res.json({ message: `NTP service has been ${enabled ? 'enabled' : 'disabled'}.` });
     });
 });
+
+// --- License Endpoints ---
+const getHardwareId = () => {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.mac.replace(/:/g, '').toUpperCase();
+            }
+        }
+    }
+    // Fallback for systems with no clear primary interface (e.g. containers)
+    try {
+        const hostname = os.hostname();
+        return crypto.createHash('sha1').update(hostname).digest('hex').substring(0, 12).toUpperCase();
+    } catch(e) {
+        return 'UNKNOWN_HWID';
+    }
+};
+
+const licenseRouter = express.Router();
+licenseRouter.use(protect); // All license routes require authentication
+
+licenseRouter.get('/hwid', (req, res) => {
+    res.json({ hwid: getHardwareId() });
+});
+
+licenseRouter.get('/status', async (req, res) => {
+    try {
+        const row = await db.get("SELECT value FROM panel_settings WHERE key = 'licenseKey'");
+        if (!row || !row.value) {
+            return res.json({ isValid: false, message: 'No license key found.' });
+        }
+        const licenseKey = JSON.parse(row.value);
+        
+        jwt.verify(licenseKey, LICENSE_SECRET_KEY, (err, decoded) => {
+            if (err) {
+                return res.json({ isValid: false, message: `License invalid: ${err.message}` });
+            }
+
+            if (decoded.hwid !== getHardwareId()) {
+                return res.json({ isValid: false, message: 'License is for a different machine.' });
+            }
+            
+            const expiryDate = new Date(decoded.exp * 1000).toISOString();
+            res.json({ isValid: true, expiryDate });
+        });
+    } catch (e) {
+        res.status(500).json({ isValid: false, message: e.message });
+    }
+});
+
+licenseRouter.post('/activate', async (req, res) => {
+    const { key } = req.body;
+    if (!key) {
+        return res.status(400).json({ isValid: false, message: 'License key is required.' });
+    }
+
+    try {
+        jwt.verify(key, LICENSE_SECRET_KEY, async (err, decoded) => {
+            if (err) {
+                return res.status(401).json({ isValid: false, message: `License key invalid: ${err.message}` });
+            }
+
+            if (decoded.hwid !== getHardwareId()) {
+                return res.status(401).json({ isValid: false, message: 'License key is for a different machine.' });
+            }
+            
+            await db.run("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('licenseKey', ?)", JSON.stringify(key));
+
+            const expiryDate = new Date(decoded.exp * 1000).toISOString();
+            res.json({ isValid: true, expiryDate, message: 'License activated successfully!' });
+        });
+    } catch (e) {
+         res.status(500).json({ isValid: false, message: e.message });
+    }
+});
+app.use('/api/license', licenseRouter);
 
 
 // Generic Database API

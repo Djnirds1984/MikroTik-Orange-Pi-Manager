@@ -56,7 +56,6 @@ const SecretFormModal: React.FC<{
             // First save the secret, then save the customer data
             const secretToSave = { ...secret, comment: secret.comment };
             if (initialData?.id) {
-                 // @ts-ignore
                 secretToSave['.id'] = initialData.id;
             }
 
@@ -179,7 +178,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null, addSal
         }
     };
     
-    const handlePayment = async (data: { sale: Omit<SaleRecord, 'id'>, payment: any }) => {
+    const handlePayment = async (data: { sale: Omit<SaleRecord, 'id' | 'routerName' | 'date'>, payment: any }) => {
         if (!selectedRouter || !paymentSecret) return false;
         
         const { plan, nonPaymentProfile, discountDays, paymentDate } = data.payment;
@@ -198,7 +197,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null, addSal
             await updatePppSecret(selectedRouter, paymentSecret['.id'], { profile: plan.pppoeProfile, comment });
             
             // Add the sale record to the local DB
-            await addSale({ ...data.sale, routerId: selectedRouter.id, routerName: selectedRouter.name, date: new Date().toISOString() });
+            await addSale({ ...data.sale, routerName: selectedRouter.name, date: new Date().toISOString() });
             
             await fetchData();
             return true;
@@ -239,6 +238,7 @@ export const Pppoe: React.FC<{ selectedRouter: RouterConfigWithId | null, addSal
                 profiles={profiles}
                 onSave={handlePayment}
                 companySettings={companySettings}
+                routerId={selectedRouter.id}
             />
 
             <SecretFormModal 

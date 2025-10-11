@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import type { RouterConfigWithId, HotspotUserProfile, VoucherPlan, VoucherPlanWithId, HotspotUser, HotspotUserData, CompanySettings } from '../types.ts';
 import { getHotspotUserProfiles, runPanelHotspotSetup, getHotspotUsers, addHotspotUser, deleteHotspotUser } from '../services/mikrotikService.ts';
@@ -213,11 +214,12 @@ const PlansManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ select
             .finally(() => setIsLoadingProfiles(false));
     }, [selectedRouter]);
 
-    const handleSave = (planData: VoucherPlan | VoucherPlanWithId) => {
+    // FIX: Corrected the type of planData to allow TypeScript to correctly infer the type for addPlan.
+    const handleSave = (planData: Omit<VoucherPlanWithId, 'id'> | VoucherPlanWithId) => {
         if ('id' in planData) {
             updatePlan(planData as VoucherPlanWithId);
         } else {
-            addPlan(planData as VoucherPlan);
+            addPlan(planData);
         }
         setIsModalOpen(false);
     };

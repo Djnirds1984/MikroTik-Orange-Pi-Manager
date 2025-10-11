@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { PppSecret, BillingPlanWithId, SaleRecord, CompanySettings, PppProfile } from '../types.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
@@ -14,9 +15,10 @@ interface PaymentModalProps {
         payment: { plan: BillingPlanWithId, nonPaymentProfile: string, discountDays: number, paymentDate: string };
     }) => Promise<boolean>; // Return true on success, false on failure
     companySettings: CompanySettings;
+    routerId: string;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, secret, plans, profiles, onSave, companySettings }) => {
+export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, secret, plans, profiles, onSave, companySettings, routerId }) => {
     const { t, formatCurrency } = useLocalization();
     const [selectedPlanId, setSelectedPlanId] = useState('');
     const [nonPaymentProfile, setNonPaymentProfile] = useState('');
@@ -95,6 +97,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sec
             clientAddress: secret.customer?.address,
             clientContact: secret.customer?.contactNumber,
             clientEmail: secret.customer?.email,
+            // FIX: Add routerId to the saleData object to satisfy the type requirements.
+            routerId: routerId,
         };
         
         const paymentData = {
@@ -107,6 +111,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ isOpen, onClose, sec
         const success = await onSave({ sale: saleData, payment: paymentData });
         
         if (success) {
+            // FIX: The SaleRecord type requires routerId, which is now present in saleData.
             const fullSaleRecord: SaleRecord = {
                 ...saleData,
                 id: `temp_${Date.now()}`,

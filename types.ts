@@ -46,6 +46,7 @@ export interface HotspotSetupParams {
     hotspotPass: string;
 }
 export interface HotspotServer {
+  '.id': string;
   id: string;
   name: string;
   interface: string;
@@ -55,12 +56,14 @@ export interface HotspotServer {
   comment?: string;
 }
 export interface HotspotUserProfile {
+    '.id': string;
     id: string;
     name: string;
     'shared-users': string | number;
     'rate-limit': string;
 }
 export interface HotspotUser {
+  '.id': string;
   id: string;
   server: string;
   name: string;
@@ -72,6 +75,7 @@ export interface HotspotUser {
   disabled: boolean;
 }
 export interface HotspotActiveUser {
+    '.id': string;
     id: string;
     server: string;
     user: string;
@@ -83,6 +87,7 @@ export interface HotspotActiveUser {
     'bytes-out': number;
 }
 export interface HotspotHost {
+    '.id': string;
     id: string;
     'mac-address': string;
     address: string;
@@ -120,6 +125,7 @@ export interface RouterboardInfo {
 }
 export interface Interface {
   '.id': string;
+  id: string;
   name: string;
   type: string;
   'mac-address': string;
@@ -136,6 +142,7 @@ export interface TrafficHistoryPoint {
 }
 export interface SslCertificate {
   '.id': string;
+  id: string;
   name: string;
   issuer: string;
   'expires-after': string;
@@ -143,6 +150,7 @@ export interface SslCertificate {
 }
 export interface PppProfile {
     '.id': string;
+    id: string;
     name: string;
     'local-address'?: string;
     'remote-address'?: string;
@@ -151,6 +159,7 @@ export interface PppProfile {
 }
 export interface PppSecret {
     '.id': string;
+    id: string;
     name: string;
     service: string;
     profile: string;
@@ -161,6 +170,7 @@ export interface PppSecret {
 }
 export interface PppActiveConnection {
     '.id': string;
+    id: string;
     name: string;
     service: string;
     address: string;
@@ -168,6 +178,7 @@ export interface PppActiveConnection {
 }
 export interface DhcpLease {
     '.id': string;
+    id: string;
     address: string;
     'mac-address': string;
     server: string;
@@ -295,6 +306,18 @@ export interface DataplicityStatus {
     config?: any;
 }
 
+// Ngrok
+export interface NgrokStatus {
+    installed: boolean;
+    active: boolean;
+    url: string | null;
+    config: {
+        authtoken?: string;
+        proto?: string;
+        port?: number;
+    } | null;
+}
+
 // Host Status types
 export interface PanelHostStatus {
   cpuUsage: number;
@@ -330,6 +353,7 @@ export interface HostNetworkConfig {
 // Firewall
 export interface FirewallRule {
     '.id': string;
+    id: string;
     chain: string;
     action: string;
     protocol?: string;
