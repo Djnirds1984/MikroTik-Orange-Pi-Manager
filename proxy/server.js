@@ -208,14 +208,17 @@ app.get('/api/host-status', authMiddleware, (req, res) => {
 // --- Static File Serving ---
 const projectRoot = path.join(__dirname, '..');
 
-// Middleware to compile .tsx files on the fly
-app.get('*.tsx', async (req, res, next) => {
+// Middleware to compile .tsx and .ts files on the fly
+app.get(/\.(tsx|ts)$/, async (req, res, next) => {
     try {
         const filePath = path.join(projectRoot, req.path);
         const source = await fs.readFile(filePath, 'utf-8');
+        
+        // Determine the correct loader based on file extension
+        const loader = req.path.endsWith('.ts') ? 'ts' : 'tsx';
 
         const result = await esbuild.transform(source, {
-            loader: 'tsx',
+            loader: loader,
             jsx: 'transform',
             target: 'es2020'
         });
