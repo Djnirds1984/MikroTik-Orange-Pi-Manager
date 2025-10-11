@@ -1,7 +1,7 @@
 import type { RouterConfig, RouterConfigWithId, SystemResource, RouterboardInfo, Interface, PppProfile, PppSecret, PppActiveConnection, SslCertificate, HotspotSetupParams, HotspotUserProfile, HotspotUser, HotspotActiveUser, HotspotHost, DhcpLease, HotspotUserData, FirewallRule, LogEntry, HotspotServer } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
-const apiBaseUrl = '/mt-api'; // The backend proxy for MikroTik API
+const apiBaseUrl = `${window.location.protocol}//${window.location.hostname}:3002/mt-api`; // The backend proxy for MikroTik API
 
 // Helper function to handle API calls to the backend proxy
 const apiCall = async <T>(routerId: string, path: string, options: RequestInit = {}): Promise<T> => {
@@ -43,7 +43,7 @@ const apiCall = async <T>(routerId: string, path: string, options: RequestInit =
 // --- Test Connection (uses a different endpoint) ---
 export const testRouterConnection = async (routerConfig: RouterConfig): Promise<{ success: boolean, message: string }> => {
     try {
-        const response = await fetch('/mt-api/test-connection', {
+        const response = await fetch(`${window.location.protocol}//${window.location.hostname}:3002/mt-api/test-connection`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
