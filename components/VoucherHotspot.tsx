@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, HotspotUserProfile, VoucherPlan, VoucherPlanWithId } from '../types.ts';
-import { getHotspotUserProfiles, runPanelHotspotSetup } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, HotspotUserProfile, VoucherPlan, VoucherPlanWithId, HotspotUser, HotspotUserData, CompanySettings } from '../types.ts';
+import { getHotspotUserProfiles, runPanelHotspotSetup, getHotspotUsers, addHotspotUser, deleteHotspotUser } from '../services/mikrotikService.ts';
 import { useVoucherPlans } from '../hooks/useVoucherPlans.ts';
+import { useCompanySettings } from '../hooks/useCompanySettings.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { Loader } from './Loader.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
-import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon, CodeBracketIcon, CheckCircleIcon } from '../constants.tsx';
+import { RouterIcon, ReceiptPercentIcon, EditIcon, TrashIcon, CodeBracketIcon, CheckCircleIcon, PrinterIcon } from '../constants.tsx';
 import { HotspotEditor } from './HotspotEditor.tsx';
 
 // --- Reusable Components ---
@@ -22,6 +23,176 @@ const TabButton: React.FC<{ label: string, icon?: React.ReactNode, isActive: boo
         {label}
     </button>
 );
+
+// --- Printable Vouchers Component ---
+const PrintableVouchers: React.FC<{ vouchers: HotspotUser[], plans: VoucherPlanWithId[], companySettings: CompanySettings }> = ({ vouchers, plans, companySettings }) => {
+    const { formatCurrency } = useLocalization();
+
+    const getPlanForVoucher = (voucher: HotspotUser) => {
+        return plans.find(p => p.mikrotik_profile_name === voucher.profile);
+    };
+
+    return (
+        <div className="p-4 bg-white text-black">
+            <style>{`
+                @media print {
+                    @page { size: A4; margin: 1cm; }
+                    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                }
+                .voucher-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+                .voucher-ticket { border: 2px dashed #999; padding: 10px; text-align: center; break-inside: avoid; display: flex; flex-direction: column; justify-content: space-between; height: 120px; }
+            `}</style>
+            <div className="voucher-grid">
+                {vouchers.map(voucher => {
+                    const plan = getPlanForVoucher(voucher);
+                    return (
+                        <div key={voucher.id} className="voucher-ticket">
+                            <div>
+                                {companySettings.logoBase64 ? <img src={companySettings.logoBase64} alt="Logo" className="max-h-8 mx-auto mb-1" /> : <h4 className="font-bold">{companySettings.companyName || 'WiFi Hotspot'}</h4>}
+                                <p className="text-xs">{plan?.name || 'Voucher'}</p>
+                            </div>
+                            <div>
+                                <p className="text-sm">Code:</p>
+                                <p className="font-mono font-bold text-lg tracking-widest bg-gray-200 rounded-sm">{voucher.name}</p>
+                            </div>
+                            <p className="text-xs font-bold">{plan ? formatCurrency(plan.price) : ''}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+
+// --- Vouchers Manager ---
+const VouchersManager: React.FC<{ selectedRouter: RouterConfigWithId, setVouchersToPrint: (vouchers: HotspotUser[]) => void }> = ({ selectedRouter, setVouchersToPrint }) => {
+    const { plans, isLoading: isLoadingPlans } = useVoucherPlans(selectedRouter.id);
+    const [vouchers, setVouchers] = useState<HotspotUser[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string|null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const users = await getHotspotUsers(selectedRouter);
+            // Filter out default 'admin' user
+            setVouchers(users.filter(u => u.name !== 'admin').sort((a,b) => (a.comment || '').localeCompare(b.comment || '')));
+        } catch(err) { setError((err as Error).message); }
+        finally { setIsLoading(false); }
+    }, [selectedRouter]);
+
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleDelete = async (userId: string) => {
+        if (!window.confirm("Are you sure?")) return;
+        try {
+            await deleteHotspotUser(selectedRouter, userId);
+            await fetchData();
+        } catch(err) { alert(`Failed to delete voucher: ${(err as Error).message}`); }
+    };
+    
+    const handleGenerate = async ({ quantity, planId, comment }: { quantity: number; planId: string; comment: string }) => {
+        setIsGenerating(true);
+        const plan = plans.find(p => p.id === planId);
+        if (!plan) {
+            alert("Selected plan not found.");
+            setIsGenerating(false);
+            return;
+        }
+
+        const minutesToMikroTikTime = (minutes: number) => {
+            if (minutes < 1) return '1s'; // prevent 0m
+            const d = Math.floor(minutes / 1440);
+            const h = Math.floor((minutes % 1440) / 60);
+            const m = minutes % 60;
+            return `${d > 0 ? `${d}d` : ''}${h > 0 ? `${h}h` : ''}${m > 0 ? `${m}m` : ''}` || '0s';
+        };
+
+        try {
+            const promises = [];
+            for (let i = 0; i < quantity; i++) {
+                const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const userData: HotspotUserData = {
+                    name: code,
+                    password: code,
+                    profile: plan.mikrotik_profile_name,
+                    'limit-uptime': minutesToMikroTikTime(plan.duration_minutes),
+                    comment: comment || `batch_${new Date().toISOString().split('T')[0]}`,
+                    disabled: 'false'
+                };
+                promises.push(addHotspotUser(selectedRouter, userData));
+            }
+            await Promise.all(promises);
+            setIsModalOpen(false);
+            await fetchData();
+        } catch(err) {
+            alert(`Failed to generate vouchers: ${(err as Error).message}`);
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const GenerateModal = ({ isOpen, onClose, onGenerate }) => {
+        const [quantity, setQuantity] = useState(10);
+        const [planId, setPlanId] = useState(plans[0]?.id || '');
+        const [comment, setComment] = useState('');
+
+        if (!isOpen) return null;
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <div className="p-6">
+                        <h3 className="text-xl font-bold mb-4">Generate Vouchers</h3>
+                        <div className="space-y-4">
+                            <div><label>Quantity</label><input type="number" value={quantity} onChange={e => setQuantity(parseInt(e.target.value))} min="1" max="100" className="mt-1 w-full p-2 rounded bg-slate-100 dark:bg-slate-700" /></div>
+                            <div><label>Plan</label><select value={planId} onChange={e => setPlanId(e.target.value)} className="mt-1 w-full p-2 rounded bg-slate-100 dark:bg-slate-700">{plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
+                            <div><label>Comment / Batch Name (Optional)</label><input type="text" value={comment} onChange={e => setComment(e.target.value)} className="mt-1 w-full p-2 rounded bg-slate-100 dark:bg-slate-700" /></div>
+                        </div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3">
+                        <button onClick={onClose} disabled={isGenerating}>Cancel</button>
+                        <button onClick={() => onGenerate({ quantity, planId, comment })} disabled={isGenerating}>{isGenerating ? "Generating..." : "Generate"}</button>
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    if (isLoading || isLoadingPlans) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 bg-red-100 text-red-700">{error}</div>
+
+    return (
+        <div>
+            <GenerateModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onGenerate={handleGenerate} />
+            <div className="flex justify-end mb-4 gap-2">
+                 <button onClick={() => setVouchersToPrint(vouchers)} className="bg-sky-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2"><PrinterIcon className="w-5 h-5"/> Print All</button>
+                <button onClick={() => setIsModalOpen(true)} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Generate Vouchers</button>
+            </div>
+             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
+                        <tr><th className="px-6 py-3">Voucher Code</th><th className="px-6 py-3">Profile</th><th className="px-6 py-3">Uptime</th><th className="px-6 py-3">Comment</th><th className="px-6 py-3 text-right">Actions</th></tr>
+                    </thead>
+                    <tbody>
+                        {vouchers.map(v => (
+                            <tr key={v.id} className="border-b dark:border-slate-700">
+                                <td className="px-6 py-4 font-mono">{v.name}</td>
+                                <td className="px-6 py-4">{v.profile}</td>
+                                <td className="px-6 py-4">{v.uptime}</td>
+                                <td className="px-6 py-4">{v.comment}</td>
+                                <td className="px-6 py-4 text-right"><button onClick={() => handleDelete(v.id)}><TrashIcon className="w-5 h-5"/></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
 
 
 // --- Plans Manager Sub-component ---
@@ -240,7 +411,28 @@ const SetupGuide: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selected
 
 // --- Main Component ---
 export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'setup' | 'plans' | 'editor' | 'vouchers' | 'dashboard'>('setup');
+    const [activeTab, setActiveTab] = useState<'setup' | 'plans' | 'vouchers' | 'editor'>('setup');
+    const { settings: companySettings } = useCompanySettings();
+    const { plans } = useVoucherPlans(selectedRouter?.id || null);
+
+    const [vouchersToPrint, setVouchersToPrint] = useState<HotspotUser[] | null>(null);
+
+    // Print handling logic
+    useEffect(() => {
+        if (vouchersToPrint) {
+            const timer = setTimeout(() => window.print(), 100);
+            return () => clearTimeout(timer);
+        }
+    }, [vouchersToPrint]);
+
+    useEffect(() => {
+        const handleAfterPrint = () => {
+            setVouchersToPrint(null);
+        };
+        window.addEventListener('afterprint', handleAfterPrint);
+        return () => window.removeEventListener('afterprint', handleAfterPrint);
+    }, []);
+
 
     if (!selectedRouter) {
         return (
@@ -253,28 +445,31 @@ export const PanelHotspot: React.FC<{ selectedRouter: RouterConfigWithId | null 
     }
     
     return (
-        <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
-                <ReceiptPercentIcon className="w-8 h-8"/> Panel Hotspot
-            </h2>
-
-            <div className="border-b border-slate-200 dark:border-slate-700">
-                <nav className="flex space-x-2 overflow-x-auto">
-                    <TabButton label="Smart Installer & Guide" isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
-                    <TabButton label="Plans" isActive={activeTab === 'plans'} onClick={() => setActiveTab('plans')} />
-                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5" />} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
-                    <TabButton label="Vouchers" isActive={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
-                    <TabButton label="Dashboard" isActive={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-                </nav>
+        <>
+            <div className={vouchersToPrint ? 'printable-area' : 'hidden no-print'}>
+                {vouchersToPrint && <PrintableVouchers vouchers={vouchersToPrint} plans={plans} companySettings={companySettings} />}
             </div>
+            <div className={`space-y-6 ${vouchersToPrint ? 'hidden' : ''}`}>
+                <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                    <ReceiptPercentIcon className="w-8 h-8"/> Panel Hotspot
+                </h2>
 
-            <div>
-                {activeTab === 'dashboard' && <div className="text-center p-8 bg-slate-50 dark:bg-slate-800 rounded-lg">Dashboard coming soon.</div>}
-                {activeTab === 'vouchers' && <div className="text-center p-8 bg-slate-50 dark:bg-slate-800 rounded-lg">Voucher generation and management coming soon.</div>}
-                {activeTab === 'plans' && <PlansManager selectedRouter={selectedRouter} />}
-                {activeTab === 'editor' && <HotspotEditor selectedRouter={selectedRouter} />}
-                {activeTab === 'setup' && <SetupGuide selectedRouter={selectedRouter} />}
+                <div className="border-b border-slate-200 dark:border-slate-700">
+                    <nav className="flex space-x-2 overflow-x-auto">
+                        <TabButton label="Setup Guide" isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
+                        <TabButton label="Voucher Plans" isActive={activeTab === 'plans'} onClick={() => setActiveTab('plans')} />
+                        <TabButton label="Vouchers" isActive={activeTab === 'vouchers'} onClick={() => setActiveTab('vouchers')} />
+                        <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5" />} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+                    </nav>
+                </div>
+
+                <div>
+                    {activeTab === 'plans' && <PlansManager selectedRouter={selectedRouter} />}
+                    {activeTab === 'editor' && <HotspotEditor selectedRouter={selectedRouter} />}
+                    {activeTab === 'setup' && <SetupGuide selectedRouter={selectedRouter} />}
+                    {activeTab === 'vouchers' && <VouchersManager selectedRouter={selectedRouter} setVouchersToPrint={setVouchersToPrint} />}
+                </div>
             </div>
-        </div>
+        </>
     );
 };

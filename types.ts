@@ -103,6 +103,21 @@ export interface HotspotUserProfile {
 
 export type HotspotUserProfileData = Omit<HotspotUserProfile, 'id'>;
 
+export interface HotspotUser {
+  id: string; // .id from MT
+  name: string;
+  password?: string;
+  profile: string;
+  uptime: string;
+  'bytes-in': number;
+  'bytes-out': number;
+  comment?: string;
+  disabled: string; // 'true' | 'false'
+  'limit-uptime'?: string;
+}
+
+export type HotspotUserData = Omit<HotspotUser, 'id' | 'uptime' | 'bytes-in' | 'bytes-out'>;
+
 
 export interface PppProfile {
     id: string;

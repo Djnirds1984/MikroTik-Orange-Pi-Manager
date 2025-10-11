@@ -15,6 +15,8 @@ import type {
     HotspotProfileData,
     HotspotUserProfile,
     HotspotUserProfileData,
+    HotspotUser,
+    HotspotUserData,
     NtpSettings,
     VlanInterface,
     IpAddress,
@@ -284,6 +286,18 @@ export const updateHotspotUserProfile = (router: RouterConfigWithId, profile: Ho
 };
 export const deleteHotspotUserProfile = (router: RouterConfigWithId, profileId: string): Promise<any> => {
     return fetchMikrotikData(router, `/ip/hotspot/user/profile/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
+};
+
+export const getHotspotUsers = (router: RouterConfigWithId): Promise<HotspotUser[]> => {
+    return fetchMikrotikData<HotspotUser[]>(router, '/ip/hotspot/user');
+};
+
+export const addHotspotUser = (router: RouterConfigWithId, userData: HotspotUserData): Promise<any> => {
+    return fetchMikrotikData(router, '/ip/hotspot/user', { method: 'PUT', body: JSON.stringify(userData) });
+};
+
+export const deleteHotspotUser = (router: RouterConfigWithId, userId: string): Promise<any> => {
+    return fetchMikrotikData(router, `/ip/hotspot/user/${encodeURIComponent(userId)}`, { method: 'DELETE' });
 };
 
 export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => {
