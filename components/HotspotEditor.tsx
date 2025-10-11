@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
 import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
@@ -140,7 +141,9 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         reader.readAsText(fileToUpload);
     };
     
-    if (status === 'editing' || status === 'saving') {
+    // FIX: Show editor only when editing OR saving an existing file (selectedFile is not null).
+    // This prevents the editor from showing during a new file upload.
+    if (status === 'editing' || (status === 'saving' && selectedFile)) {
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -165,7 +168,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     }
     
     return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6">
+        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6 relative">
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Hotspot File Browser</h3>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                 <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
@@ -192,28 +195,33 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                     </button>
                 </div>
             </div>
-
-            {status === 'loading_list' && <div className="flex justify-center p-8"><Loader /></div>}
-            {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
-
-            {status === 'browsing' && (
-                <ul className="space-y-1">
-                    {files.map(file => (
-                        <li key={file.id}>
-                            <button 
-                                onClick={() => file.type === 'directory' ? handleDirClick(file.name) : handleFileClick(file)}
-                                className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 text-left"
-                            >
-                                {file.type === 'directory' 
-                                    ? <FolderIcon className="w-5 h-5 text-yellow-500" />
-                                    : <FileIcon className="w-5 h-5 text-slate-500" />
-                                }
-                                <span className="font-medium text-slate-800 dark:text-slate-200">{file.name}</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
+            
+            {/* FIX: Use a consistent loading overlay for all browser operations */}
+            {(status === 'loading_list' || status === 'loading_content' || status === 'saving') && (
+                <div className="absolute inset-0 bg-white/80 dark:bg-slate-800/80 flex items-center justify-center rounded-lg z-10">
+                    <Loader />
+                </div>
             )}
+
+            {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
+            
+            {/* FIX: Always render the list container; it will be empty during initial load and covered by the overlay during operations. */}
+            <ul className="space-y-1">
+                {files.map(file => (
+                    <li key={file.id}>
+                        <button 
+                            onClick={() => file.type === 'directory' ? handleDirClick(file.name) : handleFileClick(file)}
+                            className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 text-left"
+                        >
+                            {file.type === 'directory' 
+                                ? <FolderIcon className="w-5 h-5 text-yellow-500" />
+                                : <FileIcon className="w-5 h-5 text-slate-500" />
+                            }
+                            <span className="font-medium text-slate-800 dark:text-slate-200">{file.name}</span>
+                        </button>
+                    </li>
+                ))}
+            </ul>
         </div>
     );
 };

@@ -516,17 +516,25 @@ app.post('/api/system/host-ntp/toggle', protect, (req, res) => {
 // --- License Endpoints ---
 const getHardwareId = () => {
     const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
+    // Prioritize ethernet interfaces
+    const ethInterfaces = Object.keys(interfaces).filter(name => name.startsWith('eth') || name.startsWith('en'));
+    const preferredInterfaces = ethInterfaces.length > 0 ? ethInterfaces : Object.keys(interfaces);
+
+    for (const name of preferredInterfaces) {
         for (const iface of interfaces[name]) {
+            // Find the first non-internal IPv4 MAC address
             if (iface.family === 'IPv4' && !iface.internal) {
+                // Standardize MAC address format
                 return iface.mac.replace(/:/g, '').toUpperCase();
             }
         }
     }
-    // Fallback for systems with no clear primary interface (e.g. containers)
+    // Fallback for systems with no clear primary interface (e.g. containers or unusual naming)
     try {
         const hostname = os.hostname();
-        return crypto.createHash('sha1').update(hostname).digest('hex').substring(0, 12).toUpperCase();
+        // Use a more robust hash of multiple system properties
+        const machineId = os.platform() + os.arch() + hostname;
+        return crypto.createHash('sha1').update(machineId).digest('hex').substring(0, 12).toUpperCase();
     } catch(e) {
         return 'UNKNOWN_HWID';
     }
@@ -577,7 +585,7 @@ licenseRouter.post('/activate', async (req, res) => {
             }
 
             if (decoded.hwid !== getHardwareId()) {
-                return res.status(401).json({ isValid: false, message: 'License key is for a different machine.' });
+                return res.status(401).json({ isValid: false, message: `License key is for a different machine. Expected HWID: ${getHardwareId()}, Key HWID: ${decoded.hwid}` });
             }
             
             await db.run("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('licenseKey', ?)", JSON.stringify(key));

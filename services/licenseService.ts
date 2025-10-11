@@ -10,7 +10,8 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         ...options,
     });
     
-    if (response.status === 401 && !options.headers?.['Authorization']?.includes('Bearer null')) {
+    // Don't auto-logout if the token was null to begin with (e.g. initial load)
+    if (response.status === 401 && options.headers?.['Authorization'] && !options.headers['Authorization'].includes('Bearer null')) {
         localStorage.removeItem('authToken');
         window.location.reload();
         throw new Error('Session expired. Please log in again.');

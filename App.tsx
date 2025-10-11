@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -254,11 +255,13 @@ const AppRouter: React.FC = () => {
 
 const App: React.FC = () => (
   <ThemeProvider>
-    <LocalizationProvider>
-      <LicenseProvider>
-        <AppRouter />
-      </LicenseProvider>
-    </LocalizationProvider>
+    <AuthProvider>
+      <LocalizationProvider>
+        <LicenseProvider>
+          <AppRouter />
+        </LicenseProvider>
+      </LocalizationProvider>
+    </AuthProvider>
   </ThemeProvider>
 );
 

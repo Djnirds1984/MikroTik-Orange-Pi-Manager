@@ -47,30 +47,33 @@ export const LicenseProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, []);
 
     useEffect(() => {
-        if (!isAuthLoading) {
-            if (user) {
-                checkStatus();
-                fetchHwid();
-            } else {
-                // Not logged in, so no license check needed yet.
-                setIsValid(false);
-                setIsLoading(false);
-            }
+        // Only run checks if auth is resolved and a user is logged in.
+        if (!isAuthLoading && user) {
+            checkStatus();
+            fetchHwid();
+        } else if (!isAuthLoading && !user) {
+            // If not logged in, no license check is needed. Stop loading.
+            setIsValid(false); // Can't be valid without a user
+            setIsLoading(false);
         }
     }, [user, isAuthLoading, checkStatus, fetchHwid]);
 
-    const activate = async (key: string) => {
+    const activate = async (key: string): Promise<LicenseStatus> => {
         setIsLoading(true);
         setError(null);
         try {
             const status = await activateLicense(key);
             setIsValid(status.isValid);
             setExpiryDate(status.expiryDate || null);
+            if (!status.isValid) {
+                 setError(status.message || 'Activation failed.');
+            }
             return status;
         } catch (e) {
-            setError((e as Error).message);
+            const err = e as Error;
+            setError(err.message);
             setIsValid(false);
-            throw e;
+            throw err;
         } finally {
             setIsLoading(false);
         }

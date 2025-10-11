@@ -19,26 +19,23 @@ const CopyButton: React.FC<{ textToCopy: string }> = ({ textToCopy }) => {
 };
 
 export const LicensePage: React.FC = () => {
-    const { hwid, activate, isLoading, error } = useLicense();
+    const { hwid, activate, isLoading, error: licenseError } = useLicense();
     const { logout } = useAuth();
     const [licenseKey, setLicenseKey] = useState('');
-    const [activationMessage, setActivationMessage] = useState<string | null>(null);
+    const [activationError, setActivationError] = useState<string | null>(null);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setActivationMessage(null);
+        setActivationError(null);
         try {
-            const result = await activate(licenseKey);
-            if (result.isValid) {
-                // Success is handled by the context which will re-render App.tsx
-                // The page will automatically switch.
-            } else {
-                setActivationMessage(result.message || 'Activation failed.');
-            }
+            await activate(licenseKey);
+            // On success, the context updates and the AppRouter will switch the view automatically.
         } catch (err) {
-            setActivationMessage((err as Error).message);
+            setActivationError((err as Error).message);
         }
     };
+
+    const displayError = activationError || licenseError;
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
@@ -71,9 +68,9 @@ export const LicensePage: React.FC = () => {
                         </div>
                         
                         <form onSubmit={handleSubmit} className="space-y-4">
-                             { (error || activationMessage) && (
+                             {displayError && (
                                 <div className="p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-600 rounded-md text-red-700 dark:text-red-300 text-sm">
-                                    {error || activationMessage}
+                                    {displayError}
                                 </div>
                             )}
 
