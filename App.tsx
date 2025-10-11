@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -12,8 +13,7 @@ import { Pppoe } from './components/Pppoe.tsx';
 import { Billing } from './components/Billing.tsx';
 import { ZeroTier } from './components/ZeroTier.tsx';
 import { Hotspot } from './components/Hotspot.tsx';
-// FIX: Corrected component name from PanelHotspot to VoucherHotspot, assuming it's for voucher management. The component file is VoucherHotspot.tsx.
-import { PanelHotspot as VoucherHotspot } from './components/VoucherHotspot.tsx';
+import { PanelHotspot } from './components/VoucherHotspot.tsx';
 import { Help } from './components/Help.tsx';
 import { SystemSettings } from './components/SystemSettings.tsx';
 import { SalesReport } from './components/SalesReport.tsx';
@@ -35,9 +35,7 @@ import { useExpensesData } from './hooks/useExpensesData.ts';
 import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
-import { AuthProvider, useAuth } from './contexts/AuthContext.tsx';
-import { LicenseProvider, useLicense } from './contexts/LicenseContext.tsx';
-import { LicensePage } from './components/LicensePage.tsx';
+import { useAuth } from './contexts/AuthContext.tsx';
 import type { View } from './types.ts';
 
 const useMediaQuery = (query: string): boolean => {
@@ -159,7 +157,7 @@ const AppContent: React.FC = () => {
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
       case 'panel_hotspot':
-          return <VoucherHotspot selectedRouter={selectedRouter} />;
+          return <PanelHotspot selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
       case 'company':
@@ -215,7 +213,6 @@ const AppContent: React.FC = () => {
 
 const AppRouter: React.FC = () => {
     const { user, isLoading, hasUsers } = useAuth();
-    const { isValid, isLoading: isLicenseLoading } = useLicense();
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
 
     useEffect(() => {
@@ -228,7 +225,7 @@ const AppRouter: React.FC = () => {
         }
     }, [isLoading, hasUsers]);
 
-    if (isLoading || isLicenseLoading) {
+    if (isLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
                 <Loader />
@@ -245,23 +242,15 @@ const AppRouter: React.FC = () => {
             </AuthLayout>
         );
     }
-    
-    if (!isValid) {
-        return <LicensePage />;
-    }
 
     return <AppContent />;
 };
 
 const App: React.FC = () => (
   <ThemeProvider>
-    <AuthProvider>
-      <LocalizationProvider>
-        <LicenseProvider>
-          <AppRouter />
-        </LicenseProvider>
-      </LocalizationProvider>
-    </AuthProvider>
+    <LocalizationProvider>
+      <AppRouter />
+    </LocalizationProvider>
   </ThemeProvider>
 );
 
