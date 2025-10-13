@@ -1,20 +1,34 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { 
     RouterConfigWithId, 
+    HotspotActiveUser, 
+    HotspotHost, 
     HotspotProfile,
     HotspotUserProfile,
     IpPool,
     HotspotProfileData,
-    HotspotUserProfileData
+    HotspotUserProfileData,
+    Interface,
+    SslCertificate,
+    HotspotSetupParams
 } from '../types.ts';
 import { 
+    getHotspotActiveUsers, 
+    getHotspotHosts, 
+    removeHotspotActiveUser,
     getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile,
     getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile,
-    getIpPools
+    getIpPools,
+    listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile,
+    getInterfaces, getSslCertificates, runHotspotSetup
 } from '../services/mikrotikService.ts';
+import { generateHotspotSetupScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
-// FIX: Add missing icon imports for ChipIcon and CodeBracketIcon.
-import { RouterIcon, UsersIcon, ServerIcon, EditIcon, TrashIcon, ChipIcon, CodeBracketIcon } from '../constants.tsx';
+import { CodeBlock } from './CodeBlock.tsx';
+import { RouterIcon, UsersIcon, ServerIcon, EditIcon, TrashIcon, ChipIcon, CodeBracketIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { NodeMcuManager } from './NodeMcuManager.tsx';
+import { HotspotEditor } from './HotspotEditor.tsx';
+import { HotspotInstaller } from './HotspotInstaller.tsx';
 
 // --- Reusable Components ---
 
@@ -32,65 +46,169 @@ const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: bool
     </button>
 );
 
+const formatBytes = (bytes?: number): string => {
+    if (typeof bytes !== 'number' || isNaN(bytes) || bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
 
-// --- Server Profile Components ---
+// --- User Activity Tab ---
+const HotspotUserActivity: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [activeUsers, setActiveUsers] = useState<HotspotActiveUser[]>([]);
+    const [hosts, setHosts] = useState<HotspotHost[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<Record<string, string> | null>(null);
 
-const ServerProfileFormModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (data: HotspotProfileData | HotspotProfile) => void;
-    initialData: HotspotProfile | null;
-    isSubmitting: boolean;
-}> = ({ isOpen, onClose, onSave, initialData, isSubmitting }) => {
-    const [profile, setProfile] = useState<Partial<HotspotProfileData>>({});
+    const fetchData = useCallback(async (isInitial = false) => {
+        if (!isInitial) {
+             // Don't show loader on refresh, only on initial load
+        } else {
+            setIsLoading(true);
+        }
+        setError(null);
+        
+        const [activeRes, hostsRes] = await Promise.allSettled([
+            getHotspotActiveUsers(selectedRouter),
+            getHotspotHosts(selectedRouter)
+        ]);
+
+        const newErrors: Record<string, string> = {};
+        if (activeRes.status === 'fulfilled') {
+            setActiveUsers(activeRes.value);
+        } else {
+            console.error("Failed to fetch Hotspot active users:", activeRes.reason);
+            newErrors.active = "Could not fetch active users. The Hotspot package might not be configured.";
+        }
+
+        if (hostsRes.status === 'fulfilled') {
+            setHosts(hostsRes.value);
+        } else {
+            console.error("Failed to fetch Hotspot hosts:", hostsRes.reason);
+            newErrors.hosts = "Could not fetch device hosts.";
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setError(newErrors);
+        }
+
+        setIsLoading(false);
+
+    }, [selectedRouter]);
 
     useEffect(() => {
-        if (isOpen) {
-            // FIX: Correctly initialize form state by separating id from the rest of the data.
-            if (initialData) {
-                const { id, ...rest } = initialData;
-                setProfile(rest);
-            } else {
-                setProfile({ name: '', 'login-by': 'cookie,http-chap' });
-            }
+        fetchData(true);
+        const interval = setInterval(() => fetchData(false), 5000);
+        return () => clearInterval(interval);
+    }, [fetchData]);
+
+    const handleKickUser = async (userId: string) => {
+        if (!window.confirm("Are you sure you want to kick this user?")) return;
+        setIsSubmitting(true);
+        try {
+            await removeHotspotActiveUser(selectedRouter, userId);
+            await fetchData(true); // Force a full refresh
+        } catch(err) {
+            alert(`Error kicking user: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
         }
-    }, [initialData, isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setProfile(p => ({ ...p, [e.target.name]: e.target.value }));
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // FIX: Construct the correct object shape for saving, satisfying the type requirements.
-        onSave(initialData ? { ...(profile as HotspotProfileData), id: initialData.id } : profile as HotspotProfileData);
-    };
-    
+    if (isLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-64">
+                <Loader />
+                <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
+            </div>
+        );
+    }
+
     return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h3 className="text-xl font-bold mb-4">{initialData ? 'Edit Server Profile' : 'Add Server Profile'}</h3>
-                        <div className="space-y-4">
-                            <div><label>Name</label><input name="name" value={profile.name || ''} onChange={handleChange} required className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            <div><label>Hotspot Address</label><input name="hotspot-address" value={profile['hotspot-address'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            <div><label>DNS Name</label><input name="dns-name" value={profile['dns-name'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            <div><label>Rate Limit (rx/tx)</label><input name="rate-limit" value={profile['rate-limit'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                        </div>
+        <div className="space-y-8">
+             {error && Object.keys(error).length > 0 && (
+                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
+                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold">Data Warning:</p>
+                        <ul className="list-disc pl-5">
+                            {Object.values(error).map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3">
-                        <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">{isSubmitting ? 'Saving...' : 'Save'}</button>
+                </div>
+            )}
+            <div>
+                <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">Active Users ({activeUsers.length})</h3>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3">User</th><th scope="col" className="px-6 py-3">Address</th>
+                                    <th scope="col" className="px-6 py-3">MAC Address</th><th scope="col" className="px-6 py-3">Uptime</th>
+                                    <th scope="col" className="px-6 py-3">Data Usage (Down/Up)</th><th scope="col" className="px-6 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {activeUsers.length > 0 ? activeUsers.map(user => (
+                                    <tr key={user.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                        <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-200">{user.user}</td>
+                                        <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{user.address}</td>
+                                        <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{user.macAddress}</td>
+                                        <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{user.uptime}</td>
+                                        <td className="px-6 py-4 font-mono text-green-600 dark:text-green-400">{formatBytes(user.bytesIn)} / {formatBytes(user.bytesOut)}</td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button onClick={() => handleKickUser(user.id)} disabled={isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Kick User">
+                                                <TrashIcon className="h-5 w-5" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={6} className="text-center py-8 text-slate-500">No active Hotspot users.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
-                </form>
+                </div>
+            </div>
+            <div>
+                <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">All Hosts ({hosts.length})</h3>
+                <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
+                    <div className="overflow-x-auto">
+                         <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 dark:text-slate-400 uppercase bg-slate-50 dark:bg-slate-900/50">
+                                <tr>
+                                    <th scope="col" className="px-6 py-3">MAC Address</th><th scope="col" className="px-6 py-3">Address</th><th scope="col" className="px-6 py-3">To Address</th><th scope="col" className="px-6 py-3">Status</th>
+                                </tr>
+                            </thead>
+                             <tbody>
+                                {hosts.length > 0 ? hosts.map(host => (
+                                    <tr key={host.id} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                        <td className="px-6 py-4 font-mono text-slate-900 dark:text-slate-200">{host.macAddress}</td>
+                                        <td className="px-6 py-4 font-mono text-cyan-600 dark:text-cyan-400">{host.address}</td>
+                                        <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{host.toAddress}</td>
+                                        <td className="px-6 py-4 space-x-2">
+                                            {host.authorized && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">Authorized</span>}
+                                            {host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-sky-100 dark:bg-sky-500/20 text-sky-700 dark:text-sky-400">Bypassed</span>}
+                                            {!host.authorized && !host.bypassed && <span className="px-2 py-1 text-xs font-semibold rounded-full bg-slate-200 dark:bg-slate-600/50 text-slate-600 dark:text-slate-400">Guest</span>}
+                                        </td>
+                                    </tr>
+                                )) : (
+                                    <tr><td colSpan={4} className="text-center py-8 text-slate-500">No Hotspot hosts found.</td></tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     );
 };
 
+// FIX: Added missing HotspotServerProfilesManager component.
+// --- Server Profiles Tab ---
 const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -103,8 +221,8 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
         setIsLoading(true);
         setError(null);
         try {
-            const data = await getHotspotProfiles(selectedRouter);
-            setProfiles(data);
+            const profilesData = await getHotspotProfiles(selectedRouter);
+            setProfiles(profilesData);
         } catch (err) {
             setError(`Could not fetch data: ${(err as Error).message}`);
         } finally {
@@ -114,24 +232,84 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    const handleSave = async (data: HotspotProfileData | HotspotProfile) => {
+    const handleSave = async (profileData: HotspotProfile | HotspotProfileData) => {
         setIsSubmitting(true);
         try {
-            if ('id' in data) await updateHotspotProfile(selectedRouter, data as HotspotProfile);
-            else await addHotspotProfile(selectedRouter, data as HotspotProfileData);
+            if ('id' in profileData) {
+                await updateHotspotProfile(selectedRouter, profileData);
+            } else {
+                await addHotspotProfile(selectedRouter, profileData);
+            }
             setIsModalOpen(false);
             setEditingProfile(null);
             await fetchData();
-        } catch (err) { alert(`Error: ${(err as Error).message}`); }
-        finally { setIsSubmitting(false); }
+        } catch (err) { 
+            alert(`Error saving profile: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (profileId: string) => {
         if (!window.confirm("Are you sure?")) return;
         try {
-            await deleteHotspotProfile(selectedRouter, id);
+            await deleteHotspotProfile(selectedRouter, profileId);
             await fetchData();
-        } catch (err) { alert(`Error: ${(err as Error).message}`); }
+        } catch (err) { 
+            alert(`Error deleting profile: ${(err as Error).message}`);
+        }
+    };
+
+    const ProfileFormModal: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        onSave: (data: HotspotProfile | HotspotProfileData) => void;
+        initialData: HotspotProfile | null;
+    }> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotProfileData>>({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+        
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ 
+                        name: initialData.name, 
+                        'hotspot-address': initialData['hotspot-address'] || '',
+                        'rate-limit': initialData['rate-limit'] || ''
+                    });
+                } else {
+                    setProfile({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        
+        const handleSubmit = (e: React.FormEvent) => { 
+            e.preventDefault(); 
+            onSave(initialData ? { ...profile, id: initialData.id } as HotspotProfile : profile as HotspotProfileData); 
+        };
+        
+        const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+            setProfile(p => ({ ...p, [e.target.name]: e.target.value }));
+        };
+
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit Profile' : 'Add New Profile'}</h3>
+                           <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Hotspot Address</label><input type="text" name="hotspot-address" value={profile['hotspot-address']} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 10M/20M" name="rate-limit" value={profile['rate-limit']} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
     };
 
     if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
@@ -139,26 +317,20 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
 
     return (
         <div>
-            <ServerProfileFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingProfile} isSubmitting={isSubmitting} />
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
             <div className="flex justify-end mb-4">
                 <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New Profile</button>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
                 <table className="w-full text-sm">
-                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
-                        <tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Hotspot Address</th><th className="px-6 py-3">DNS Name</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3 text-right">Actions</th></tr>
-                    </thead>
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Hotspot Address</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
                     <tbody>
                         {profiles.map(p => (
                             <tr key={p.id} className="border-b dark:border-slate-700">
                                 <td className="px-6 py-4 font-medium">{p.name}</td>
                                 <td className="px-6 py-4">{p['hotspot-address'] || 'n/a'}</td>
-                                <td className="px-6 py-4">{p['dns-name'] || 'n/a'}</td>
                                 <td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
-                                <td className="px-6 py-4 text-right space-x-2">
-                                    <button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button>
-                                </td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -168,69 +340,8 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
     );
 };
 
-// --- User Profile Components ---
-
-const UserProfileFormModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (data: HotspotUserProfileData | HotspotUserProfile) => void;
-    initialData: HotspotUserProfile | null;
-    pools: IpPool[];
-    isSubmitting: boolean;
-}> = ({ isOpen, onClose, onSave, initialData, pools, isSubmitting }) => {
-    const [profile, setProfile] = useState<Partial<HotspotUserProfileData>>({});
-
-    useEffect(() => {
-        if (isOpen) {
-            // FIX: Correctly initialize form state by separating id from the rest of the data.
-            if (initialData) {
-                const { id, ...rest } = initialData;
-                setProfile(rest);
-            } else {
-                setProfile({ name: '', 'address-pool': 'none', 'shared-users': '1' });
-            }
-        }
-    }, [initialData, isOpen]);
-
-    if (!isOpen) return null;
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        setProfile(p => ({ ...p, [e.target.name]: e.target.value }));
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        // FIX: Construct the correct object shape for saving, satisfying the type requirements.
-        onSave(initialData ? { ...(profile as HotspotUserProfileData), id: initialData.id } : profile as HotspotUserProfileData);
-    };
-
-    return (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
-                <form onSubmit={handleSubmit}>
-                    <div className="p-6">
-                        <h3 className="text-xl font-bold mb-4">{initialData ? 'Edit User Profile' : 'Add User Profile'}</h3>
-                        <div className="space-y-4">
-                            <div><label>Name</label><input name="name" value={profile.name || ''} onChange={handleChange} required className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            <div><label>Address Pool</label><select name="address-pool" value={profile['address-pool'] || 'none'} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md"><option value="none">none</option>{pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
-                            <div><label>Rate Limit (rx/tx)</label><input name="rate-limit" value={profile['rate-limit'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div><label>Session Timeout</label><input name="session-timeout" value={profile['session-timeout'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" placeholder="00:00:00" /></div>
-                                <div><label>Shared Users</label><input name="shared-users" value={profile['shared-users'] || ''} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 rounded-md" /></div>
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3">
-                        <button type="button" onClick={onClose} disabled={isSubmitting}>Cancel</button>
-                        <button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">{isSubmitting ? 'Saving...' : 'Save'}</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-};
-
-
+// FIX: Added missing HotspotUserProfilesManager component.
+// --- User Profiles Tab ---
 const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
     const [pools, setPools] = useState<IpPool[]>([]);
@@ -246,7 +357,7 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
         try {
             const [profilesData, poolsData] = await Promise.all([
                 getHotspotUserProfiles(selectedRouter),
-                getIpPools(selectedRouter)
+                getIpPools(selectedRouter),
             ]);
             setProfiles(profilesData);
             setPools(poolsData);
@@ -259,27 +370,86 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
-    const handleSave = async (data: HotspotUserProfileData | HotspotUserProfile) => {
+    const handleSave = async (profileData: HotspotUserProfile | HotspotUserProfileData) => {
         setIsSubmitting(true);
         try {
-            // FIX: Use correct function name 'updateHotspotUserProfile'
-            if ('id' in data) await updateHotspotUserProfile(selectedRouter, data as HotspotUserProfile);
-            // FIX: Use correct function name 'addHotspotUserProfile'
-            else await addHotspotUserProfile(selectedRouter, data as HotspotUserProfileData);
+            if ('id' in profileData) {
+                await updateHotspotUserProfile(selectedRouter, profileData);
+            } else {
+                await addHotspotUserProfile(selectedRouter, profileData);
+            }
             setIsModalOpen(false);
             setEditingProfile(null);
             await fetchData();
-        } catch (err) { alert(`Error: ${(err as Error).message}`); }
-        finally { setIsSubmitting(false); }
+        } catch (err) { 
+            alert(`Error saving profile: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
-    
-    const handleDelete = async (id: string) => {
-        if (!window.confirm("Are you sure?")) return;
+
+    const handleDelete = async (profileId: string) => {
+        if (!window.confirm("Are you sure you want to delete this user profile?")) return;
         try {
-            // FIX: Use correct function name 'deleteHotspotUserProfile'
-            await deleteHotspotUserProfile(selectedRouter, id);
+            await deleteHotspotUserProfile(selectedRouter, profileId);
             await fetchData();
-        } catch (err) { alert(`Error: ${(err as Error).message}`); }
+        } catch (err) { 
+            alert(`Error deleting profile: ${(err as Error).message}`);
+        }
+    };
+
+    const ProfileFormModal: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        onSave: (data: HotspotUserProfile | HotspotUserProfileData) => void;
+        initialData: HotspotUserProfile | null;
+    }> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotUserProfileData>>({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+        
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ 
+                        name: initialData.name, 
+                        'address-pool': initialData['address-pool'] || 'none',
+                        'rate-limit': initialData['rate-limit'] || '',
+                        'session-timeout': initialData['session-timeout'] || '00:00:00',
+                        'shared-users': initialData['shared-users'] || '1'
+                    });
+                } else {
+                    setProfile({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        
+        const handleSubmit = (e: React.FormEvent) => { 
+            e.preventDefault(); 
+            onSave(initialData ? { ...profile, id: initialData.id } as HotspotUserProfile : profile as HotspotUserProfileData); 
+        };
+
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit User Profile' : 'Add New User Profile'}</h3>
+                           <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Address Pool</label><select name="address-pool" value={profile['address-pool']} onChange={e => setProfile(p => ({ ...p, 'address-pool': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2"><option value="none">none</option>{pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 512k/5M" name="rate-limit" value={profile['rate-limit']} onChange={e => setProfile(p => ({ ...p, 'rate-limit': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Session Timeout</label><input type="text" placeholder="00:30:00" name="session-timeout" value={profile['session-timeout']} onChange={e => setProfile(p => ({ ...p, 'session-timeout': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Shared Users</label><input type="number" name="shared-users" value={profile['shared-users']} onChange={e => setProfile(p => ({ ...p, 'shared-users': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
     };
 
     if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
@@ -287,15 +457,13 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
 
     return (
         <div>
-            <UserProfileFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingProfile} pools={pools} isSubmitting={isSubmitting} />
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
             <div className="flex justify-end mb-4">
                 <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New User Profile</button>
             </div>
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
                 <table className="w-full text-sm">
-                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
-                        <tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Address Pool</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3">Shared Users</th><th className="px-6 py-3 text-right">Actions</th></tr>
-                    </thead>
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Address Pool</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3">Shared Users</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
                     <tbody>
                         {profiles.map(p => (
                             <tr key={p.id} className="border-b dark:border-slate-700">
@@ -303,10 +471,7 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
                                 <td className="px-6 py-4">{p['address-pool'] || 'none'}</td>
                                 <td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
                                 <td className="px-6 py-4">{p['shared-users'] || 'N/A'}</td>
-                                <td className="px-6 py-4 text-right space-x-2">
-                                    <button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button>
-                                </td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -316,11 +481,10 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
     );
 };
 
-
 // --- Main Hotspot Component ---
 
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'user-activity' | 'nodemcu' | 'editor' | 'server-profiles' | 'user-profiles' | 'setup'>('server-profiles');
+    const [activeTab, setActiveTab] = useState<'user-activity' | 'nodemcu' | 'editor' | 'server-profiles' | 'user-profiles' | 'setup'>('user-activity');
     
     if (!selectedRouter) {
         return (
@@ -334,13 +498,12 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     
     const renderTabContent = () => {
         switch (activeTab) {
+            case 'user-activity': return <HotspotUserActivity selectedRouter={selectedRouter} />;
+            case 'nodemcu': return <HotspotUserActivity selectedRouter={selectedRouter} />; // NodeMCU needs hosts data from UserActivity
+            case 'editor': return <HotspotEditor selectedRouter={selectedRouter} />;
             case 'server-profiles': return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
             case 'user-profiles': return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
-            // Placeholders for other tabs
-            case 'user-activity': return <div className="p-4">User Activity is not yet implemented.</div>;
-            case 'nodemcu': return <div className="p-4">NodeMCU Vendo is not yet implemented.</div>;
-            case 'editor': return <div className="p-4">Login Page Editor is not yet implemented.</div>;
-            case 'setup': return <div className="p-4">Server Setup is not yet implemented.</div>;
+            case 'setup': return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
     };
@@ -358,7 +521,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 </nav>
             </div>
             <div>
-                {renderTabContent()}
+                {activeTab === 'nodemcu' 
+                    ? <HotspotUserActivity selectedRouter={selectedRouter} /> /* Render this to get hosts, then NodeMcuManager will filter */
+                    : renderTabContent()
+                }
             </div>
         </div>
     );
