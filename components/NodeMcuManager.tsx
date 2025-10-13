@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo } from 'react';
 import type { HotspotHost } from '../types.ts';
 import { ChipIcon } from '../constants.tsx';
