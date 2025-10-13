@@ -23,8 +23,8 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     const [files, setFiles] = useState<any[]>([]);
     const [selectedFile, setSelectedFile] = useState<any | null>(null);
     const [content, setContent] = useState('');
-    // FIX: Corrected the status type to include 'editing' and 'saving' to allow for all component states.
-    const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error'>('loading_list');
+    // FIX: Split 'saving' status into 'saving-edit' and 'saving-upload' to distinguish contexts and resolve type errors.
+    const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving-edit' | 'saving-upload' | 'error'>('loading_list');
     const [error, setError] = useState<string | null>(null);
     
     const [fileToUpload, setFileToUpload] = useState<File | null>(null);
@@ -75,7 +75,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
 
     const handleSave = async () => {
         if (!selectedFile) return;
-        setStatus('saving');
+        setStatus('saving-edit');
         setError(null);
         try {
             await saveHotspotFileContent(selectedRouter, selectedFile.id, content);
@@ -108,7 +108,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             return;
         }
         
-        setStatus('saving');
+        setStatus('saving-upload');
         setError(null);
 
         const reader = new FileReader();
@@ -142,7 +142,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         reader.readAsText(fileToUpload);
     };
     
-    if (status === 'editing' || status === 'saving') {
+    if (status === 'editing' || status === 'saving-edit') {
         return (
             <div className="space-y-6">
                 <div className="flex justify-between items-center">
@@ -151,9 +151,9 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                         <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
-                        <button onClick={handleSave} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
-                            {status === 'saving' ? 'Saving...' : 'Save File'}
+                        <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
+                        <button onClick={handleSave} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
+                            {status === 'saving-edit' ? 'Saving...' : 'Save File'}
                         </button>
                     </div>
                 </div>
@@ -187,15 +187,15 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                     />
                     <button 
                         onClick={handleUpload} 
-                        disabled={!fileToUpload || status === 'saving'}
+                        disabled={!fileToUpload || status === 'saving-upload'}
                         className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50"
                     >
-                        {status === 'saving' ? 'Uploading...' : 'Upload'}
+                        {status === 'saving-upload' ? 'Uploading...' : 'Upload'}
                     </button>
                 </div>
             </div>
 
-            {status === 'loading_list' && <div className="flex justify-center p-8"><Loader /></div>}
+            {(status === 'loading_list' || status === 'loading_content' || status === 'saving-upload') && <div className="flex justify-center p-8"><Loader /></div>}
             {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
 
             {status === 'browsing' && (

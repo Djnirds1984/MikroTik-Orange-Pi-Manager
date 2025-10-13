@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 interface User {
     id: string;
     username: string;
-    role: 'admin' | 'employee';
 }
 
 interface SecurityQuestion {

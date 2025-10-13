@@ -19,7 +19,6 @@ export type View =
   | 'updater'
   | 'super_router'
   | 'logs'
-  | 'panel_roles'
   | 'help';
 
 export interface RouterConfig {

@@ -167,8 +167,6 @@ const AppContent: React.FC = () => {
         return <SuperRouter />;
       case 'logs':
         return <Logs selectedRouter={selectedRouter} />;
-      case 'panel_roles':
-        return <PanelRoles />;
       default:
         return <Dashboard selectedRouter={selectedRouter} />;
     }

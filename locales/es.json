@@ -20,8 +20,7 @@
         "system_settings": "Configuración del Sistema",
         "updater": "Actualizador",
         "super_router": "Super Router",
-        "logs": "Registros del Sistema",
-        "panel_roles": "Roles del Panel"
+        "logs": "Registros del Sistema"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -40,8 +39,7 @@
         "system": "Configuración del Sistema",
         "updater": "Actualizador del Panel",
         "super_router": "Configuración del Router Anfitrión",
-        "logs": "Visor de Registros",
-        "panel_roles": "Gestión de Roles del Panel"
+        "logs": "Visor de Registros"
     },
     "topbar": {
         "add_router_title": "Ir a la página de Routers para añadir un nuevo router",
