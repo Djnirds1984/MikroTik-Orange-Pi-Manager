@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
 import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
@@ -142,6 +141,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         reader.readAsText(fileToUpload);
     };
     
+    // FIX: Change status check to 'saving-edit' for this UI block.
     if (status === 'editing' || status === 'saving-edit') {
         return (
             <div className="space-y-6">
@@ -152,6 +152,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
+                        {/* FIX: Change status check and text to 'saving-edit'. */}
                         <button onClick={handleSave} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
                             {status === 'saving-edit' ? 'Saving...' : 'Save File'}
                         </button>
@@ -187,14 +188,17 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                     />
                     <button 
                         onClick={handleUpload} 
+                        // FIX: Change status check to 'saving-upload'.
                         disabled={!fileToUpload || status === 'saving-upload'}
                         className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50"
                     >
+                        {/* FIX: Change status check and text to 'saving-upload'. */}
                         {status === 'saving-upload' ? 'Uploading...' : 'Upload'}
                     </button>
                 </div>
             </div>
 
+            {/* FIX: Add 'saving-upload' to loader condition. */}
             {(status === 'loading_list' || status === 'loading_content' || status === 'saving-upload') && <div className="flex justify-center p-8"><Loader /></div>}
             {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
 
