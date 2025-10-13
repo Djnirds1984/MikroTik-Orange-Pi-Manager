@@ -180,10 +180,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const hasPermission = (permission: string) => {
         if (!user) return false;
-        if (user.role?.name === 'Administrator') return true;
+        // Admin has a wildcard permission
+        if (user.permissions?.includes('*:*')) return true;
         return user.permissions?.includes(permission) || false;
     };
-
 
     const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission };
 

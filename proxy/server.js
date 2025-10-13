@@ -276,14 +276,143 @@ async function initDb() {
             user_version = 12;
         }
 
+        if (user_version < 13) {
+            console.log('Applying migration v13 (Full Role-Based Access Control)...');
+            await db.exec('BEGIN TRANSACTION;');
+            try {
+                // 1. Create new tables
+                await db.exec(`
+                    CREATE TABLE IF NOT EXISTS roles (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        description TEXT
+                    );
+                `);
+                await db.exec(`
+                    CREATE TABLE IF NOT EXISTS permissions (
+                        id TEXT PRIMARY KEY,
+                        name TEXT UNIQUE NOT NULL,
+                        description TEXT
+                    );
+                `);
+                await db.exec(`
+                    CREATE TABLE IF NOT EXISTS role_permissions (
+                        role_id TEXT NOT NULL,
+                        permission_id TEXT NOT NULL,
+                        PRIMARY KEY (role_id, permission_id),
+                        FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+                        FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+                    );
+                `);
+
+                // 2. Seed roles and permissions
+                const adminRoleId = 'role_admin';
+                const employeeRoleId = 'role_employee';
+                await db.run('INSERT OR IGNORE INTO roles (id, name, description) VALUES (?, ?, ?)', adminRoleId, 'Administrator', 'Full access to all panel features.');
+                await db.run('INSERT OR IGNORE INTO roles (id, name, description) VALUES (?, ?, ?)', employeeRoleId, 'Employee', 'Limited access for day-to-day operations.');
+
+                const permissions = [
+                    { id: 'perm_sales_delete', name: 'sales_report:delete', description: 'Can delete sales reports' },
+                    { id: 'perm_pppoe_delete', name: 'pppoe_users:delete', description: 'Can delete PPPoE users' },
+                ];
+                for (const p of permissions) {
+                    await db.run('INSERT OR IGNORE INTO permissions (id, name, description) VALUES (?, ?, ?)', p.id, p.name, p.description);
+                }
+                
+                // 3. Seed role_permissions (Admin gets all, Employee gets none of the deletable ones)
+                // Note: Not having a permission is the same as being denied. We only need to add the permissions they *do* have.
+                // For simplicity, we'll give admin all existing permissions. In a real app, you'd list them out.
+                // Here, we just won't give Employee the delete permissions.
+                await db.run('INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)', adminRoleId, 'perm_sales_delete');
+                await db.run('INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)', adminRoleId, 'perm_pppoe_delete');
+
+                // 4. Migrate users table if it still has the old 'role' column
+                const userCols = await db.all("PRAGMA table_info(users);");
+                if (userCols.some(c => c.name === 'role')) {
+                    console.log('Migrating users table to use role_id...');
+                    await db.exec('ALTER TABLE users RENAME TO users_old;');
+                    await db.exec(`
+                        CREATE TABLE users (
+                            id TEXT PRIMARY KEY,
+                            username TEXT UNIQUE NOT NULL,
+                            password TEXT NOT NULL,
+                            role_id TEXT NOT NULL,
+                            FOREIGN KEY (role_id) REFERENCES roles(id)
+                        );
+                    `);
+                    await db.exec(`
+                        INSERT INTO users (id, username, password, role_id)
+                        SELECT 
+                            id, 
+                            username, 
+                            password, 
+                            CASE 
+                                WHEN lower(role) = 'admin' THEN '${adminRoleId}'
+                                WHEN lower(role) = 'administrator' THEN '${adminRoleId}'
+                                ELSE '${employeeRoleId}'
+                            END
+                        FROM users_old;
+                    `);
+                    await db.exec('DROP TABLE users_old;');
+                    console.log('Users table migrated successfully.');
+                }
+                
+                await db.exec('COMMIT;');
+            } catch (e) {
+                await db.exec('ROLLBACK;');
+                console.error("Migration v13 failed:", e);
+                throw e; // Stop initialization if migration fails
+            }
+            await db.exec('PRAGMA user_version = 13;');
+            user_version = 13;
+        }
+
+
     } catch (err) {
         console.error('Failed to initialize database:', err);
         process.exit(1);
     }
 }
 
+// --- Auth Helper ---
+const getAuthHeader = () => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+        return { 'Authorization': `Bearer ${token}` };
+    }
+    return {};
+};
+
 // --- Authentication ---
 const authRouter = express.Router();
+
+const buildUserPayload = async (user) => {
+    let permissions = [];
+    // Admins get all permissions implicitly
+    if (user.roleName.toLowerCase() === 'administrator') {
+        const allPerms = await db.all('SELECT name FROM permissions');
+        permissions = allPerms.map(p => p.name);
+    } else {
+        const perms = await db.all(`
+            SELECT p.name 
+            FROM permissions p
+            JOIN role_permissions rp ON p.id = rp.permission_id
+            WHERE rp.role_id = ?
+        `, user.roleId);
+        permissions = perms.map(p => p.name);
+    }
+
+    return {
+        id: user.id,
+        username: user.username,
+        role: {
+            id: user.roleId,
+            name: user.roleName
+        },
+        permissions: permissions
+    };
+};
+
 
 authRouter.get('/has-users', async (req, res) => {
     try {
@@ -310,10 +439,9 @@ authRouter.post('/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = `user_${Date.now()}`;
-        const userRole = 'admin'; // First user is always admin
-        const user = { id: userId, username, role: userRole };
+        const adminRoleId = 'role_admin';
 
-        await db.run('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)', user.id, user.username, hashedPassword, user.role);
+        await db.run('INSERT INTO users (id, username, password, role_id) VALUES (?, ?, ?, ?)', userId, username, hashedPassword, adminRoleId);
 
         for (const qa of securityQuestions) {
             if (qa.question && qa.answer) {
@@ -331,8 +459,10 @@ authRouter.post('/register', async (req, res) => {
         
         await db.exec('COMMIT;');
         
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '7d' });
-        res.status(201).json({ token, user });
+        const userRecord = await db.get('SELECT users.*, roles.id as roleId, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id WHERE users.id = ?', userId);
+        const userPayload = await buildUserPayload(userRecord);
+        const token = jwt.sign(userPayload, SECRET_KEY, { expiresIn: '7d' });
+        res.status(201).json({ token, user: userPayload });
 
     } catch (e) {
         await db.exec('ROLLBACK;');
@@ -349,7 +479,7 @@ authRouter.post('/login', async (req, res) => {
         return res.status(400).json({ message: 'Username and password are required.' });
     }
     try {
-        const user = await db.get('SELECT * FROM users WHERE username = ?', username);
+        const user = await db.get('SELECT users.*, roles.id as roleId, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id WHERE username = ?', username);
         if (!user) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
@@ -357,9 +487,10 @@ authRouter.post('/login', async (req, res) => {
         if (!isMatch) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
-
-        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '7d' });
-        res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+        
+        const userPayload = await buildUserPayload(user);
+        const token = jwt.sign(userPayload, SECRET_KEY, { expiresIn: '7d' });
+        res.json({ token, user: userPayload });
 
     } catch (e) {
         res.status(500).json({ message: e.message });
@@ -371,8 +502,6 @@ authRouter.get('/security-questions/:username', async (req, res) => {
         const { username } = req.params;
         const user = await db.get('SELECT id FROM users WHERE username = ?', username);
         if (!user) {
-            // To prevent username enumeration, we send back an empty array even if the user doesn't exist.
-            // The frontend should check for an empty array and show a generic error.
             return res.json({ questions: [] });
         }
         const questions = await db.all('SELECT question FROM user_security_questions WHERE user_id = ? ORDER BY id', user.id);
@@ -441,7 +570,6 @@ const protect = (req, res, next) => {
 
 authRouter.post('/reset-all', protect, async (req, res) => {
     try {
-        // Since user_security_questions has ON DELETE CASCADE, deleting from users is sufficient.
         await db.exec('DELETE FROM users');
         res.json({ message: 'All user credentials have been reset.' });
     } catch (e) {
@@ -454,47 +582,58 @@ authRouter.get('/status', protect, (req, res) => {
 });
 
 authRouter.post('/logout', (req, res) => {
-    // In a stateless JWT setup, logout is mainly handled client-side by deleting the token.
-    // This endpoint is here for completeness and could be used for token blacklisting in a more complex setup.
     res.status(200).json({ message: 'Logged out successfully.' });
 });
 
 app.use('/api/auth', authRouter);
 
-// --- Panel User Management ---
-const panelUsersRouter = express.Router();
-panelUsersRouter.use(protect); // All routes are protected
+// --- Panel User & Role Management ---
+const panelAdminRouter = express.Router();
+panelAdminRouter.use(protect);
 
 // Middleware to check for admin role
 const requireAdmin = (req, res, next) => {
-    if (req.user.role !== 'admin') {
-        return res.status(403).json({ message: 'Forbidden: Administrator access required.' });
+    if (!req.user || !req.user.permissions || !req.user.permissions.includes('*:*')) {
+         if (req.user.role.name.toLowerCase() !== 'administrator') {
+             return res.status(403).json({ message: 'Forbidden: Administrator access required.' });
+         }
     }
     next();
 };
 
-panelUsersRouter.get('/', requireAdmin, async (req, res) => {
+panelAdminRouter.get('/roles', requireAdmin, async (req, res) => {
     try {
-        const users = await db.all('SELECT id, username, role FROM users');
-        res.json(users);
+        const roles = await db.all('SELECT id, name FROM roles');
+        res.json(roles);
     } catch (e) {
         res.status(500).json({ message: e.message });
     }
 });
 
-panelUsersRouter.post('/', requireAdmin, async (req, res) => {
-    const { username, password, role } = req.body;
-    if (!username || !password || !role) {
-        return res.status(400).json({ message: 'Username, password, and role are required.' });
+panelAdminRouter.get('/panel-users', requireAdmin, async (req, res) => {
+    try {
+        const users = await db.all('SELECT users.id, users.username, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id');
+        res.json(users.map(u => ({ id: u.id, username: u.username, role: { name: u.roleName } })));
+    } catch (e) {
+        res.status(500).json({ message: e.message });
     }
-    if (!['admin', 'employee'].includes(role)) {
-        return res.status(400).json({ message: 'Invalid role specified.' });
+});
+
+panelAdminRouter.post('/panel-users', requireAdmin, async (req, res) => {
+    const { username, password, role_id } = req.body;
+    if (!username || !password || !role_id) {
+        return res.status(400).json({ message: 'Username, password, and role_id are required.' });
     }
     try {
+        const roleExists = await db.get('SELECT id FROM roles WHERE id = ?', role_id);
+        if (!roleExists) {
+            return res.status(400).json({ message: 'Invalid role_id specified.' });
+        }
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = `user_${Date.now()}`;
-        await db.run('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)', userId, username, hashedPassword, role);
-        res.status(201).json({ id: userId, username, role });
+        await db.run('INSERT INTO users (id, username, password, role_id) VALUES (?, ?, ?, ?)', userId, username, hashedPassword, role_id);
+        const newUser = await db.get('SELECT users.id, users.username, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id WHERE users.id = ?', userId);
+        res.status(201).json({ id: newUser.id, username: newUser.username, role: { name: newUser.roleName } });
     } catch (e) {
         if (e.message.includes('UNIQUE constraint failed')) {
              return res.status(409).json({ message: 'Username already exists.' });
@@ -503,7 +642,7 @@ panelUsersRouter.post('/', requireAdmin, async (req, res) => {
     }
 });
 
-panelUsersRouter.delete('/:id', requireAdmin, async (req, res) => {
+panelAdminRouter.delete('/panel-users/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     if (req.user.id === id) {
         return res.status(403).json({ message: 'You cannot delete your own account.' });
@@ -519,7 +658,7 @@ panelUsersRouter.delete('/:id', requireAdmin, async (req, res) => {
     }
 });
 
-app.use('/api/panel-users', panelUsersRouter);
+app.use('/api', panelAdminRouter);
 
 
 // --- ESBuild Middleware for TS/TSX ---

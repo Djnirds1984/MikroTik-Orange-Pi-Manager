@@ -183,4 +183,4 @@ export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale,
             </div>
         </>
     );
-};
+}
