@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import type { HotspotHost } from '../types.ts';
 import { ChipIcon } from '../constants.tsx';
@@ -27,7 +28,8 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
 };
 
 // The main manager component
-export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) => {
+// FIX: Allow hosts to be null to handle initial loading states gracefully.
+export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] | null }> = ({ hosts }) => {
     const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
 
     const nodeMcuHosts = useMemo(() => {
