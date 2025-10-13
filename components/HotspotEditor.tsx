@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
 import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
@@ -22,6 +23,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     const [files, setFiles] = useState<any[]>([]);
     const [selectedFile, setSelectedFile] = useState<any | null>(null);
     const [content, setContent] = useState('');
+    // FIX: Corrected the status type to include 'editing' and 'saving' to allow for all component states.
     const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error'>('loading_list');
     const [error, setError] = useState<string | null>(null);
     

@@ -20,7 +20,8 @@
         "system_settings": "Configurações do Sistema",
         "updater": "Atualizador",
         "super_router": "Super Roteador",
-        "logs": "Logs do Sistema"
+        "logs": "Logs do Sistema",
+        "panel_roles": "Funções do Painel"
     },
     "titles": {
         "dashboard": "Painel",
@@ -39,7 +40,8 @@
         "system": "Configurações do Sistema",
         "updater": "Atualizador do Painel",
         "super_router": "Configuração do Roteador Host",
-        "logs": "Visualizador de Logs"
+        "logs": "Visualizador de Logs",
+        "panel_roles": "Gerenciamento de Funções do Painel"
     },
     "topbar": {
         "add_router_title": "Vá para a página de Roteadores para adicionar um novo roteador",

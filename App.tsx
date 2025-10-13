@@ -1,7 +1,3 @@
-
-
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -28,6 +24,7 @@ import { ForgotPassword } from './components/ForgotPassword.tsx';
 import { AuthLayout } from './components/AuthLayout.tsx';
 import { SuperRouter } from './components/SuperRouter.tsx';
 import { Logs } from './components/Logs.tsx';
+import { PanelRoles } from './components/PanelRoles.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -170,6 +167,8 @@ const AppContent: React.FC = () => {
         return <SuperRouter />;
       case 'logs':
         return <Logs selectedRouter={selectedRouter} />;
+      case 'panel_roles':
+        return <PanelRoles />;
       default:
         return <Dashboard selectedRouter={selectedRouter} />;
     }

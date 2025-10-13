@@ -1,4 +1,7 @@
+
 import path from 'path';
+// FIX: Import URL and fileURLToPath to resolve __dirname issue in ESM.
+import { URL, fileURLToPath } from 'url';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -16,7 +19,8 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          '@': path.resolve(__dirname, '.'),
+          // FIX: Replace `__dirname` with the standard ESM equivalent.
+          '@': fileURLToPath(new URL('.', import.meta.url)),
         }
       }
     };

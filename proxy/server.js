@@ -253,6 +253,28 @@ async function initDb() {
             user_version = 11;
         }
 
+        if (user_version < 12) {
+            console.log('Applying migration v12 (Add roles to users)...');
+            try {
+                await db.exec('ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT "employee";');
+            } catch (e) {
+                if (!e.message.includes('duplicate column name')) {
+                    throw e;
+                }
+                console.log('Column "role" already exists.');
+            }
+            // Set the first user (if any) to be an admin
+            try {
+                const firstUser = await db.get('SELECT id FROM users ORDER BY rowid ASC LIMIT 1');
+                if (firstUser) {
+                    await db.run('UPDATE users SET role = "admin" WHERE id = ?', firstUser.id);
+                }
+            } catch (e) {
+                console.error("Could not set first user to admin:", e.message);
+            }
+            await db.exec('PRAGMA user_version = 12;');
+            user_version = 12;
+        }
 
     } catch (err) {
         console.error('Failed to initialize database:', err);
@@ -288,9 +310,10 @@ authRouter.post('/register', async (req, res) => {
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = `user_${Date.now()}`;
-        const user = { id: userId, username };
+        const userRole = 'admin'; // First user is always admin
+        const user = { id: userId, username, role: userRole };
 
-        await db.run('INSERT INTO users (id, username, password) VALUES (?, ?, ?)', user.id, user.username, hashedPassword);
+        await db.run('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)', user.id, user.username, hashedPassword, user.role);
 
         for (const qa of securityQuestions) {
             if (qa.question && qa.answer) {
@@ -308,7 +331,7 @@ authRouter.post('/register', async (req, res) => {
         
         await db.exec('COMMIT;');
         
-        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '7d' });
         res.status(201).json({ token, user });
 
     } catch (e) {
@@ -335,8 +358,8 @@ authRouter.post('/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
 
-        const token = jwt.sign({ id: user.id, username: user.username }, SECRET_KEY, { expiresIn: '7d' });
-        res.json({ token, user: { id: user.id, username: user.username } });
+        const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '7d' });
+        res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
 
     } catch (e) {
         res.status(500).json({ message: e.message });
@@ -437,6 +460,67 @@ authRouter.post('/logout', (req, res) => {
 });
 
 app.use('/api/auth', authRouter);
+
+// --- Panel User Management ---
+const panelUsersRouter = express.Router();
+panelUsersRouter.use(protect); // All routes are protected
+
+// Middleware to check for admin role
+const requireAdmin = (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Forbidden: Administrator access required.' });
+    }
+    next();
+};
+
+panelUsersRouter.get('/', requireAdmin, async (req, res) => {
+    try {
+        const users = await db.all('SELECT id, username, role FROM users');
+        res.json(users);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+panelUsersRouter.post('/', requireAdmin, async (req, res) => {
+    const { username, password, role } = req.body;
+    if (!username || !password || !role) {
+        return res.status(400).json({ message: 'Username, password, and role are required.' });
+    }
+    if (!['admin', 'employee'].includes(role)) {
+        return res.status(400).json({ message: 'Invalid role specified.' });
+    }
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userId = `user_${Date.now()}`;
+        await db.run('INSERT INTO users (id, username, password, role) VALUES (?, ?, ?, ?)', userId, username, hashedPassword, role);
+        res.status(201).json({ id: userId, username, role });
+    } catch (e) {
+        if (e.message.includes('UNIQUE constraint failed')) {
+             return res.status(409).json({ message: 'Username already exists.' });
+        }
+        res.status(500).json({ message: e.message });
+    }
+});
+
+panelUsersRouter.delete('/:id', requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    if (req.user.id === id) {
+        return res.status(403).json({ message: 'You cannot delete your own account.' });
+    }
+    try {
+        const result = await db.run('DELETE FROM users WHERE id = ?', id);
+        if (result.changes === 0) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        res.status(204).send();
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+app.use('/api/panel-users', panelUsersRouter);
+
 
 // --- ESBuild Middleware for TS/TSX ---
 app.use(async (req, res, next) => {

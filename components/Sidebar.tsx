@@ -1,6 +1,7 @@
-import React from 'react';
-import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon } from '../constants.tsx';
+import React, { useMemo } from 'react';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon, KeyIcon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 import type { View, CompanySettings } from '../types.ts';
 
 interface SidebarProps {
@@ -49,9 +50,10 @@ const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
+  const { user } = useAuth();
   const { t } = useLocalization();
   
-  const navItems = [
+  const navItems = useMemo(() => [
     { id: 'dashboard', label: t('sidebar.dashboard'), icon: <EthernetIcon className="w-6 h-6" /> },
     { id: 'scripting', label: t('sidebar.ai_scripting'), icon: <EditIcon className="w-6 h-6" /> },
     { id: 'terminal', label: t('sidebar.terminal'), icon: <TerminalIcon className="w-6 h-6" /> },
@@ -64,12 +66,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     { id: 'hotspot', label: t('sidebar.hotspot'), icon: <WifiIcon className="w-6 h-6" /> },
     { id: 'panel_hotspot', label: t('sidebar.panel_hotspot'), icon: <ReceiptPercentIcon className="w-6 h-6" /> },
     { id: 'zerotier', label: t('sidebar.zerotier'), icon: <ZeroTierIcon className="w-6 h-6" /> },
+    { id: 'panel_roles', label: t('sidebar.panel_roles'), icon: <KeyIcon className="w-6 h-6" />, adminOnly: true },
     { id: 'company', label: t('sidebar.company'), icon: <BuildingOffice2Icon className="w-6 h-6" /> },
     { id: 'system', label: t('sidebar.system_settings'), icon: <CogIcon className="w-6 h-6" /> },
     { id: 'updater', label: t('sidebar.updater'), icon: <UpdateIcon className="w-6 h-6" /> },
     { id: 'super_router', label: t('sidebar.super_router'), icon: <ShieldCheckIcon className="w-6 h-6" /> },
     { id: 'logs', label: t('sidebar.logs'), icon: <CodeBracketIcon className="w-6 h-6" /> },
-  ] as const;
+  ], [t]);
+
+  const visibleNavItems = useMemo(() => {
+      if (user?.role !== 'admin') {
+          return navItems.filter(item => !item.adminOnly);
+      }
+      return navItems;
+  }, [user, navItems]);
 
   return (
     <aside
@@ -95,13 +105,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
       </div>
       <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto">
         <ul className="space-y-2">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <NavItem
               key={item.id}
               label={item.label}
               icon={item.icon}
               isActive={currentView === item.id}
-              onClick={() => setCurrentView(item.id)}
+              onClick={() => setCurrentView(item.id as View)}
             />
           ))}
         </ul>
