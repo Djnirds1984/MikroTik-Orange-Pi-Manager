@@ -4,6 +4,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 interface User {
     id: string;
     username: string;
+    role: {
+        id: string;
+        name: string;
+    };
+    permissions: string[];
 }
 
 interface SecurityQuestion {
@@ -23,6 +28,7 @@ interface AuthContextType {
     getSecurityQuestions: (username: string) => Promise<string[]>;
     resetPassword: (username: string, answers: string[], newPassword: string) => Promise<{ success: boolean; message: string }>;
     clearError: () => void;
+    hasPermission: (permission: string) => boolean;
 }
 
 // Create the context with a default undefined value
@@ -172,7 +178,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('authToken');
     };
 
-    const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError };
+    const hasPermission = (permission: string) => {
+        if (!user) return false;
+        if (user.role?.name === 'Administrator') return true;
+        return user.permissions?.includes(permission) || false;
+    };
+
+
+    const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission };
 
     return (
         <AuthContext.Provider value={value}>

@@ -20,7 +20,8 @@
         "system_settings": "Mga Setting ng System",
         "updater": "Updater",
         "super_router": "Super Router",
-        "logs": "Mga Log ng System"
+        "logs": "Mga Log ng System",
+        "panel_roles": "Mga Tungkulin ng Panel"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -39,7 +40,8 @@
         "system": "Mga Setting ng System",
         "updater": "Panel Updater",
         "super_router": "Pagsasaayos ng Host Router",
-        "logs": "Tingnan ang Log"
+        "logs": "Tingnan ang Log",
+        "panel_roles": "Pamamahala ng Tungkulin ng Panel"
     },
     "topbar": {
         "add_router_title": "Pumunta sa pahina ng Mga Router para magdagdag ng bagong router",

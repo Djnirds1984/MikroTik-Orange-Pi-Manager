@@ -12,6 +12,7 @@ import { RouterIcon, EditIcon, TrashIcon, ExclamationTriangleIcon, UsersIcon, Si
 import { PaymentModal } from './PaymentModal.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useCompanySettings } from '../hooks/useCompanySettings.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 // --- Reusable Components ---
 const TabButton: React.FC<{ label: string, icon: React.ReactNode, isActive: boolean, onClick: () => void }> = ({ label, icon, isActive, onClick }) => (
@@ -145,6 +146,7 @@ const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
 
 // --- Users Management Sub-component ---
 const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (saleData: Omit<SaleRecord, 'id'>) => Promise<void> }> = ({ selectedRouter, addSale }) => {
+    const { hasPermission } = useAuth();
     const [secrets, setSecrets] = useState<PppSecret[]>([]);
     const [active, setActive] = useState<PppActiveConnection[]>([]);
     const [profiles, setProfiles] = useState<PppProfile[]>([]);
@@ -370,7 +372,7 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
                                 <td className="px-6 py-4 text-right space-x-1">
                                     <button onClick={() => { setSelectedSecret(user); setPaymentModalOpen(true); }} className="p-1"><CurrencyDollarIcon className="w-5 h-5"/></button>
                                     <button onClick={() => { setSelectedSecret(user); setUserModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => handleDeleteUser(user.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button>
+                                    {hasPermission('pppoe_users:delete') && <button onClick={() => handleDeleteUser(user.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button>}
                                 </td>
                             </tr>
                         ))}

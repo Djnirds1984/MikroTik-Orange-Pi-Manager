@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import type { SaleRecord, CompanySettings } from '../types.ts';
 import { CurrencyDollarIcon, TrashIcon, PrinterIcon } from '../constants.tsx';
 import { PrintableReceipt } from './PrintableReceipt.tsx';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface SalesReportProps {
     salesData: SaleRecord[];
@@ -22,6 +23,7 @@ const StatCard: React.FC<{ title: string, value: string | number, icon: React.Re
 );
 
 export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale, clearSales, companySettings }) => {
+    const { hasPermission } = useAuth();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [receiptToPrint, setReceiptToPrint] = useState<SaleRecord | null>(null);
@@ -103,9 +105,11 @@ export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale,
                             <button onClick={handlePrintReport} className="px-4 py-2 text-sm text-white bg-sky-600 hover:bg-sky-500 rounded-lg font-semibold flex items-center gap-2">
                                 <PrinterIcon className="w-5 h-5" /> Print Report
                             </button>
-                             <button onClick={handleClear} className="px-4 py-2 text-sm text-white bg-red-700 hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700 rounded-lg font-semibold flex items-center gap-2">
-                                <TrashIcon className="w-5 h-5" /> Clear All
-                            </button>
+                             {hasPermission('sales_report:delete') && (
+                                <button onClick={handleClear} className="px-4 py-2 text-sm text-white bg-red-700 hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700 rounded-lg font-semibold flex items-center gap-2">
+                                    <TrashIcon className="w-5 h-5" /> Clear All
+                                </button>
+                             )}
                         </div>
                     </div>
 
@@ -158,9 +162,11 @@ export const SalesReport: React.FC<SalesReportProps> = ({ salesData, deleteSale,
                                                 <button onClick={() => handlePrintReceipt(sale)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 rounded-md" title="Print Receipt">
                                                     <PrinterIcon className="h-5 w-5" />
                                                 </button>
-                                                <button onClick={() => deleteSale(sale.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md" title="Delete Record">
-                                                    <TrashIcon className="h-5 w-5" />
-                                                </button>
+                                                {hasPermission('sales_report:delete') && (
+                                                    <button onClick={() => deleteSale(sale.id)} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md" title="Delete Record">
+                                                        <TrashIcon className="h-5 w-5" />
+                                                    </button>
+                                                )}
                                             </td>
                                         </tr>
                                     )) : (
