@@ -243,7 +243,9 @@ const HotspotNodeMcu: React.FC<{ hosts: HotspotHost[] | null }> = ({ hosts }) =>
                         </li>
                     ))
                 ) : (
-                    <li className="p-6 text-center text-slate-500">No Vendo machines detected among the active Hotspot hosts with a matching comment.</li>
+                    <li className="p-6 text-center text-slate-500">
+                        No Vendo machines detected among the active Hotspot hosts with a matching comment.
+                    </li>
                 )}
             </ul>
         </div>
@@ -388,12 +390,12 @@ const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selec
 };
 
 // --- Sub-Component: Server Profiles ---
-const HotspotServerProfiles: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     return <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-lg"><h2 className="text-2xl font-bold">Server Profiles</h2><p className="mt-2 text-slate-600 dark:text-slate-400">Hotspot Server Profiles management is not yet implemented.</p></div>;
 };
 
 // --- Sub-Component: User Profiles ---
-const HotspotUserProfiles: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     return <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-lg"><h2 className="text-2xl font-bold">User Profiles</h2><p className="mt-2 text-slate-600 dark:text-slate-400">Hotspot User Profiles management is not yet implemented.</p></div>;
 };
 
@@ -541,8 +543,8 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             case 'activity': return <HotspotUserActivity selectedRouter={selectedRouter} hosts={hosts} isLoadingHosts={isLoadingHosts} hostsError={hostsError} />;
             case 'nodemcu': return <HotspotNodeMcu hosts={hosts} />;
             case 'editor': return <HotspotEditor selectedRouter={selectedRouter} />;
-            case 'profiles': return <HotspotServerProfiles selectedRouter={selectedRouter} />;
-            case 'user-profiles': return <HotspotUserProfiles selectedRouter={selectedRouter} />;
+            case 'profiles': return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
+            case 'user-profiles': return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
             case 'setup': return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
