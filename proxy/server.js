@@ -320,9 +320,6 @@ async function initDb() {
                 }
                 
                 // 3. Seed role_permissions (Admin gets all, Employee gets none of the deletable ones)
-                // Note: Not having a permission is the same as being denied. We only need to add the permissions they *do* have.
-                // For simplicity, we'll give admin all existing permissions. In a real app, you'd list them out.
-                // Here, we just won't give Employee the delete permissions.
                 await db.run('INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)', adminRoleId, 'perm_sales_delete');
                 await db.run('INSERT OR IGNORE INTO role_permissions (role_id, permission_id) VALUES (?, ?)', adminRoleId, 'perm_pppoe_delete');
 
@@ -388,10 +385,11 @@ const authRouter = express.Router();
 
 const buildUserPayload = async (user) => {
     let permissions = [];
-    // Admins get all permissions implicitly
+    // Admins get all permissions implicitly by name check for now
     if (user.roleName.toLowerCase() === 'administrator') {
         const allPerms = await db.all('SELECT name FROM permissions');
         permissions = allPerms.map(p => p.name);
+        permissions.push('*:*'); // Wildcard for admin
     } else {
         const perms = await db.all(`
             SELECT p.name 
@@ -593,17 +591,15 @@ panelAdminRouter.use(protect);
 
 // Middleware to check for admin role
 const requireAdmin = (req, res, next) => {
-    if (!req.user || !req.user.permissions || !req.user.permissions.includes('*:*')) {
-         if (req.user.role.name.toLowerCase() !== 'administrator') {
-             return res.status(403).json({ message: 'Forbidden: Administrator access required.' });
-         }
+    if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
+        return next();
     }
-    next();
+    res.status(403).json({ message: 'Forbidden: Administrator access required.' });
 };
 
 panelAdminRouter.get('/roles', requireAdmin, async (req, res) => {
     try {
-        const roles = await db.all('SELECT id, name FROM roles');
+        const roles = await db.all('SELECT id, name, description FROM roles');
         res.json(roles);
     } catch (e) {
         res.status(500).json({ message: e.message });
@@ -657,6 +653,56 @@ panelAdminRouter.delete('/panel-users/:id', requireAdmin, async (req, res) => {
         res.status(500).json({ message: e.message });
     }
 });
+
+
+panelAdminRouter.get('/permissions', requireAdmin, async (req, res) => {
+    try {
+        const permissions = await db.all('SELECT id, name, description FROM permissions');
+        res.json(permissions);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+panelAdminRouter.get('/roles/:roleId/permissions', requireAdmin, async (req, res) => {
+    try {
+        const { roleId } = req.params;
+        const permissions = await db.all('SELECT permission_id FROM role_permissions WHERE role_id = ?', roleId);
+        res.json(permissions.map(p => p.permission_id));
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+panelAdminRouter.put('/roles/:roleId/permissions', requireAdmin, async (req, res) => {
+    try {
+        const { roleId } = req.params;
+        const { permissionIds } = req.body;
+
+        if (!Array.isArray(permissionIds)) {
+            return res.status(400).json({ message: 'permissionIds must be an array.' });
+        }
+        
+        const role = await db.get('SELECT name FROM roles WHERE id = ?', roleId);
+        if (role && role.name.toLowerCase() === 'administrator') {
+            return res.status(403).json({ message: 'Administrator permissions cannot be modified.' });
+        }
+
+        await db.exec('BEGIN TRANSACTION;');
+        await db.run('DELETE FROM role_permissions WHERE role_id = ?', roleId);
+        for (const permId of permissionIds) {
+            await db.run('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)', roleId, permId);
+        }
+        await db.exec('COMMIT;');
+        
+        res.json({ message: 'Permissions updated successfully.' });
+
+    } catch (e) {
+        await db.exec('ROLLBACK;');
+        res.status(500).json({ message: e.message });
+    }
+});
+
 
 app.use('/api', panelAdminRouter);
 
@@ -852,13 +898,11 @@ const createSettingsSaver = (tableName) => async (req, res) => {
     }
 };
 
-// FIX: Define specific routes BEFORE the generic `dbRouter` to ensure they are matched first.
 app.get('/api/db/panel-settings', protect, createSettingsHandler('panel_settings'));
 app.post('/api/db/panel-settings', protect, createSettingsSaver('panel_settings'));
 app.get('/api/db/company-settings', protect, createSettingsHandler('company_settings'));
 app.post('/api/db/company-settings', protect, createSettingsSaver('company_settings'));
 
-// All other /api/db routes will be handled by the generic router.
 app.use('/api/db', protect, dbRouter);
 
 
@@ -1252,7 +1296,6 @@ ngrokApi.get('/status', async (req, res) => {
             if (active) {
                 try {
                     const agentResponse = await new Promise((resolve, reject) => {
-                         // Use native http to avoid adding axios dependency here
                         const http = require('http');
                         http.get('http://127.0.0.1:4040/api/tunnels', (resp) => {
                             let data = '';
@@ -1380,14 +1423,8 @@ app.use('/api/ngrok', ngrokApi);
 
 app.get('/api/current-version', protect, async (req, res) => {
     try {
-        // First, check if it's a git repo. This will throw if it's not.
         await runCommand("git rev-parse --is-inside-work-tree");
-        
-        // FIX: Use a null byte as a separator for robust parsing. This prevents crashes
-        // when commit messages contain special characters like newlines.
         const stdout = await runCommand("git log -1 --pretty=format:'%h%x00%s%x00%b'");
-
-        // The stdout from `git log` can be empty if there are no commits.
         if (!stdout.trim()) {
             return res.json({ 
                 hash: 'N/A', 
@@ -1400,14 +1437,13 @@ app.get('/api/current-version', protect, async (req, res) => {
         const versionInfo = {
             hash: parts[0] || '',
             title: parts[1] || '',
-            description: (parts[2] || '').trim(), // Trim trailing newlines from body
+            description: (parts[2] || '').trim(),
         };
 
         res.json(versionInfo);
 
     } catch (e) {
         let message = e.message;
-        // Provide more user-friendly error messages
         if (message.includes('not a git repository')) {
             message = 'This is not a git repository. The updater requires the application to be cloned from git.';
         } else {

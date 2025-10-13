@@ -29,6 +29,7 @@ interface AuthContextType {
     resetPassword: (username: string, answers: string[], newPassword: string) => Promise<{ success: boolean; message: string }>;
     clearError: () => void;
     hasPermission: (permission: string) => boolean;
+    verifyToken: (token: string) => Promise<void>; // Expose verifyToken
 }
 
 // Create the context with a default undefined value
@@ -179,13 +180,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const hasPermission = (permission: string) => {
-        if (!user) return false;
+        if (!user || !user.permissions) return false;
         // Admin has a wildcard permission
-        if (user.permissions?.includes('*:*')) return true;
-        return user.permissions?.includes(permission) || false;
+        if (user.permissions.includes('*:*')) return true;
+        return user.permissions.includes(permission) || false;
     };
 
-    const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission };
+    const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission, verifyToken };
 
     return (
         <AuthContext.Provider value={value}>
