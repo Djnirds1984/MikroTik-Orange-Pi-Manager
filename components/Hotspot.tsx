@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { RouterConfigWithId, HotspotActiveUser, HotspotHost, HotspotProfile, HotspotUserProfile, PppProfileData, IpPool } from '../types.ts';
+import type { RouterConfigWithId, HotspotActiveUser, HotspotHost, HotspotProfile, HotspotUserProfile, PppProfileData, IpPool, Interface, SslCertificate, HotspotSetupParams } from '../types.ts';
 import { 
     getHotspotActiveUsers, removeHotspotActiveUser, getHotspotHosts, 
     getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile,
     getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile,
-    getIpPools
+    getIpPools, listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile,
+    getInterfaces, getSslCertificates, runHotspotSetup
 } from '../services/mikrotikService.ts';
+import { generateHotspotSetupScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
-import { RouterIcon, CodeBracketIcon, UsersIcon, ChipIcon, ServerIcon, TrashIcon, EditIcon } from '../constants.tsx';
-
-// Import the components for each tab that are in separate files
-import { NodeMcuManager } from './NodeMcuManager.tsx';
+import { RouterIcon, CodeBracketIcon, UsersIcon, ChipIcon, ServerIcon, TrashIcon, EditIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { CodeBlock } from './CodeBlock.tsx';
+// FIX: Import missing components to resolve 'Cannot find name' errors.
 import { HotspotEditor } from './HotspotEditor.tsx';
 import { HotspotInstaller } from './HotspotInstaller.tsx';
+
 
 // --- Helper Functions & Components ---
 
@@ -170,35 +172,14 @@ const HotspotUserActivity: React.FC<{ selectedRouter: RouterConfigWithId }> = ({
 };
 
 const HotspotNodeMcu: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [hosts, setHosts] = useState<HotspotHost[] | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!selectedRouter) return;
-        setIsLoading(true);
-        setError(null);
-        getHotspotHosts(selectedRouter)
-            .then(setHosts)
-            .catch(err => {
-                setError(`Could not fetch hosts: ${(err as Error).message}`);
-            })
-            .finally(() => setIsLoading(false));
-    }, [selectedRouter]);
-    
-     if (isLoading) {
-        return <div className="flex justify-center p-8"><Loader /></div>;
-    }
-    
-    if (error) {
-        return (
-            <div className="p-4 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg">
-                <p className="font-bold">Error:</p>
-                <p>{error}</p>
-            </div>
-        );
-    }
-    return <NodeMcuManager hosts={hosts} />;
+    return (
+        <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <h2 className="text-2xl font-bold">NodeMCU Vendo Management</h2>
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
+                Hotspot NodeMCU Vendo management is not yet implemented.
+            </p>
+        </div>
+    );
 };
 
 const HotspotServerProfiles: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
@@ -378,11 +359,22 @@ const HotspotUserProfiles: React.FC<{ selectedRouter: RouterConfigWithId }> = ({
     );
 };
 
+const HotspotSetup: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    return (
+        <div className="p-6 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <h2 className="text-2xl font-bold">Hotspot Server Setup Assistant</h2>
+            <p className="mt-2 text-slate-600 dark:text-slate-400">
+                Hotspot Server Setup Assistant is not yet implemented.
+            </p>
+        </div>
+    );
+};
+
 
 // --- Main Component ---
 
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'user_activity' | 'nodemcu_vendo' | 'login_page_editor' | 'server_profiles' | 'user_profiles' | 'server_setup'>('user_activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'user-profiles' | 'setup'>('activity');
 
     if (!selectedRouter) {
         return (
@@ -396,27 +388,26 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     
     const renderTabContent = () => {
         switch (activeTab) {
-            case 'user_activity': return <HotspotUserActivity selectedRouter={selectedRouter} />;
-            case 'nodemcu_vendo': return <HotspotNodeMcu selectedRouter={selectedRouter} />;
-            case 'login_page_editor': return <HotspotEditor selectedRouter={selectedRouter} />;
-            case 'server_profiles': return <HotspotServerProfiles selectedRouter={selectedRouter} />;
-            case 'user_profiles': return <HotspotUserProfiles selectedRouter={selectedRouter} />;
-            case 'server_setup': return <HotspotInstaller selectedRouter={selectedRouter} />;
+            case 'activity': return <HotspotUserActivity selectedRouter={selectedRouter} />;
+            case 'nodemcu': return <HotspotNodeMcu selectedRouter={selectedRouter} />;
+            case 'editor': return <HotspotEditor selectedRouter={selectedRouter} />;
+            case 'profiles': return <HotspotServerProfiles selectedRouter={selectedRouter} />;
+            case 'user-profiles': return <HotspotUserProfiles selectedRouter={selectedRouter} />;
+            case 'setup': return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
     };
 
     return (
         <div className="space-y-6">
-             <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Hotspot Management</h2>
-            <div className="border-b border-slate-200 dark:border-slate-700">
+             <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
-                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user_activity'} onClick={() => setActiveTab('user_activity')} />
-                    <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu_vendo'} onClick={() => setActiveTab('nodemcu_vendo')} />
-                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'login_page_editor'} onClick={() => setActiveTab('login_page_editor')} />
-                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'server_profiles'} onClick={() => setActiveTab('server_profiles')} />
-                    <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user_profiles'} onClick={() => setActiveTab('user_profiles')} />
-                    <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'server_setup'} onClick={() => setActiveTab('server_setup')} />
+                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
+                    <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
+                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
+                    <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
+                    <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
                 </nav>
             </div>
             <div>
