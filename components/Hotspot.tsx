@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { 
     RouterConfigWithId, 
     HotspotActiveUser, 
@@ -54,91 +54,17 @@ const formatBytes = (bytes?: number): string => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-// --- User Activity Tab ---
-const HotspotUserActivity: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [activeUsers, setActiveUsers] = useState<HotspotActiveUser[]>([]);
-    const [hosts, setHosts] = useState<HotspotHost[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<Record<string, string> | null>(null);
+// --- User Activity Tab (Now Presentational) ---
+interface HotspotUserActivityProps {
+    activeUsers: HotspotActiveUser[];
+    hosts: HotspotHost[];
+    onKickUser: (userId: string) => void;
+    isSubmitting: boolean;
+}
 
-    const fetchData = useCallback(async (isInitial = false) => {
-        if (!isInitial) {
-             // Don't show loader on refresh, only on initial load
-        } else {
-            setIsLoading(true);
-        }
-        setError(null);
-        
-        const [activeRes, hostsRes] = await Promise.allSettled([
-            getHotspotActiveUsers(selectedRouter),
-            getHotspotHosts(selectedRouter)
-        ]);
-
-        const newErrors: Record<string, string> = {};
-        if (activeRes.status === 'fulfilled') {
-            setActiveUsers(activeRes.value);
-        } else {
-            console.error("Failed to fetch Hotspot active users:", activeRes.reason);
-            newErrors.active = "Could not fetch active users. The Hotspot package might not be configured.";
-        }
-
-        if (hostsRes.status === 'fulfilled') {
-            setHosts(hostsRes.value);
-        } else {
-            console.error("Failed to fetch Hotspot hosts:", hostsRes.reason);
-            newErrors.hosts = "Could not fetch device hosts.";
-        }
-
-        if (Object.keys(newErrors).length > 0) {
-            setError(newErrors);
-        }
-
-        setIsLoading(false);
-
-    }, [selectedRouter]);
-
-    useEffect(() => {
-        fetchData(true);
-        const interval = setInterval(() => fetchData(false), 5000);
-        return () => clearInterval(interval);
-    }, [fetchData]);
-
-    const handleKickUser = async (userId: string) => {
-        if (!window.confirm("Are you sure you want to kick this user?")) return;
-        setIsSubmitting(true);
-        try {
-            await removeHotspotActiveUser(selectedRouter, userId);
-            await fetchData(true); // Force a full refresh
-        } catch(err) {
-            alert(`Error kicking user: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center h-64">
-                <Loader />
-                <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
-            </div>
-        );
-    }
-
+const HotspotUserActivity: React.FC<HotspotUserActivityProps> = ({ activeUsers, hosts, onKickUser, isSubmitting }) => {
     return (
         <div className="space-y-8">
-             {error && Object.keys(error).length > 0 && (
-                <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
-                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
-                    <div>
-                        <p className="font-semibold">Data Warning:</p>
-                        <ul className="list-disc pl-5">
-                            {Object.values(error).map((e, i) => <li key={i}>{e}</li>)}
-                        </ul>
-                    </div>
-                </div>
-            )}
             <div>
                 <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-4">Active Users ({activeUsers.length})</h3>
                 <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md overflow-hidden">
@@ -160,7 +86,7 @@ const HotspotUserActivity: React.FC<{ selectedRouter: RouterConfigWithId }> = ({
                                         <td className="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">{user.uptime}</td>
                                         <td className="px-6 py-4 font-mono text-green-600 dark:text-green-400">{formatBytes(user.bytesIn)} / {formatBytes(user.bytesOut)}</td>
                                         <td className="px-6 py-4 text-right">
-                                            <button onClick={() => handleKickUser(user.id)} disabled={isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Kick User">
+                                            <button onClick={() => onKickUser(user.id)} disabled={isSubmitting} className="p-2 text-slate-500 dark:text-slate-400 hover:text-red-500 rounded-md disabled:opacity-50" title="Kick User">
                                                 <TrashIcon className="h-5 w-5" />
                                             </button>
                                         </td>
@@ -486,6 +412,75 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const [activeTab, setActiveTab] = useState<'user-activity' | 'nodemcu' | 'editor' | 'server-profiles' | 'user-profiles' | 'setup'>('user-activity');
     
+    // --- LIFTED STATE & LOGIC for user-activity and nodemcu ---
+    const [activeUsers, setActiveUsers] = useState<HotspotActiveUser[]>([]);
+    const [hosts, setHosts] = useState<HotspotHost[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<Record<string, string> | null>(null);
+
+    const fetchData = useCallback(async (isInitial = false) => {
+        if (!selectedRouter) {
+            setActiveUsers([]);
+            setHosts([]);
+            if (isInitial) setIsLoading(false);
+            return;
+        }
+
+        if (isInitial) setIsLoading(true);
+        setError(null);
+        
+        const [activeRes, hostsRes] = await Promise.allSettled([
+            getHotspotActiveUsers(selectedRouter),
+            getHotspotHosts(selectedRouter)
+        ]);
+
+        const newErrors: Record<string, string> = {};
+        if (activeRes.status === 'fulfilled') {
+            setActiveUsers(activeRes.value);
+        } else {
+            console.error("Failed to fetch Hotspot active users:", activeRes.reason);
+            newErrors.active = "Could not fetch active users. The Hotspot package might not be configured.";
+            setActiveUsers([]);
+        }
+
+        if (hostsRes.status === 'fulfilled') {
+            setHosts(hostsRes.value);
+        } else {
+            console.error("Failed to fetch Hotspot hosts:", hostsRes.reason);
+            newErrors.hosts = "Could not fetch device hosts.";
+            setHosts([]);
+        }
+
+        if (Object.keys(newErrors).length > 0) {
+            setError(newErrors);
+        }
+
+        if (isInitial) setIsLoading(false);
+    }, [selectedRouter]);
+
+    useEffect(() => {
+        if (!selectedRouter) return;
+        if (activeTab === 'user-activity' || activeTab === 'nodemcu') {
+            fetchData(true);
+            const interval = setInterval(() => fetchData(false), 5000);
+            return () => clearInterval(interval);
+        }
+    }, [selectedRouter, fetchData, activeTab]);
+
+    const handleKickUser = async (userId: string) => {
+        if (!selectedRouter || !window.confirm("Are you sure you want to kick this user?")) return;
+        setIsSubmitting(true);
+        try {
+            await removeHotspotActiveUser(selectedRouter, userId);
+            await fetchData(true); // Force a full refresh
+        } catch(err) {
+            alert(`Error kicking user: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     if (!selectedRouter) {
         return (
              <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -497,13 +492,42 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     }
     
     const renderTabContent = () => {
+        if (isLoading && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64">
+                    <Loader />
+                    <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
+                </div>
+            );
+        }
+        
+        if (error && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+             return (
+                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
+                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold">Data Warning:</p>
+                        <ul className="list-disc pl-5">
+                            {Object.values(error).map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                    </div>
+                </div>
+             );
+        }
+
         switch (activeTab) {
-            case 'user-activity': return <HotspotUserActivity selectedRouter={selectedRouter} />;
-            case 'nodemcu': return <HotspotUserActivity selectedRouter={selectedRouter} />; // NodeMCU needs hosts data from UserActivity
-            case 'editor': return <HotspotEditor selectedRouter={selectedRouter} />;
-            case 'server-profiles': return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
-            case 'user-profiles': return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
-            case 'setup': return <HotspotInstaller selectedRouter={selectedRouter} />;
+            case 'user-activity': 
+                return <HotspotUserActivity activeUsers={activeUsers} hosts={hosts} onKickUser={handleKickUser} isSubmitting={isSubmitting} />;
+            case 'nodemcu': 
+                return <NodeMcuManager hosts={hosts} />;
+            case 'editor': 
+                return <HotspotEditor selectedRouter={selectedRouter} />;
+            case 'server-profiles': 
+                return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
+            case 'user-profiles': 
+                return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
+            case 'setup': 
+                return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
     };
@@ -521,10 +545,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 </nav>
             </div>
             <div>
-                {activeTab === 'nodemcu' 
-                    ? <HotspotUserActivity selectedRouter={selectedRouter} /> /* Render this to get hosts, then NodeMcuManager will filter */
-                    : renderTabContent()
-                }
+                {renderTabContent()}
             </div>
         </div>
     );

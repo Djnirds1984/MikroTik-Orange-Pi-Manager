@@ -26,8 +26,6 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
     );
 };
 
-// The main manager component
-// FIX: Allow hosts to be null to handle initial loading states gracefully.
 export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] | null }> = ({ hosts }) => {
     const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
 
