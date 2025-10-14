@@ -19,7 +19,8 @@ export type View =
   | 'super_router'
   | 'logs'
   | 'panel_roles'
-  | 'help';
+  | 'help'
+  | 'mikrotik_files';
 
 export interface RouterConfig {
   name: string;
@@ -492,4 +493,11 @@ export interface NgrokStatus {
         proto: string;
         port: number;
     };
+}
+
+export interface MikroTikFile {
+    id: string;
+    name: string;
+    type: string;
+    size: string;
 }

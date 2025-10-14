@@ -20,7 +20,8 @@
         "updater": "Actualizador",
         "super_router": "Super Router",
         "logs": "Registros del Sistema",
-        "panel_roles": "Roles del Panel"
+        "panel_roles": "Roles del Panel",
+        "mikrotik_files": "Archivos Mikrotik"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -39,7 +40,8 @@
         "updater": "Actualizador del Panel",
         "super_router": "Configuración del Router Anfitrión",
         "logs": "Visor de Registros",
-        "panel_roles": "Gestión de Roles del Panel"
+        "panel_roles": "Gestión de Roles del Panel",
+        "mikrotik_files": "Editor de Archivos Mikrotik"
     },
     "topbar": {
         "add_router_title": "Ir a la página de Routers para añadir un nuevo router",

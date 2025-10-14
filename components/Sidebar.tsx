@@ -62,6 +62,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     { id: 'sales', label: t('sidebar.sales_report'), icon: <CurrencyDollarIcon className="w-6 h-6" /> },
     { id: 'inventory', label: t('sidebar.inventory'), icon: <ArchiveBoxIcon className="w-6 h-6" /> },
     { id: 'hotspot', label: t('sidebar.hotspot'), icon: <WifiIcon className="w-6 h-6" /> },
+    { id: 'mikrotik_files', label: t('sidebar.mikrotik_files'), icon: <ArchiveBoxIcon className="w-6 h-6" /> },
     { id: 'zerotier', label: t('sidebar.zerotier'), icon: <ZeroTierIcon className="w-6 h-6" /> },
     { id: 'company', label: t('sidebar.company'), icon: <BuildingOffice2Icon className="w-6 h-6" /> },
     { id: 'system', label: t('sidebar.system_settings'), icon: <CogIcon className="w-6 h-6" /> },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import type { RouterConfigWithId } from '../types.ts';
-import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
+// FIX: Corrected import names for file handling functions and added `createFile`.
+import { listFiles, getFileContent, saveFileContent, createFile } from '../services/mikrotikService.ts';
+import type { RouterConfigWithId, MikroTikFile } from '../types.ts';
 import { Loader } from './Loader.tsx';
 import { ExclamationTriangleIcon } from '../constants.tsx';
 
@@ -16,13 +17,16 @@ const FileIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
+// FIX: Added a comprehensive status type to fix comparison errors.
+type Status = 'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error' | 'idle';
 
 export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [path, setPath] = useState<string[]>(['hotspot']);
     const [files, setFiles] = useState<any[]>([]);
     const [selectedFile, setSelectedFile] = useState<any | null>(null);
     const [content, setContent] = useState('');
-    const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error'>('loading_list');
+    // FIX: Used the `Status` type to ensure all states are covered.
+    const [status, setStatus] = useState<Status>('loading_list');
     const [error, setError] = useState<string | null>(null);
     
     const [fileToUpload, setFileToUpload] = useState<File | null>(null);
@@ -34,7 +38,8 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setStatus('loading_list');
         setError(null);
         try {
-            const fileList = await listHotspotFiles(selectedRouter, currentPath);
+            // FIX: Renamed to `listFiles`
+            const fileList = await listFiles(selectedRouter, currentPath);
             setFiles(fileList);
             setStatus('browsing');
         } catch (err) {
@@ -53,7 +58,8 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setError(null);
         setSelectedFile(file);
         try {
-            const { content } = await getHotspotFileContent(selectedRouter, file.name);
+            // FIX: Renamed to `getFileContent`
+            const { content } = await getFileContent(selectedRouter, file.name);
             setContent(content);
             setStatus('editing');
         } catch (err) {
@@ -76,9 +82,12 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setStatus('saving');
         setError(null);
         try {
-            await saveHotspotFileContent(selectedRouter, selectedFile.id, content);
+            // FIX: Renamed to `saveFileContent`
+            await saveFileContent(selectedRouter!, selectedFile.id, content);
             alert('File saved successfully!');
-            setStatus('editing');
+            // After saving, go back to the browser view
+            setStatus('browsing'); 
+            setSelectedFile(null);
         } catch (err) {
              setError(`Failed to save '${selectedFile.name}': ${(err as Error).message}`);
              setStatus('error');
@@ -114,9 +123,11 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             try {
                 const textContent = event.target?.result as string;
                 if (existingFile) {
-                    await saveHotspotFileContent(selectedRouter, existingFile.id, textContent);
+                    // FIX: Renamed to `saveFileContent`
+                    await saveFileContent(selectedRouter, existingFile.id, textContent);
                 } else {
-                    await createHotspotFile(selectedRouter, fullPath, textContent);
+                    // FIX: Renamed to `createFile`
+                    await createFile(selectedRouter, fullPath, textContent);
                 }
 
                 alert('File uploaded successfully!');
@@ -142,24 +153,26 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     
     if (status === 'editing' || status === 'saving') {
         return (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
+            <div className="space-y-6 h-full flex flex-col">
+                <div className="flex justify-between items-center flex-shrink-0">
                     <div>
                         <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Editing File</h3>
                         <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
+                     <div className="flex items-center gap-2">
+                        <button onClick={() => setStatus('browsing')} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
                         <button onClick={handleSave} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
                             {status === 'saving' ? 'Saving...' : 'Save File'}
                         </button>
                     </div>
                 </div>
-                {error && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[60vh] min-h-[500px]">
-                    <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full h-full p-2 font-mono text-xs bg-white dark:bg-slate-900 border rounded-md resize-none" spellCheck="false" />
-                    <iframe srcDoc={content} title="Preview" className="w-full h-full bg-white border rounded-md" sandbox="allow-forms allow-scripts allow-same-origin" />
-                </div>
+                 {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+                 <textarea
+                    value={content}
+                    onChange={e => setContent(e.target.value)}
+                    className="w-full flex-grow p-2 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md resize-none"
+                    spellCheck="false"
+                 />
             </div>
         );
     }

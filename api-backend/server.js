@@ -442,6 +442,14 @@ app.post('/mt-api/:routerId/hotspot/panel-setup', getRouterConfig, async (req, r
     });
 });
 
+// Custom handler for getting file content
+app.post('/mt-api/:routerId/file/print', getRouterConfig, async (req, res) => {
+    await handleApiRequest(req, res, async () => {
+        const { data } = await req.routerInstance.post('/file/print', req.body);
+        return data;
+    });
+});
+
 
 // All other router-specific requests are handled by this generic proxy
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {

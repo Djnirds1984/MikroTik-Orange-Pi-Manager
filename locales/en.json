@@ -20,7 +20,8 @@
         "updater": "Updater",
         "super_router": "Super Router",
         "logs": "System Logs",
-        "panel_roles": "Panel Roles"
+        "panel_roles": "Panel Roles",
+        "mikrotik_files": "Mikrotik Files"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -39,7 +40,8 @@
         "updater": "Panel Updater",
         "super_router": "Host Router Configuration",
         "logs": "Log Viewer",
-        "panel_roles": "Panel Role Management"
+        "panel_roles": "Panel Role Management",
+        "mikrotik_files": "Mikrotik File Editor"
     },
     "topbar": {
         "add_router_title": "Go to Routers page to add a new router",

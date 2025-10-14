@@ -19,7 +19,7 @@ import {
     getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile,
     getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile,
     getIpPools,
-    listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile,
+    // FIX: Removed unused file-related imports that were causing errors.
     getInterfaces, getSslCertificates, runHotspotSetup
 } from '../services/mikrotikService.ts';
 import { generateHotspotSetupScript } from '../services/geminiService.ts';

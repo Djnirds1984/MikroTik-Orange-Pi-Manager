@@ -32,6 +32,7 @@ import type {
     PppServerData,
     FirewallRule,
     MikroTikLogEntry,
+    MikroTikFile,
 } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
@@ -289,28 +290,6 @@ export const deleteHotspotUserProfile = (router: RouterConfigWithId, profileId: 
     return fetchMikrotikData(router, `/ip/hotspot/user/profile/${encodeURIComponent(profileId)}`, { method: 'DELETE' });
 };
 
-export const listHotspotFiles = (router: RouterConfigWithId, path: string): Promise<any[]> => {
-    return fetchMikrotikData<any[]>(router, `/file?name=${encodeURIComponent(path)}`);
-};
-export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => {
-    return fetchMikrotikData<{ contents: string }>(router, `/file/print`, { 
-        method: 'POST', 
-        body: JSON.stringify({ file: filePath }) 
-    }).then(data => ({ content: data.contents }));
-};
-export const saveHotspotFileContent = (router: RouterConfigWithId, fileId: string, content: string): Promise<any> => {
-    return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, { 
-        method: 'PATCH', 
-        body: JSON.stringify({ contents: content }) 
-    });
-};
-export const createHotspotFile = (router: RouterConfigWithId, fullPath: string, contents: string): Promise<any> => {
-    return fetchMikrotikData(router, '/file', {
-        method: 'POST',
-        body: JSON.stringify({ name: fullPath, contents }),
-    });
-};
-
 export const getSslCertificates = (router: RouterConfigWithId): Promise<SslCertificate[]> => {
     return fetchMikrotikData<SslCertificate[]>(router, '/certificate');
 };
@@ -343,4 +322,31 @@ export const { get: getFirewallMangle, add: addFirewallMangle, update: updateFir
 // --- Logs ---
 export const getRouterLogs = (router: RouterConfigWithId): Promise<MikroTikLogEntry[]> => {
     return fetchMikrotikData<MikroTikLogEntry[]>(router, '/log');
+};
+
+// --- Files ---
+export const listFiles = (router: RouterConfigWithId): Promise<MikroTikFile[]> => {
+    return fetchMikrotikData<MikroTikFile[]>(router, '/file');
+};
+
+export const getFileContent = (router: RouterConfigWithId, fileId: string): Promise<{ contents: string }> => {
+    return fetchMikrotikData<{ contents: string }>(router, `/file/print`, { 
+        method: 'POST', 
+        body: JSON.stringify({ file: fileId }) 
+    });
+};
+
+export const saveFileContent = (router: RouterConfigWithId, fileId: string, content: string): Promise<any> => {
+    return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, { 
+        method: 'PATCH', 
+        body: JSON.stringify({ contents: content }) 
+    });
+};
+
+// FIX: Add missing createFile function for uploading new files.
+export const createFile = (router: RouterConfigWithId, name: string, content: string): Promise<any> => {
+    return fetchMikrotikData(router, '/file', { 
+        method: 'POST', 
+        body: JSON.stringify({ name, contents: content }) 
+    });
 };

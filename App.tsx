@@ -24,6 +24,7 @@ import { AuthLayout } from './components/AuthLayout.tsx';
 import { SuperRouter } from './components/SuperRouter.tsx';
 import { Logs } from './components/Logs.tsx';
 import { PanelRoles } from './components/PanelRoles.tsx';
+import { MikrotikFiles } from './components/MikrotikFiles.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -152,6 +153,8 @@ const AppContent: React.FC = () => {
                  />;
       case 'hotspot':
           return <Hotspot selectedRouter={selectedRouter} />;
+      case 'mikrotik_files':
+          return <MikrotikFiles selectedRouter={selectedRouter} />;
       case 'zerotier':
           return <ZeroTier />;
       case 'company':
