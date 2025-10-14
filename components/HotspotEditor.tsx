@@ -1,25 +1,42 @@
-
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { listFiles, getFileContent, saveFileContent, createFile } from '../services/mikrotikService.ts';
 import type { RouterConfigWithId, MikroTikFile } from '../types.ts';
 import { Loader } from './Loader.tsx';
-import { ExclamationTriangleIcon, FolderIcon, FileIcon } from '../constants.tsx';
+import { FolderIcon, FileIcon } from '../constants.tsx';
 
-type View = 'browser' | 'editor';
 type Status = 'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error';
 
 export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [allFiles, setAllFiles] = useState<MikroTikFile[]>([]);
-    const [path, setPath] = useState<string[]>(['hotspot']);
-    const [selectedFile, setSelectedFile] = useState<MikroTikFile | null>(null);
-    const [content, setContent] = useState('');
+    const [path, setPath] = useState<string[]>(['flash', 'hotspot']);
     const [status, setStatus] = useState<Status>('loading_list');
     const [error, setError] = useState<string | null>(null);
+    const [selectedFile, setSelectedFile] = useState<MikroTikFile | null>(null);
+    const [content, setContent] = useState('');
+    const [view, setView] = useState<'browser' | 'editor'>('browser');
     
     const [fileToUpload, setFileToUpload] = useState<File | null>(null);
     const uploadInputRef = useRef<HTMLInputElement>(null);
 
     const currentPath = useMemo(() => path.join('/'), [path]);
+
+    const fetchData = useCallback(async () => {
+        setStatus('loading_list');
+        setError(null);
+        try {
+            const fileList = await listFiles(selectedRouter);
+            setAllFiles(fileList);
+            setStatus('browsing');
+        } catch (err) {
+            setError(`Failed to list files: ${(err as Error).message}`);
+            setStatus('error');
+        }
+    }, [selectedRouter]);
+
+    useEffect(() => {
+        fetchData();
+        setPath(['flash', 'hotspot']);
+    }, [fetchData]);
 
     const directoryContents = useMemo(() => {
         const pathPrefix = currentPath ? `${currentPath}/` : '';
@@ -36,7 +53,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
 
             if (slashIndex === -1) {
                 if (!items.has(relativePath)) {
-                    items.set(relativePath, { name: relativePath, type: 'file', original: file });
+                    items.set(relativePath, { name: relativePath, type: file.type === '.folder' ? 'directory' : 'file', original: file });
                 }
             } else {
                 const dirName = relativePath.substring(0, slashIndex);
@@ -57,38 +74,21 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         });
     }, [allFiles, currentPath]);
 
-    const fetchFiles = useCallback(async () => {
-        setStatus('loading_list');
-        setError(null);
-        try {
-            const fileList = await listFiles(selectedRouter);
-            setAllFiles(fileList);
-            setStatus('browsing');
-        } catch (err) {
-            setError(`Failed to list files: ${(err as Error).message}`);
-            setStatus('error');
-        }
-    }, [selectedRouter]);
-
-    useEffect(() => {
-        fetchFiles();
-    }, [fetchFiles]);
-
     const handleItemClick = async (item: { name: string, type: 'directory' | 'file', original: MikroTikFile }) => {
         if (item.type === 'directory') {
             setPath(prev => [...prev, item.name]);
         } else {
             setStatus('loading_content');
             setError(null);
-            setSelectedFile(item.original);
             try {
-                const { contents } = await getFileContent(selectedRouter!, item.original.id);
+                setSelectedFile(item.original);
+                const { contents } = await getFileContent(selectedRouter, item.original.id);
                 setContent(contents);
-                setStatus('editing');
+                setView('editor');
+                setStatus('browsing');
             } catch (err) {
                 setError(`Failed to load content for '${item.name}': ${(err as Error).message}`);
                 setStatus('error');
-                setSelectedFile(null);
             }
         }
     };
@@ -98,14 +98,18 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setStatus('saving');
         setError(null);
         try {
-            await saveFileContent(selectedRouter!, selectedFile.id, content);
+            await saveFileContent(selectedRouter, selectedFile.id, content);
             alert('File saved successfully!');
-            setStatus('browsing'); 
-            setSelectedFile(null);
+            setView('browser');
+            setStatus('browsing');
         } catch (err) {
-             setError(`Failed to save '${selectedFile.name}': ${(err as Error).message}`);
-             setStatus('error');
+            setError(`Failed to save '${selectedFile.name}': ${(err as Error).message}`);
+            setStatus('error');
         }
+    };
+
+    const handleBreadcrumbClick = (index: number) => {
+        setPath(prev => prev.slice(0, index + 1));
     };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -128,12 +132,12 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             try {
                 const textContent = event.target?.result as string;
                 if (existingFile) {
-                    await saveFileContent(selectedRouter!, existingFile.id, textContent);
+                    await saveFileContent(selectedRouter, existingFile.id, textContent);
                 } else {
                     await createFile(selectedRouter, fullPath, textContent);
                 }
                 alert('File uploaded successfully!');
-                await fetchFiles();
+                await fetchData();
                 setFileToUpload(null);
                 if (uploadInputRef.current) uploadInputRef.current.value = "";
                 setStatus('browsing');
@@ -146,35 +150,28 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         reader.readAsText(fileToUpload);
     };
 
-    // FIX: Add missing handleBreadcrumbClick function.
-    const handleBreadcrumbClick = (index: number) => {
-        setPath(prev => prev.slice(0, index + 1));
-    };
-    
-    // FIX: Change condition to only enter editor view on 'editing' status. The 'saving' status will now be handled in both views.
-    if (status === 'editing') {
+    if (view === 'editor') {
         return (
-            <div className="space-y-6 h-full flex flex-col">
-                <div className="flex justify-between items-center flex-shrink-0">
+            <div className="space-y-4 h-full flex flex-col">
+                <div className="flex justify-between items-center">
                     <div>
-                        <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Editing File</h3>
-                        <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
+                        <h3 className="text-xl font-semibold">Editing:</h3>
+                        <p className="text-sm font-mono text-slate-500">{selectedFile?.name}</p>
                     </div>
-                     <div className="flex items-center gap-2">
-                        <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 rounded-lg">Back to Files</button>
-                        <button onClick={handleSave} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-[--color-primary-600] text-white rounded-lg disabled:opacity-50">
-                            {status === 'saving' ? 'Saving...' : 'Save File'}
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setView('browser')} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-slate-200 rounded-lg">Back</button>
+                        <button onClick={handleSave} disabled={status === 'saving'} className="px-4 py-2 text-sm bg-orange-600 text-white rounded-lg disabled:opacity-50">
+                            {status === 'saving' ? 'Saving...' : 'Save'}
                         </button>
                     </div>
                 </div>
-                 {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
-                 <textarea
+                {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+                <textarea
                     value={content}
                     onChange={e => setContent(e.target.value)}
-                    className="w-full flex-grow p-2 font-mono text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md resize-none"
+                    className="w-full flex-grow p-2 font-mono text-xs bg-white dark:bg-slate-900 border rounded-md resize-none"
                     spellCheck="false"
-                 />
-                 <iframe srcDoc={content} title="Preview" className="w-full h-full bg-white border rounded-md" sandbox="allow-forms allow-scripts allow-same-origin"/>
+                />
             </div>
         );
     }
@@ -186,22 +183,17 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                 <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
                     <button onClick={() => setPath([])} className="hover:underline">root</button>
                     {path.map((p, i) => (
-                        <span key={i}>
-                            {' / '}
-                            <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
-                        </span>
+                        <span key={i}>{' / '}<button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button></span>
                     ))}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                     <input ref={uploadInputRef} type="file" onChange={handleFileSelect} className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500" />
-                    {/* FIX: Corrected comparison for button status and text, which had a type overlap error. */}
                     <button onClick={handleUpload} disabled={!fileToUpload || status === 'saving'} className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50">
                         {status === 'saving' ? 'Uploading...' : 'Upload'}
                     </button>
                 </div>
             </div>
-
-            {/* FIX: Handle 'saving' status in the browser view to show a loader during uploads. */}
+            
             {(status === 'loading_list' || status === 'saving') && <div className="flex justify-center p-8"><Loader /></div>}
             {status === 'error' && <div className="p-4 bg-red-100 text-red-700 rounded-md">{error}</div>}
 

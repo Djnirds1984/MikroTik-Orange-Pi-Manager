@@ -9,7 +9,7 @@ type Status = 'loading' | 'editing' | 'saving' | 'error' | 'idle';
 
 export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
     const [allFiles, setAllFiles] = useState<MikroTikFile[]>([]);
-    const [path, setPath] = useState<string[]>([]);
+    const [path, setPath] = useState<string[]>(['flash']);
     const [status, setStatus] = useState<Status>('loading');
     const [error, setError] = useState<string | null>(null);
     
@@ -33,7 +33,8 @@ export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null
 
     useEffect(() => {
         fetchData();
-        setPath([]); // Reset path when router changes
+        // When router changes, reset to the desired default path
+        setPath(['flash']); 
     }, [fetchData]);
 
     const currentPathString = useMemo(() => path.join('/'), [path]);
