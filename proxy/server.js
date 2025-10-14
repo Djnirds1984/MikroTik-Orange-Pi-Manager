@@ -326,31 +326,49 @@ async function initDb() {
                 // 4. Migrate users table if it still has the old 'role' column
                 const userCols = await db.all("PRAGMA table_info(users);");
                 if (userCols.some(c => c.name === 'role')) {
-                    console.log('Migrating users table to use role_id...');
-                    await db.exec('ALTER TABLE users RENAME TO users_old;');
-                    await db.exec(`
-                        CREATE TABLE users (
-                            id TEXT PRIMARY KEY,
-                            username TEXT UNIQUE NOT NULL,
-                            password TEXT NOT NULL,
-                            role_id TEXT NOT NULL,
-                            FOREIGN KEY (role_id) REFERENCES roles(id)
-                        );
-                    `);
-                    await db.exec(`
-                        INSERT INTO users (id, username, password, role_id)
-                        SELECT 
-                            id, 
-                            username, 
-                            password, 
-                            CASE 
-                                WHEN lower(role) = 'admin' THEN '${adminRoleId}'
-                                WHEN lower(role) = 'administrator' THEN '${adminRoleId}'
-                                ELSE '${employeeRoleId}'
-                            END
-                        FROM users_old;
-                    `);
-                    await db.exec('DROP TABLE users_old;');
+                    const userCount = await db.get("SELECT COUNT(*) as count FROM users");
+                    
+                    if (userCount.count === 0) {
+                        // Table is empty, just rebuild it. Safest for fresh installs.
+                        console.log('Rebuilding empty users table for role_id...');
+                        await db.exec('DROP TABLE users;');
+                        await db.exec(`
+                            CREATE TABLE users (
+                                id TEXT PRIMARY KEY,
+                                username TEXT UNIQUE NOT NULL,
+                                password TEXT NOT NULL,
+                                role_id TEXT NOT NULL,
+                                FOREIGN KEY (role_id) REFERENCES roles(id)
+                            );
+                        `);
+                    } else {
+                        // Table has data, migrate it carefully.
+                        console.log('Migrating users table with data to use role_id...');
+                        await db.exec('ALTER TABLE users RENAME TO users_old;');
+                        await db.exec(`
+                            CREATE TABLE users (
+                                id TEXT PRIMARY KEY,
+                                username TEXT UNIQUE NOT NULL,
+                                password TEXT NOT NULL,
+                                role_id TEXT NOT NULL,
+                                FOREIGN KEY (role_id) REFERENCES roles(id)
+                            );
+                        `);
+                        await db.exec(`
+                            INSERT INTO users (id, username, password, role_id)
+                            SELECT 
+                                id, 
+                                username, 
+                                password, 
+                                CASE 
+                                    WHEN lower(role) = 'admin' THEN '${adminRoleId}'
+                                    WHEN lower(role) = 'administrator' THEN '${adminRoleId}'
+                                    ELSE '${employeeRoleId}'
+                                END
+                            FROM users_old;
+                        `);
+                        await db.exec('DROP TABLE users_old;');
+                    }
                     console.log('Users table migrated successfully.');
                 }
                 
