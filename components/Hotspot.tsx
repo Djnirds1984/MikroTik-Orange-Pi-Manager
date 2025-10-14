@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { 
     RouterConfigWithId, 
     HotspotActiveUser, 
@@ -25,7 +25,10 @@ import {
 import { generateHotspotSetupScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
-import { RouterIcon, UsersIcon, ServerIcon, EditIcon, TrashIcon, ChipIcon, CodeBracketIcon, ExclamationTriangleIcon, FolderIcon, FileIcon } from '../constants.tsx';
+import { RouterIcon, UsersIcon, ServerIcon, EditIcon, TrashIcon, ChipIcon, CodeBracketIcon, ExclamationTriangleIcon } from '../constants.tsx';
+import { NodeMcuManager } from './NodeMcuManager.tsx';
+import { HotspotEditor } from './HotspotEditor.tsx';
+import { HotspotInstaller } from './HotspotInstaller.tsx';
 
 // --- Reusable Components ---
 
@@ -51,14 +54,15 @@ const formatBytes = (bytes?: number): string => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-// --- Sub-components defined inside Hotspot.tsx ---
-
-const HotspotUserActivity: React.FC<{
+// --- User Activity Tab (Now Presentational) ---
+interface HotspotUserActivityProps {
     activeUsers: HotspotActiveUser[];
     hosts: HotspotHost[];
     onKickUser: (userId: string) => void;
     isSubmitting: boolean;
-}> = ({ activeUsers, hosts, onKickUser, isSubmitting }) => {
+}
+
+const HotspotUserActivity: React.FC<HotspotUserActivityProps> = ({ activeUsers, hosts, onKickUser, isSubmitting }) => {
     return (
         <div className="space-y-8">
             <div>
@@ -129,295 +133,286 @@ const HotspotUserActivity: React.FC<{
     );
 };
 
-const NodeMcuManager: React.FC<{ hosts: HotspotHost[] }> = ({ hosts }) => {
-    const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
-
-    const nodeMcuHosts = useMemo(() => {
-        if (!hosts) return [];
-        const keywords = ['vendo', 'vendo1', 'pisowifi'];
-        return hosts.filter(host => {
-            if (!host.comment) return false;
-            const lowerCaseComment = host.comment.toLowerCase();
-            return keywords.some(keyword => lowerCaseComment.includes(keyword));
-        });
-    }, [hosts]);
-
-    if (selectedHost) {
-        return (
-            <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md flex flex-col h-[75vh] min-h-[600px]">
-                <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center flex-shrink-0">
-                    <div>
-                        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">
-                            Vendo Settings
-                        </h3>
-                        <p className="text-sm font-mono text-cyan-500">{selectedHost.address}</p>
-                    </div>
-                    <button 
-                        onClick={() => setSelectedHost(null)}
-                        className="px-4 py-2 bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-white rounded-lg font-semibold"
-                    >
-                        &larr; Back to List
-                    </button>
-                </div>
-                <div className="flex-grow p-4"><iframe src={`http://${selectedHost.address}/admin#`} title={`Settings for ${selectedHost.address}`} className="w-full h-full border-2 border-slate-300 dark:border-slate-600 rounded-md" sandbox="allow-forms allow-scripts allow-same-origin" /></div>
-                <div className="p-2 border-t border-slate-200 dark:border-slate-700 text-center text-xs text-slate-400">
-                    You are viewing the device's web panel directly. All actions inside this frame are performed on the device.
-                </div>
-            </div>
-        );
-    }
-    
-    return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
-             <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                <h3 className="text-lg font-semibold flex items-center gap-2"><ChipIcon className="w-6 h-6 text-[--color-primary-500]"/> Detected NodeMCU Vendo Machines</h3>
-                <p className="text-sm text-slate-500 mt-1">This list is filtered from Hotspot hosts to show devices with a comment containing 'vendo', 'vendo1', or 'pisowifi'.</p>
-            </div>
-             <ul role="list" className="divide-y divide-slate-200 dark:divide-slate-700">
-                {nodeMcuHosts.length > 0 ? (
-                    nodeMcuHosts.map(host => (
-                        <li key={host.id} className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                            <div className="flex items-center gap-4">
-                                <ChipIcon className="h-8 w-8 text-[--color-primary-500] dark:text-[--color-primary-400]" />
-                                <div>
-                                    <p className="font-semibold text-slate-900 dark:text-slate-100 font-mono">{host.address}</p>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 font-mono">{host.macAddress}</p>
-                                    {host.comment && <p className="text-xs text-slate-400 italic mt-1">Comment: {host.comment}</p>}
-                                </div>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <button onClick={() => setSelectedHost(host)} className="px-4 py-2 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-md font-semibold">Settings</button>
-                            </div>
-                        </li>
-                    ))
-                ) : (
-                    <li className="p-6 text-center text-slate-500">
-                        No Vendo machines detected among the active Hotspot hosts with a matching comment.
-                    </li>
-                )}
-            </ul>
-        </div>
-    );
-};
-
-const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [path, setPath] = useState<string[]>(['hotspot']);
-    const [files, setFiles] = useState<any[]>([]);
-    const [selectedFile, setSelectedFile] = useState<any | null>(null);
-    const [content, setContent] = useState('');
-    // FIX: Split 'saving' status into 'saving-edit' and 'saving-upload' to distinguish contexts and resolve type errors.
-    const [status, setStatus] = useState<'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving-edit' | 'saving-upload' | 'error'>('loading_list');
+// FIX: Added missing HotspotServerProfilesManager component.
+// --- Server Profiles Tab ---
+const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
+    const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    
-    const [fileToUpload, setFileToUpload] = useState<File | null>(null);
-    const uploadInputRef = useRef<HTMLInputElement>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProfile, setEditingProfile] = useState<HotspotProfile | null>(null);
 
-    const currentPath = path.join('/');
-
-    const fetchFiles = useCallback(async (p: string) => {
-        setStatus('loading_list');
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
         setError(null);
         try {
-            const fileList = await listHotspotFiles(selectedRouter, p);
-            setFiles(fileList);
-            setStatus('browsing');
+            const profilesData = await getHotspotProfiles(selectedRouter);
+            setProfiles(profilesData);
         } catch (err) {
-            setError(`Failed to list files in '${p}': ${(err as Error).message}`);
-            setStatus('error');
+            setError(`Could not fetch data: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
         }
     }, [selectedRouter]);
-    
-    useEffect(() => {
-        fetchFiles(currentPath);
-    }, [currentPath, fetchFiles]);
-    
-    const handleFileClick = async (file: any) => {
-        if (file.type === 'directory') {
-            const dirName = file.name.split('/').pop();
-            if (dirName) {
-                 setPath(prev => [...prev, dirName]);
-            }
-        } else if (file.type === 'file') {
-            setStatus('loading_content');
-            setError(null);
-            setSelectedFile(file);
-            try {
-                const { content } = await getHotspotFileContent(selectedRouter, file.name);
-                setContent(content);
-                setStatus('editing');
-            } catch (err) {
-                 setError(`Failed to load content for '${file.name}': ${(err as Error).message}`);
-                 setStatus('error');
-                 setSelectedFile(null);
-            }
-        }
-    };
-    
-    const handleBreadcrumbClick = (index: number) => {
-        setPath(prev => prev.slice(0, index + 1));
-    };
 
-    const handleSave = async () => {
-        if (!selectedFile) return;
-        // FIX: Use 'saving-edit' status for saving edited file content.
-        setStatus('saving-edit');
-        setError(null);
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSave = async (profileData: HotspotProfile | HotspotProfileData) => {
+        setIsSubmitting(true);
         try {
-            await saveHotspotFileContent(selectedRouter, selectedFile.id, content);
-            alert('File saved successfully!');
-            setStatus('editing');
-        } catch (err) {
-             setError(`Failed to save '${selectedFile.name}': ${(err as Error).message}`);
-             setStatus('error');
-        }
-    };
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
-            setFileToUpload(e.target.files[0]);
-        } else {
-            setFileToUpload(null);
-        }
-    };
-
-    const handleUpload = async () => {
-        if (!fileToUpload) {
-            alert("Please select a file to upload.");
-            return;
-        }
-
-        const fullPath = `${currentPath}/${fileToUpload.name}`;
-        const existingFile = files.find(f => f.name === fullPath);
-
-        if (existingFile && !window.confirm(`File "${fileToUpload.name}" already exists. Overwrite it?`)) {
-            return;
-        }
-        
-        // FIX: Use 'saving-upload' status for uploading a new file.
-        setStatus('saving-upload');
-        setError(null);
-
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            try {
-                const textContent = event.target?.result as string;
-                if (existingFile) {
-                    await saveHotspotFileContent(selectedRouter, existingFile.id, textContent);
-                } else {
-                    await createHotspotFile(selectedRouter, fullPath, textContent);
-                }
-                alert('File uploaded successfully!');
-                await fetchFiles(currentPath);
-                setFileToUpload(null);
-                if (uploadInputRef.current) uploadInputRef.current.value = "";
-                setStatus('browsing');
-            } catch (err) {
-                setError(`Upload failed: ${(err as Error).message}`);
-                setStatus('error');
+            if ('id' in profileData) {
+                await updateHotspotProfile(selectedRouter, profileData);
+            } else {
+                await addHotspotProfile(selectedRouter, profileData);
             }
-        };
-        reader.onerror = () => { setError("Failed to read the selected file."); setStatus('error'); };
-        reader.readAsText(fileToUpload);
+            setIsModalOpen(false);
+            setEditingProfile(null);
+            await fetchData();
+        } catch (err) { 
+            alert(`Error saving profile: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
-    
-    // FIX: Check for 'saving-edit' status when in the file editor view.
-    if (status === 'editing' || status === 'saving-edit') {
+
+    const handleDelete = async (profileId: string) => {
+        if (!window.confirm("Are you sure?")) return;
+        try {
+            await deleteHotspotProfile(selectedRouter, profileId);
+            await fetchData();
+        } catch (err) { 
+            alert(`Error deleting profile: ${(err as Error).message}`);
+        }
+    };
+
+    const ProfileFormModal: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        onSave: (data: HotspotProfile | HotspotProfileData) => void;
+        initialData: HotspotProfile | null;
+    }> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotProfileData>>({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+        
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ 
+                        name: initialData.name, 
+                        'hotspot-address': initialData['hotspot-address'] || '',
+                        'rate-limit': initialData['rate-limit'] || ''
+                    });
+                } else {
+                    setProfile({ name: '', 'hotspot-address': '', 'rate-limit': '' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        
+        const handleSubmit = (e: React.FormEvent) => { 
+            e.preventDefault(); 
+            onSave(initialData ? { ...profile, id: initialData.id } as HotspotProfile : profile as HotspotProfileData); 
+        };
+        
+        const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+            setProfile(p => ({ ...p, [e.target.name]: e.target.value }));
+        };
+
         return (
-            <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">Editing File</h3>
-                        <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {/* FIX: Check for 'saving-edit' status to disable buttons. */}
-                        <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
-                        <button onClick={handleSave} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
-                            {status === 'saving-edit' ? 'Saving...' : 'Save File'}
-                        </button>
-                    </div>
-                </div>
-                {error && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[60vh] min-h-[500px]">
-                    <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full h-full p-2 font-mono text-xs bg-white dark:bg-slate-900 border rounded-md resize-none" spellCheck="false" />
-                    <iframe srcDoc={content} title="Preview" className="w-full h-full bg-white border rounded-md" sandbox="allow-forms allow-scripts allow-same-origin" />
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit Profile' : 'Add New Profile'}</h3>
+                           <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={handleChange} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Hotspot Address</label><input type="text" name="hotspot-address" value={profile['hotspot-address']} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 10M/20M" name="rate-limit" value={profile['rate-limit']} onChange={handleChange} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
                 </div>
             </div>
         );
-    }
-    
-    const sortedFiles = useMemo(() => {
-        return [...files].sort((a, b) => {
-            if (a.type === 'directory' && b.type !== 'directory') return -1;
-            if (a.type !== 'directory' && b.type === 'directory') return 1;
-            return a.name.split('/').pop()!.localeCompare(b.name.split('/').pop()!);
-        });
-    }, [files]);
-    
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+
     return (
-        <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6">
-            <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Hotspot File Browser</h3>
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
-                 <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
-                    {path.map((p, i) => (<span key={i}><button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>{i < path.length - 1 && ' / '}</span>))}
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                    <input ref={uploadInputRef} type="file" onChange={handleFileSelect} className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500" />
-                    <button 
-                        onClick={handleUpload} 
-                        // FIX: Check for 'saving-upload' status to disable button.
-                        disabled={!fileToUpload || status === 'saving-upload'}
-                        className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50"
-                    >
-                        {/* FIX: Check for 'saving-upload' status for button text. */}
-                        {status === 'saving-upload' ? 'Uploading...' : 'Upload'}
-                    </button>
-                </div>
+        <div>
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
+            <div className="flex justify-end mb-4">
+                <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New Profile</button>
             </div>
-
-            {/* FIX: Add 'saving-upload' to the loader condition for the file browser view. */}
-            {(status === 'loading_list' || status === 'loading_content' || status === 'saving-upload') && <div className="flex justify-center p-8"><Loader /></div>}
-            {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
-
-            {status === 'browsing' && (
-                <ul className="space-y-1">
-                    {sortedFiles.map(file => (
-                        <li key={file.id}>
-                            <button onClick={() => handleFileClick(file)} className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 text-left">
-                                {file.type === 'directory' ? <FolderIcon className="w-5 h-5 text-yellow-500" /> : <FileIcon className="w-5 h-5 text-slate-500" />}
-                                <span className="font-medium text-slate-800 dark:text-slate-200">{file.name.split('/').pop()}</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Hotspot Address</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <tbody>
+                        {profiles.map(p => (
+                            <tr key={p.id} className="border-b dark:border-slate-700">
+                                <td className="px-6 py-4 font-medium">{p.name}</td>
+                                <td className="px-6 py-4">{p['hotspot-address'] || 'n/a'}</td>
+                                <td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 };
 
-const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    // Implement full CRUD for Hotspot Server Profiles
-    // Fetch data, display in table, use modal for add/edit
-    return <div>Server Profiles Manager coming soon...</div>
-};
-
+// FIX: Added missing HotspotUserProfilesManager component.
+// --- User Profiles Tab ---
 const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-     // Implement full CRUD for Hotspot User Profiles
-    // Fetch data, display in table, use modal for add/edit
-    return <div>User Profiles Manager coming soon...</div>;
-};
+    const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
+    const [pools, setPools] = useState<IpPool[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingProfile, setEditingProfile] = useState<HotspotUserProfile | null>(null);
 
-const HotspotServerSetup: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    // Implement Hotspot Setup Wizard form
-    return <div>Server Setup coming soon...</div>;
-};
+    const fetchData = useCallback(async () => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [profilesData, poolsData] = await Promise.all([
+                getHotspotUserProfiles(selectedRouter),
+                getIpPools(selectedRouter),
+            ]);
+            setProfiles(profilesData);
+            setPools(poolsData);
+        } catch (err) {
+            setError(`Could not fetch data: ${(err as Error).message}`);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [selectedRouter]);
 
+    useEffect(() => { fetchData(); }, [fetchData]);
+
+    const handleSave = async (profileData: HotspotUserProfile | HotspotUserProfileData) => {
+        setIsSubmitting(true);
+        try {
+            if ('id' in profileData) {
+                await updateHotspotUserProfile(selectedRouter, profileData);
+            } else {
+                await addHotspotUserProfile(selectedRouter, profileData);
+            }
+            setIsModalOpen(false);
+            setEditingProfile(null);
+            await fetchData();
+        } catch (err) { 
+            alert(`Error saving profile: ${(err as Error).message}`);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleDelete = async (profileId: string) => {
+        if (!window.confirm("Are you sure you want to delete this user profile?")) return;
+        try {
+            await deleteHotspotUserProfile(selectedRouter, profileId);
+            await fetchData();
+        } catch (err) { 
+            alert(`Error deleting profile: ${(err as Error).message}`);
+        }
+    };
+
+    const ProfileFormModal: React.FC<{
+        isOpen: boolean;
+        onClose: () => void;
+        onSave: (data: HotspotUserProfile | HotspotUserProfileData) => void;
+        initialData: HotspotUserProfile | null;
+    }> = ({ isOpen, onClose, onSave, initialData }) => {
+        const [profile, setProfile] = useState<Partial<HotspotUserProfileData>>({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+        
+        useEffect(() => {
+            if (isOpen) {
+                if (initialData) {
+                    setProfile({ 
+                        name: initialData.name, 
+                        'address-pool': initialData['address-pool'] || 'none',
+                        'rate-limit': initialData['rate-limit'] || '',
+                        'session-timeout': initialData['session-timeout'] || '00:00:00',
+                        'shared-users': initialData['shared-users'] || '1'
+                    });
+                } else {
+                    setProfile({ name: '', 'address-pool': 'none', 'rate-limit': '', 'session-timeout': '00:00:00', 'shared-users': '1' });
+                }
+            }
+        }, [initialData, isOpen]);
+
+        if (!isOpen) return null;
+        
+        const handleSubmit = (e: React.FormEvent) => { 
+            e.preventDefault(); 
+            onSave(initialData ? { ...profile, id: initialData.id } as HotspotUserProfile : profile as HotspotUserProfileData); 
+        };
+
+        return (
+            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg">
+                    <form onSubmit={handleSubmit}>
+                        <div className="p-6">
+                            <h3 className="text-xl font-bold text-[--color-primary-500] dark:text-[--color-primary-400] mb-4">{initialData ? 'Edit User Profile' : 'Add New User Profile'}</h3>
+                           <div className="space-y-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Profile Name</label><input type="text" name="name" value={profile.name} onChange={e => setProfile(p => ({ ...p, name: e.target.value }))} required className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Address Pool</label><select name="address-pool" value={profile['address-pool']} onChange={e => setProfile(p => ({ ...p, 'address-pool': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2"><option value="none">none</option>{pools.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Rate Limit (rx/tx)</label><input type="text" placeholder="e.g., 512k/5M" name="rate-limit" value={profile['rate-limit']} onChange={e => setProfile(p => ({ ...p, 'rate-limit': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div className="grid grid-cols-2 gap-4">
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Session Timeout</label><input type="text" placeholder="00:30:00" name="session-timeout" value={profile['session-timeout']} onChange={e => setProfile(p => ({ ...p, 'session-timeout': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Shared Users</label><input type="number" name="shared-users" value={profile['shared-users']} onChange={e => setProfile(p => ({ ...p, 'shared-users': e.target.value }))} className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 rounded-md p-2" /></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3"><button type="button" onClick={onClose} className="px-4 py-2 rounded-md">Cancel</button><button type="submit" disabled={isSubmitting} className="px-4 py-2 bg-[--color-primary-600] text-white rounded-md">Save</button></div>
+                    </form>
+                </div>
+            </div>
+        );
+    };
+
+    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+
+    return (
+        <div>
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
+            <div className="flex justify-end mb-4">
+                <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New User Profile</button>
+            </div>
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
+                <table className="w-full text-sm">
+                    <thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50"><tr><th className="px-6 py-3">Name</th><th className="px-6 py-3">Address Pool</th><th className="px-6 py-3">Rate Limit</th><th className="px-6 py-3">Shared Users</th><th className="px-6 py-3 text-right">Actions</th></tr></thead>
+                    <tbody>
+                        {profiles.map(p => (
+                            <tr key={p.id} className="border-b dark:border-slate-700">
+                                <td className="px-6 py-4 font-medium">{p.name}</td>
+                                <td className="px-6 py-4">{p['address-pool'] || 'none'}</td>
+                                <td className="px-6 py-4">{p['rate-limit'] || 'N/A'}</td>
+                                <td className="px-6 py-4">{p['shared-users'] || 'N/A'}</td>
+                                <td className="px-6 py-4 text-right space-x-2"><button onClick={() => { setEditingProfile(p); setIsModalOpen(true); }} className="p-1"><EditIcon className="w-5 h-5"/></button><button onClick={() => handleDelete(p.id)} className="p-1"><TrashIcon className="w-5 h-5"/></button></td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
 
 // --- Main Hotspot Component ---
+
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'user-profiles' | 'setup'>('activity');
+    const [activeTab, setActiveTab] = useState<'user-activity' | 'nodemcu' | 'editor' | 'server-profiles' | 'user-profiles' | 'setup'>('user-activity');
     
-    // State and logic for tabs that need shared data
+    // --- LIFTED STATE & LOGIC for user-activity and nodemcu ---
     const [activeUsers, setActiveUsers] = useState<HotspotActiveUser[]>([]);
     const [hosts, setHosts] = useState<HotspotHost[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -457,13 +452,16 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             setHosts([]);
         }
 
-        if (Object.keys(newErrors).length > 0) setError(newErrors);
+        if (Object.keys(newErrors).length > 0) {
+            setError(newErrors);
+        }
+
         if (isInitial) setIsLoading(false);
     }, [selectedRouter]);
 
     useEffect(() => {
         if (!selectedRouter) return;
-        if (activeTab === 'activity' || activeTab === 'nodemcu') {
+        if (activeTab === 'user-activity' || activeTab === 'nodemcu') {
             fetchData(true);
             const interval = setInterval(() => fetchData(false), 5000);
             return () => clearInterval(interval);
@@ -475,9 +473,9 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         setIsSubmitting(true);
         try {
             await removeHotspotActiveUser(selectedRouter, userId);
-            await fetchData(true); // Force a refresh
+            await fetchData(true); // Force a full refresh
         } catch(err) {
-            alert(`Error: ${(err as Error).message}`);
+            alert(`Error kicking user: ${(err as Error).message}`);
         } finally {
             setIsSubmitting(false);
         }
@@ -494,40 +492,58 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     }
     
     const renderTabContent = () => {
-        if (isLoading && (activeTab === 'activity' || activeTab === 'nodemcu')) {
-            return <div className="flex justify-center p-8"><Loader /></div>;
+        if (isLoading && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+            return (
+                <div className="flex flex-col items-center justify-center h-64">
+                    <Loader />
+                    <p className="mt-4 text-[--color-primary-500] dark:text-[--color-primary-400]">Fetching Hotspot data from {selectedRouter.name}...</p>
+                </div>
+            );
         }
-        if (error && (activeTab === 'activity' || activeTab === 'nodemcu')) {
-             return <div className="p-4 bg-yellow-50 text-yellow-800 rounded-md">Warning: {Object.values(error).join(' ')}</div>;
+        
+        if (error && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+             return (
+                 <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
+                    <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
+                    <div>
+                        <p className="font-semibold">Data Warning:</p>
+                        <ul className="list-disc pl-5">
+                            {Object.values(error).map((e, i) => <li key={i}>{e}</li>)}
+                        </ul>
+                    </div>
+                </div>
+             );
         }
 
         switch (activeTab) {
-            case 'activity': 
+            case 'user-activity': 
                 return <HotspotUserActivity activeUsers={activeUsers} hosts={hosts} onKickUser={handleKickUser} isSubmitting={isSubmitting} />;
             case 'nodemcu': 
                 return <NodeMcuManager hosts={hosts} />;
             case 'editor': 
-                return <LoginPageEditor selectedRouter={selectedRouter} />;
-            case 'profiles': 
+                return <HotspotEditor selectedRouter={selectedRouter} />;
+            case 'server-profiles': 
                 return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
             case 'user-profiles': 
                 return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
             case 'setup': 
-                return <HotspotServerSetup selectedRouter={selectedRouter} />;
+                return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
     };
 
     return (
         <div className="space-y-6">
-             <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
-                <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
-                <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
-                <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
-                <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
-                <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
-                <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
-            </nav>
+             <div className="border-b border-slate-200 dark:border-slate-700">
+                <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
+                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-activity'} onClick={() => setActiveTab('user-activity')} />
+                    <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
+                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'server-profiles'} onClick={() => setActiveTab('server-profiles')} />
+                    <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
+                    <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
+                </nav>
+            </div>
             <div>
                 {renderTabContent()}
             </div>

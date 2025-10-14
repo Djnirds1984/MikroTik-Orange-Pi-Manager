@@ -293,7 +293,10 @@ export const listHotspotFiles = (router: RouterConfigWithId, path: string): Prom
     return fetchMikrotikData<any[]>(router, `/file?name=${encodeURIComponent(path)}`);
 };
 export const getHotspotFileContent = (router: RouterConfigWithId, filePath: string): Promise<{ content: string }> => {
-    return fetchMikrotikData<{ content: string }>(router, `/file/print?file=${encodeURIComponent(filePath)}`);
+    return fetchMikrotikData<{ contents: string }>(router, `/file/print`, { 
+        method: 'POST', 
+        body: JSON.stringify({ file: filePath }) 
+    }).then(data => ({ content: data.contents }));
 };
 export const saveHotspotFileContent = (router: RouterConfigWithId, fileId: string, content: string): Promise<any> => {
     return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, { 
