@@ -26,6 +26,7 @@ const HostItem: React.FC<{ host: HotspotHost; onSelect: () => void; }> = ({ host
     );
 };
 
+// This component receives the list of hosts as a prop. It does not fetch its own data.
 export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] | null }> = ({ hosts }) => {
     const [selectedHost, setSelectedHost] = useState<HotspotHost | null>(null);
 
@@ -38,7 +39,6 @@ export const NodeMcuManager: React.FC<{ hosts: HotspotHost[] | null }> = ({ host
             return keywords.some(keyword => lowerCaseComment.includes(keyword));
         });
     }, [hosts]);
-
 
     // Iframe view when a host is selected
     if (selectedHost) {
