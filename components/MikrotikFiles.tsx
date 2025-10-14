@@ -40,30 +40,36 @@ export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null
 
     const directoryContents = useMemo(() => {
         const pathPrefix = currentPathString ? `${currentPathString}/` : '';
-        const itemsInDir = allFiles.filter(f => f.name.startsWith(pathPrefix) && f.name !== currentPathString);
 
-        const displayItems = new Map<string, { name: string, type: 'directory' | 'file', original: MikroTikFile }>();
-
-        for (const item of itemsInDir) {
-            const subPath = item.name.substring(pathPrefix.length);
-            const pathComponent = subPath.split('/')[0];
-            
-            if (pathComponent && !displayItems.has(pathComponent)) {
-                const isDir = subPath.includes('/') || item.type === 'directory';
-                const originalItem = isDir ? allFiles.find(f => f.name === `${pathPrefix}${pathComponent}`) || item : item;
-
-                displayItems.set(pathComponent, {
-                    name: pathComponent,
-                    type: isDir ? 'directory' : 'file',
-                    original: originalItem,
-                });
+        const itemsInCurrentDir = allFiles.filter(file => {
+            if (!file.name.startsWith(pathPrefix)) {
+                return false;
             }
-        }
-
-        return Array.from(displayItems.values()).sort((a, b) => {
+            const subPath = file.name.substring(pathPrefix.length);
+            if (subPath === '') {
+                return false; // Exclude self (e.g., 'hotspot/' when path is 'hotspot')
+            }
+            const slashCount = (subPath.match(/\//g) || []).length;
+            // It's a direct child if it has 0 slashes (file), or 1 slash at the end (directory).
+            return slashCount === 0 || (slashCount === 1 && subPath.endsWith('/'));
+        });
+        
+        // FIX: Added an explicit return type to the map callback to prevent TypeScript from widening the `type` property to a generic string.
+        return itemsInCurrentDir.map((item): { name: string; type: 'directory' | 'file'; original: MikroTikFile } => {
+            const subPath = item.name.substring(pathPrefix.length);
+            const isDir = subPath.endsWith('/');
+            const displayName = isDir ? subPath.slice(0, -1) : subPath;
+            return {
+                name: displayName,
+                // MikroTik can return `.folder` or just rely on the trailing slash
+                type: (item.type === '.folder' || isDir) ? 'directory' : 'file',
+                original: item,
+            };
+        }).sort((a, b) => {
             if (a.type === b.type) return a.name.localeCompare(b.name);
             return a.type === 'directory' ? -1 : 1;
         });
+
     }, [allFiles, currentPathString]);
 
     const handleItemClick = async (item: { name: string, type: 'directory' | 'file', original: MikroTikFile }) => {
@@ -99,6 +105,11 @@ export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null
             setStatus('error');
         }
     };
+
+    const handleBreadcrumbClick = (index: number) => {
+        setPath(prev => prev.slice(0, index + 1));
+    };
+
 
     if (!selectedRouter) {
         return (
@@ -144,7 +155,7 @@ export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null
                 {path.map((p, i) => (
                     <span key={i}>
                         {' / '}
-                        <button onClick={() => setPath(prev => prev.slice(0, i + 1))} className="hover:underline">{p}</button>
+                        <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
                     </span>
                 ))}
             </div>

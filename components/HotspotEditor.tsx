@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 // FIX: Corrected import names for file handling functions and added `createFile`.
 import { listFiles, getFileContent, saveFileContent, createFile } from '../services/mikrotikService.ts';
@@ -17,8 +18,9 @@ const FileIcon: React.FC<{ className?: string }> = ({ className }) => (
     </svg>
 );
 
-// FIX: Added a comprehensive status type to fix comparison errors.
-type Status = 'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error' | 'idle';
+// FIX: Corrected Status type to include all states used in the component.
+type Status = 'browsing' | 'loading_list' | 'loading_content' | 'editing' | 'saving' | 'error';
+type View = 'browser' | 'editor';
 
 export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [path, setPath] = useState<string[]>(['hotspot']);
@@ -34,23 +36,24 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
 
     const currentPath = path.join('/');
 
-    const fetchFiles = useCallback(async (currentPath: string) => {
+    // FIX: Corrected `listFiles` call to not pass a path argument, as it fetches all files.
+    const fetchFiles = useCallback(async () => {
         setStatus('loading_list');
         setError(null);
         try {
-            // FIX: Renamed to `listFiles`
-            const fileList = await listFiles(selectedRouter, currentPath);
+            const fileList = await listFiles(selectedRouter);
             setFiles(fileList);
             setStatus('browsing');
         } catch (err) {
-            setError(`Failed to list files in '${currentPath}': ${(err as Error).message}`);
+            setError(`Failed to list files: ${(err as Error).message}`);
             setStatus('error');
         }
     }, [selectedRouter]);
     
+    // FIX: Changed useEffect to only depend on fetchFiles, as path changes are handled by client-side filtering.
     useEffect(() => {
-        fetchFiles(currentPath);
-    }, [currentPath, fetchFiles]);
+        fetchFiles();
+    }, [fetchFiles]);
     
     const handleFileClick = async (file: any) => {
         if (file.type !== 'file') return;
@@ -58,9 +61,9 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         setError(null);
         setSelectedFile(file);
         try {
-            // FIX: Renamed to `getFileContent`
-            const { content } = await getFileContent(selectedRouter, file.name);
-            setContent(content);
+            // FIX: Destructured `contents` from the response instead of `content`.
+            const { contents } = await getFileContent(selectedRouter!, file.name);
+            setContent(contents);
             setStatus('editing');
         } catch (err) {
              setError(`Failed to load content for '${file.name}': ${(err as Error).message}`);
@@ -131,7 +134,8 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                 }
 
                 alert('File uploaded successfully!');
-                await fetchFiles(currentPath);
+                // FIX: Refetch files after upload without passing an argument.
+                await fetchFiles();
                 
                 setFileToUpload(null);
                 if (uploadInputRef.current) {
@@ -182,10 +186,11 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Hotspot File Browser</h3>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                 <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
+                    <button onClick={() => setPath([])} className="hover:underline">root</button>
                     {path.map((p, i) => (
                         <span key={i}>
+                            {' / '}
                             <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
-                            {i < path.length - 1 && ' / '}
                         </span>
                     ))}
                 </div>
@@ -207,7 +212,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             </div>
 
             {status === 'loading_list' && <div className="flex justify-center p-8"><Loader /></div>}
-            {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
+            {status === 'error' && <div className="p-4 bg-red-100 text-red-700 rounded-md">{error}</div>}
 
             {status === 'browsing' && (
                 <ul className="space-y-1">
