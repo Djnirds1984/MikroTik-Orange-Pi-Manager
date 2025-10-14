@@ -329,24 +329,26 @@ export const listFiles = (router: RouterConfigWithId): Promise<MikroTikFile[]> =
     return fetchMikrotikData<MikroTikFile[]>(router, '/file');
 };
 
-export const getFileContent = (router: RouterConfigWithId, fileId: string): Promise<{ contents: string }> => {
-    return fetchMikrotikData<{ contents: string }>(router, `/file/print`, { 
-        method: 'POST', 
-        body: JSON.stringify({ file: fileId }) 
+export const getFileContent = async (router: RouterConfigWithId, fileId: string): Promise<{ contents: string }> => {
+    // Use GET on the /contents sub-resource, which is more RESTful and avoids POST.
+    // This returns raw text, so we wrap it in the expected object structure.
+    const content = await fetchMikrotikData<string>(router, `/file/${encodeURIComponent(fileId)}/contents`, {
+        method: 'GET'
     });
+    return { contents: content };
 };
 
 export const saveFileContent = (router: RouterConfigWithId, fileId: string, content: string): Promise<any> => {
-    return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, { 
+    return fetchMikrotikData(router, `/file/${encodeURIComponent(fileId)}`, {
         method: 'PATCH', 
         body: JSON.stringify({ contents: content }) 
     });
 };
 
 export const createFile = (router: RouterConfigWithId, name: string, content: string): Promise<any> => {
-    // MikroTik API uses POST to /rest/file to create a new file
+    // Using PUT as requested, which is a valid method for file creation in RouterOS REST API.
     return fetchMikrotikData(router, '/file', { 
-        method: 'POST', 
+        method: 'PUT', 
         body: JSON.stringify({ name, contents: content }) 
     });
 };

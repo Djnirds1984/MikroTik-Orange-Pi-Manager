@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { listFiles, getFileContent, saveFileContent, createFile } from '../services/mikrotikService.ts';
 import type { RouterConfigWithId, MikroTikFile } from '../types.ts';
@@ -144,8 +145,14 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
         reader.onerror = () => { setError("Failed to read the selected file."); setStatus('error'); };
         reader.readAsText(fileToUpload);
     };
+
+    // FIX: Add missing handleBreadcrumbClick function.
+    const handleBreadcrumbClick = (index: number) => {
+        setPath(prev => prev.slice(0, index + 1));
+    };
     
-    if (status === 'editing' || status === 'saving') {
+    // FIX: Change condition to only enter editor view on 'editing' status. The 'saving' status will now be handled in both views.
+    if (status === 'editing') {
         return (
             <div className="space-y-6 h-full flex flex-col">
                 <div className="flex justify-between items-center flex-shrink-0">
@@ -177,19 +184,25 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Login Page File Browser</h3>
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4">
                 <div className="text-sm text-slate-500 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-900/50 p-2 rounded-md overflow-x-auto whitespace-nowrap">
+                    <button onClick={() => setPath([])} className="hover:underline">root</button>
                     {path.map((p, i) => (
-                        <span key={i}><button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button> / </span>
+                        <span key={i}>
+                            {' / '}
+                            <button onClick={() => handleBreadcrumbClick(i)} className="hover:underline">{p}</button>
+                        </span>
                     ))}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                     <input ref={uploadInputRef} type="file" onChange={handleFileSelect} className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500" />
+                    {/* FIX: Corrected comparison for button status and text, which had a type overlap error. */}
                     <button onClick={handleUpload} disabled={!fileToUpload || status === 'saving'} className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50">
-                        {status === 'saving' ? '...' : 'Upload'}
+                        {status === 'saving' ? 'Uploading...' : 'Upload'}
                     </button>
                 </div>
             </div>
 
-            {status === 'loading_list' && <div className="flex justify-center p-8"><Loader /></div>}
+            {/* FIX: Handle 'saving' status in the browser view to show a loader during uploads. */}
+            {(status === 'loading_list' || status === 'saving') && <div className="flex justify-center p-8"><Loader /></div>}
             {status === 'error' && <div className="p-4 bg-red-100 text-red-700 rounded-md">{error}</div>}
 
             {status === 'browsing' && (
