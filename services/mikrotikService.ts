@@ -1,3 +1,4 @@
+
 import type {
     RouterConfig,
     RouterConfigWithId,
@@ -330,17 +331,13 @@ export const listFiles = (router: RouterConfigWithId): Promise<MikroTikFile[]> =
 };
 
 export const getFileContent = async (router: RouterConfigWithId, fileId: string): Promise<{ contents: string }> => {
-    // Using POST to the 'print' endpoint is a reliable way to get file contents across RouterOS versions.
-    // We query by the specific file's unique ID. The key should be '.id' not '?.id' in the POST body.
-    const response = await fetchMikrotikData<any[]>(router, '/file/print', {
-        method: 'POST',
-        body: JSON.stringify({
-            '.proplist': 'contents',
-            '.id': fileId
-        })
+    // Using GET with query parameters for wider RouterOS version compatibility, as requested by user.
+    // The fileId (e.g., "*1") must be URI encoded to be passed in a URL.
+    const path = `/file/print?=.id=${encodeURIComponent(fileId)}&.proplist=contents`;
+    const response = await fetchMikrotikData<any[]>(router, path, {
+        method: 'GET',
     });
-    // The response is an array with one object.
-    // If the file is empty, 'contents' may not be present, so we check for it.
+
     if (response && response.length > 0 && typeof response[0].contents !== 'undefined') {
         return { contents: response[0].contents };
     }

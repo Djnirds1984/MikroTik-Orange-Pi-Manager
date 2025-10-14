@@ -1,3 +1,4 @@
+
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -455,12 +456,12 @@ app.post('/mt-api/:routerId/file/print', getRouterConfig, async (req, res) => {
 app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
     await handleApiRequest(req, res, async () => {
         // The API path is the part of the URL *after* the routerId
-        const apiPath = req.originalUrl.replace(`/mt-api/${req.params.routerId}`, '');
+        const apiPath = req.path.replace(`/mt-api/${req.params.routerId}`, ''); // Use req.path to exclude query string
         const options = {
             method: req.method,
             url: apiPath,
             data: (req.method !== 'GET' && req.body) ? req.body : undefined,
-            params: req.method === 'GET' ? req.query : undefined
+            params: req.query // Pass query params separately for axios to handle
         };
         const response = await req.routerInstance(options);
         return response.data;
