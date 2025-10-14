@@ -343,8 +343,8 @@ export const saveFileContent = (router: RouterConfigWithId, fileId: string, cont
     });
 };
 
-// FIX: Add missing createFile function for uploading new files.
 export const createFile = (router: RouterConfigWithId, name: string, content: string): Promise<any> => {
+    // MikroTik API uses POST to /rest/file to create a new file
     return fetchMikrotikData(router, '/file', { 
         method: 'POST', 
         body: JSON.stringify({ name, contents: content }) 

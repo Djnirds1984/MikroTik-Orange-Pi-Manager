@@ -40,36 +40,51 @@ export const MikrotikFiles: React.FC<{ selectedRouter: RouterConfigWithId | null
 
     const directoryContents = useMemo(() => {
         const pathPrefix = currentPathString ? `${currentPathString}/` : '';
+        const items = new Map<string, { name: string; type: 'directory' | 'file'; original: MikroTikFile }>();
 
-        const itemsInCurrentDir = allFiles.filter(file => {
-            if (!file.name.startsWith(pathPrefix)) {
-                return false;
+        for (const file of allFiles) {
+            if (currentPathString && !file.name.startsWith(pathPrefix)) {
+                continue;
             }
-            const subPath = file.name.substring(pathPrefix.length);
-            if (subPath === '') {
-                return false; // Exclude self (e.g., 'hotspot/' when path is 'hotspot')
+
+            const relativePath = file.name.substring(pathPrefix.length);
+            if (relativePath === '') continue;
+
+            const slashIndex = relativePath.indexOf('/');
+
+            if (slashIndex === -1) {
+                // No slash. It could be a file OR a folder without a trailing slash.
+                // e.g., "login.html" or "flash" (where type is '.folder')
+                if (!items.has(relativePath)) {
+                    items.set(relativePath, {
+                        name: relativePath,
+                        type: file.type === '.folder' ? 'directory' : 'file',
+                        original: file
+                    });
+                }
+            } else {
+                // Has a slash. It represents a directory in the current view.
+                // e.g., "hotspot/" or "hotspot/login.html"
+                const dirName = relativePath.substring(0, slashIndex);
+                if (dirName && !items.has(dirName)) {
+                    // Find an explicit directory entry for this name if it exists.
+                    const dirFile = allFiles.find(f => f.name === `${pathPrefix}${dirName}/` || (f.name === `${pathPrefix}${dirName}` && f.type === '.folder'));
+                    // Use the explicit entry, or create a "virtual" one. The original doesn't matter much for display.
+                    items.set(dirName, {
+                        name: dirName,
+                        type: 'directory',
+                        original: dirFile || { ...file, id: `dir-${pathPrefix}${dirName}`, name: `${pathPrefix}${dirName}/`, type: '.folder' }
+                    });
+                }
             }
-            const slashCount = (subPath.match(/\//g) || []).length;
-            // It's a direct child if it has 0 slashes (file), or 1 slash at the end (directory).
-            return slashCount === 0 || (slashCount === 1 && subPath.endsWith('/'));
-        });
-        
-        // FIX: Added an explicit return type to the map callback to prevent TypeScript from widening the `type` property to a generic string.
-        return itemsInCurrentDir.map((item): { name: string; type: 'directory' | 'file'; original: MikroTikFile } => {
-            const subPath = item.name.substring(pathPrefix.length);
-            const isDir = subPath.endsWith('/');
-            const displayName = isDir ? subPath.slice(0, -1) : subPath;
-            return {
-                name: displayName,
-                // MikroTik can return `.folder` or just rely on the trailing slash
-                type: (item.type === '.folder' || isDir) ? 'directory' : 'file',
-                original: item,
-            };
-        }).sort((a, b) => {
-            if (a.type === b.type) return a.name.localeCompare(b.name);
+        }
+
+        return Array.from(items.values()).sort((a, b) => {
+            if (a.type === b.type) {
+                return a.name.localeCompare(b.name);
+            }
             return a.type === 'directory' ? -1 : 1;
         });
-
     }, [allFiles, currentPathString]);
 
     const handleItemClick = async (item: { name: string, type: 'directory' | 'file', original: MikroTikFile }) => {

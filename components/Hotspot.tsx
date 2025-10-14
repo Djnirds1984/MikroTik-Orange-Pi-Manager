@@ -19,7 +19,6 @@ import {
     getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile,
     getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile,
     getIpPools,
-    // FIX: Removed unused file-related imports that were causing errors.
     getInterfaces, getSslCertificates, runHotspotSetup
 } from '../services/mikrotikService.ts';
 import { generateHotspotSetupScript } from '../services/geminiService.ts';
@@ -133,7 +132,6 @@ const HotspotUserActivity: React.FC<HotspotUserActivityProps> = ({ activeUsers, 
     );
 };
 
-// FIX: Added missing HotspotServerProfilesManager component.
 // --- Server Profiles Tab ---
 const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
@@ -266,7 +264,6 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
     );
 };
 
-// FIX: Added missing HotspotUserProfilesManager component.
 // --- User Profiles Tab ---
 const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
