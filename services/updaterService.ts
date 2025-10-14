@@ -1,5 +1,5 @@
+
 import { getAuthHeader } from './databaseService.ts';
-// FIX: Import VersionInfo to properly type the getCurrentVersion function.
 import type { VersionInfo } from '../types.ts';
 
 // A generic fetcher for simple JSON API calls

@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import type { AIFixResponse, ChatMessage, HotspotSetupParams } from '../types.ts';
 
