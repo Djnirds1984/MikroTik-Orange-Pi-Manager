@@ -12,7 +12,6 @@ export type View =
   | 'sales'
   | 'inventory'
   | 'hotspot'
-  | 'panel_hotspot'
   | 'zerotier'
   | 'company'
   | 'system'
