@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import type { RouterConfigWithId } from '../types.ts';
 import { listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile } from '../services/mikrotikService.ts';
 import { Loader } from './Loader.tsx';
@@ -47,6 +47,13 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
     useEffect(() => {
         fetchFiles(currentPath);
     }, [currentPath, fetchFiles]);
+
+    const handleDirClick = (dirName: string) => {
+        const dirNameOnly = dirName.split('/').pop();
+        if (dirNameOnly) {
+             setPath(prev => [...prev, dirNameOnly]);
+        }
+    };
     
     const handleFileClick = async (file: any) => {
         if (file.type !== 'file') return;
@@ -62,10 +69,6 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
              setStatus('error');
              setSelectedFile(null);
         }
-    };
-
-    const handleDirClick = (dirName: string) => {
-        setPath(prev => [...prev, dirName]);
     };
     
     const handleBreadcrumbClick = (index: number) => {
@@ -151,6 +154,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                         <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* FIX: Change status check to 'saving-edit'. */}
                         <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
                         {/* FIX: Change status check and text to 'saving-edit'. */}
                         <button onClick={handleSave} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
@@ -166,6 +170,14 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
             </div>
         );
     }
+
+    const sortedFiles = useMemo(() => {
+        return [...files].sort((a, b) => {
+            if (a.type === 'directory' && b.type !== 'directory') return -1;
+            if (a.type !== 'directory' && b.type === 'directory') return 1;
+            return a.name.split('/').pop()!.localeCompare(b.name.split('/').pop()!);
+        });
+    }, [files]);
     
     return (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6">
@@ -204,7 +216,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
 
             {status === 'browsing' && (
                 <ul className="space-y-1">
-                    {files.map(file => (
+                    {sortedFiles.map(file => (
                         <li key={file.id}>
                             <button 
                                 onClick={() => file.type === 'directory' ? handleDirClick(file.name) : handleFileClick(file)}
@@ -214,7 +226,7 @@ export const HotspotEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = (
                                     ? <FolderIcon className="w-5 h-5 text-yellow-500" />
                                     : <FileIcon className="w-5 h-5 text-slate-500" />
                                 }
-                                <span className="font-medium text-slate-800 dark:text-slate-200">{file.name}</span>
+                                <span className="font-medium text-slate-800 dark:text-slate-200">{file.name.split('/').pop()}</span>
                             </button>
                         </li>
                     ))}

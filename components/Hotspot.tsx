@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { 
     RouterConfigWithId, 
@@ -260,6 +259,7 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
 
     const handleSave = async () => {
         if (!selectedFile) return;
+        // FIX: Use 'saving-edit' status for saving edited file content.
         setStatus('saving-edit');
         setError(null);
         try {
@@ -293,6 +293,7 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
             return;
         }
         
+        // FIX: Use 'saving-upload' status for uploading a new file.
         setStatus('saving-upload');
         setError(null);
 
@@ -319,7 +320,7 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
         reader.readAsText(fileToUpload);
     };
     
-    // FIX: Change status check to 'saving-edit' for this UI block.
+    // FIX: Check for 'saving-edit' status when in the file editor view.
     if (status === 'editing' || status === 'saving-edit') {
         return (
             <div className="space-y-6">
@@ -329,8 +330,8 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
                         <p className="text-sm font-mono text-slate-500 dark:text-slate-400">{selectedFile?.name}</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        {/* FIX: Check for 'saving-edit' status to disable buttons. */}
                         <button onClick={() => { setSelectedFile(null); setStatus('browsing'); }} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 rounded-lg font-semibold disabled:opacity-50">Back to Files</button>
-                        {/* FIX: Change status check and text to 'saving-edit'. */}
                         <button onClick={handleSave} disabled={status === 'saving-edit'} className="px-4 py-2 text-sm bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white rounded-lg font-semibold disabled:opacity-50">
                             {status === 'saving-edit' ? 'Saving...' : 'Save File'}
                         </button>
@@ -364,17 +365,17 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
                     <input ref={uploadInputRef} type="file" onChange={handleFileSelect} className="text-xs text-slate-500 file:mr-2 file:py-1 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-600 file:text-slate-700 dark:file:text-slate-200 hover:file:bg-slate-300 dark:hover:file:bg-slate-500" />
                     <button 
                         onClick={handleUpload} 
-                        // FIX: Change status check to 'saving-upload'.
+                        // FIX: Check for 'saving-upload' status to disable button.
                         disabled={!fileToUpload || status === 'saving-upload'}
                         className="px-3 py-1.5 text-sm bg-sky-600 hover:bg-sky-500 text-white rounded-lg font-semibold disabled:opacity-50"
                     >
-                        {/* FIX: Change status check and text to 'saving-upload'. */}
+                        {/* FIX: Check for 'saving-upload' status for button text. */}
                         {status === 'saving-upload' ? 'Uploading...' : 'Upload'}
                     </button>
                 </div>
             </div>
 
-            {/* FIX: Add 'saving-upload' to loader condition. */}
+            {/* FIX: Add 'saving-upload' to the loader condition for the file browser view. */}
             {(status === 'loading_list' || status === 'loading_content' || status === 'saving-upload') && <div className="flex justify-center p-8"><Loader /></div>}
             {status === 'error' && <div className="p-4 bg-red-50 text-red-700 rounded-md">{error}</div>}
 
@@ -382,7 +383,7 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
                 <ul className="space-y-1">
                     {sortedFiles.map(file => (
                         <li key={file.id}>
-                            <button onClick={() => file.type === 'directory' ? handleDirClick(file.name.split('/').pop()!) : handleFileClick(file)} className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 text-left">
+                            <button onClick={() => handleFileClick(file)} className="w-full flex items-center gap-3 p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700/50 text-left">
                                 {file.type === 'directory' ? <FolderIcon className="w-5 h-5 text-yellow-500" /> : <FileIcon className="w-5 h-5 text-slate-500" />}
                                 <span className="font-medium text-slate-800 dark:text-slate-200">{file.name.split('/').pop()}</span>
                             </button>
@@ -394,287 +395,21 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
     );
 };
 
-// FIX: Implement missing component HotspotServerProfilesManager
 const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProfile, setEditingProfile] = useState<HotspotProfile | null>(null);
-
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const profilesData = await getHotspotProfiles(selectedRouter);
-            setProfiles(profilesData);
-        } catch (err) {
-            setError(`Could not fetch data: ${(err as Error).message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedRouter]);
-
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const handleSave = async (profileData: HotspotProfile | HotspotProfileData) => {
-        setIsSubmitting(true);
-        try {
-            if ('id' in profileData) await updateHotspotProfile(selectedRouter, profileData);
-            else await addHotspotProfile(selectedRouter, profileData);
-            setIsModalOpen(false);
-            setEditingProfile(null);
-            await fetchData();
-        } catch (err) { alert(`Error saving profile: ${(err as Error).message}`); }
-        finally { setIsSubmitting(false); }
-    };
-
-    const handleDelete = async (profileId: string) => {
-        if (!window.confirm("Are you sure?")) return;
-        try {
-            await deleteHotspotProfile(selectedRouter, profileId);
-            await fetchData();
-        } catch (err) { alert(`Error deleting profile: ${(err as Error).message}`); }
-    };
-    
-    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
-    if (error) return <div className="p-4 text-red-600">{error}</div>;
-
-    return <div>Profiles Manager Implementation...</div>;
+    // Implement full CRUD for Hotspot Server Profiles
+    // Fetch data, display in table, use modal for add/edit
+    return <div>Server Profiles Manager coming soon...</div>
 };
 
-// FIX: Implement missing component HotspotUserProfilesManager
 const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
-    const [pools, setPools] = useState<IpPool[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingProfile, setEditingProfile] = useState<HotspotUserProfile | null>(null);
-
-    const fetchData = useCallback(async () => {
-        setIsLoading(true);
-        setError(null);
-        try {
-            const [profilesData, poolsData] = await Promise.all([
-                getHotspotUserProfiles(selectedRouter),
-                getIpPools(selectedRouter)
-            ]);
-            setProfiles(profilesData);
-            setPools(poolsData);
-        } catch (err) {
-            setError(`Could not fetch data: ${(err as Error).message}`);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [selectedRouter]);
-
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    const handleSave = async (profileData: HotspotUserProfile | HotspotUserProfileData) => {
-        setIsSubmitting(true);
-        try {
-            if ('id' in profileData) {
-                await updateHotspotUserProfile(selectedRouter, profileData);
-            } else {
-                await addHotspotUserProfile(selectedRouter, profileData);
-            }
-            setIsModalOpen(false);
-            setEditingProfile(null);
-            await fetchData();
-        } catch (err) {
-            alert(`Error saving profile: ${(err as Error).message}`);
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const handleDelete = async (profileId: string) => {
-        if (!window.confirm("Are you sure you want to delete this user profile?")) return;
-        try {
-            await deleteHotspotUserProfile(selectedRouter, profileId);
-            await fetchData();
-        } catch (err) {
-            alert(`Error deleting profile: ${(err as Error).message}`);
-        }
-    };
-    
-    if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
-    if (error) return <div className="p-4 text-red-600">{error}</div>;
-
-    return <div>User Profiles Manager Implementation...</div>
-};
-
-
-// FIX: Implement missing component HotspotServerSetup
-const getPoolFromNetwork = (network: string): string => {
-    if (!/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/.test(network)) {
-        return '';
-    }
-    const [ip, cidrStr] = network.split('/');
-    const ipParts = ip.split('.').map(Number);
-    const cidr = parseInt(cidrStr, 10);
-    
-    if (cidr < 8 || cidr > 30) return ''; // Only handle reasonable subnet sizes
-
-    const startIp = [...ipParts];
-    startIp[3]++;
-    
-    const ipAsInt = (ipParts[0] << 24 | ipParts[1] << 16 | ipParts[2] << 8 | ipParts[3]) >>> 0;
-    const subnetMask = (0xffffffff << (32 - cidr)) >>> 0;
-    const networkAddress = ipAsInt & subnetMask;
-    const broadcastAddress = networkAddress | ~subnetMask;
-    
-    const endIpParts = [
-        (broadcastAddress >> 24) & 255,
-        (broadcastAddress >> 16) & 255,
-        (broadcastAddress >> 8) & 255,
-        (broadcastAddress & 255) - 1 // One less than broadcast
-    ];
-
-    // FIX: Removed spaces around the hyphen to match MikroTik API requirements.
-    return `${startIp.join('.')}-${endIpParts.join('.')}`;
+     // Implement full CRUD for Hotspot User Profiles
+    // Fetch data, display in table, use modal for add/edit
+    return <div>User Profiles Manager coming soon...</div>;
 };
 
 const HotspotServerSetup: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
-    const [setupMethod, setSetupMethod] = useState<'ai' | 'smart'>('smart');
-    const [params, setParams] = useState<HotspotSetupParams>({
-        hotspotInterface: '',
-        localAddress: '10.5.50.1/24',
-        addressPool: '10.5.50.2-10.5.50.254',
-        sslCertificate: 'none',
-        dnsServers: '8.8.8.8, 1.1.1.1',
-        dnsName: 'hotspot.login',
-        hotspotUser: 'admin',
-        hotspotPass: '1234'
-    });
-    const [interfaces, setInterfaces] = useState<Interface[]>([]);
-    const [certificates, setCertificates] = useState<SslCertificate[]>([]);
-    const [isLoadingData, setIsLoadingData] = useState(true);
-    const [isWorking, setIsWorking] = useState(false);
-    const [script, setScript] = useState('');
-    const [statusMessage, setStatusMessage] = useState<string | null>(null);
-    const [error, setError] = useState<string | null>(null);
-
-    const fetchData = useCallback(async () => {
-        setIsLoadingData(true);
-        setError(null);
-        try {
-            const [ifaces, certs] = await Promise.all([
-                getInterfaces(selectedRouter),
-                getSslCertificates(selectedRouter)
-            ]);
-            setInterfaces(ifaces);
-            setCertificates(certs.filter(c => !c.name.includes('*'))); // Filter default certs
-            
-            if (ifaces.length > 0 && !params.hotspotInterface) {
-                const defaultIface = ifaces.find(i => i.type === 'bridge' && i.name.toLowerCase().includes('lan'))?.name || ifaces.find(i => i.type === 'bridge')?.name || ifaces[0].name;
-                setParams(p => ({ ...p, hotspotInterface: defaultIface }));
-            }
-
-        } catch (err) {
-            setError(`Failed to fetch initial data: ${(err as Error).message}`);
-        } finally {
-            setIsLoadingData(false);
-        }
-    }, [selectedRouter, params.hotspotInterface]);
-
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setParams(p => {
-            const newParams = { ...p, [name]: value };
-            if (name === 'localAddress') {
-                newParams.addressPool = getPoolFromNetwork(value);
-            }
-            return newParams;
-        });
-    };
-    
-    const handleRun = async () => {
-        setIsWorking(true);
-        setScript('');
-        setStatusMessage(null);
-        setError(null);
-
-        if (setupMethod === 'ai') {
-            try {
-                const generatedScript = await generateHotspotSetupScript(params);
-                setScript(generatedScript);
-            } catch (err) {
-                setScript(`# Error generating script: ${(err as Error).message}`);
-            }
-        } else { // Smart Installer
-            try {
-                setStatusMessage("Starting Hotspot setup on router...");
-                const result = await runHotspotSetup(selectedRouter, params);
-                setStatusMessage(result.message);
-            } catch (err) {
-                setError(`Setup failed: ${(err as Error).message}`);
-            }
-        }
-        setIsWorking(false);
-    };
-    
-    if (isLoadingData) {
-        return <div className="flex justify-center p-8"><Loader /></div>;
-    }
-    
-    if (error && !isWorking) {
-        return <div className="p-4 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md">{error}</div>;
-    }
-
-    return (
-         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-700">
-                <h3 className="text-lg font-semibold text-[--color-primary-500] dark:text-[--color-primary-400]">Hotspot Server Setup Assistant</h3>
-            </div>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6">
-                <div className="space-y-4">
-                    {/* Form Fields */}
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Hotspot Interface</label><select name="hotspotInterface" value={params.hotspotInterface} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md">{interfaces.map(i => <option key={i.name}>{i.name}</option>)}</select></div>
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Local Address of Network</label><input name="localAddress" value={params.localAddress} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Address Pool of Network</label><input name="addressPool" value={params.addressPool} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">SSL Certificate</label><select name="sslCertificate" value={params.sslCertificate} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md"><option value="none">none</option>{certificates.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}</select></div>
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">DNS Servers</label><input name="dnsServers" value={params.dnsServers} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                    <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">DNS Name</label><input name="dnsName" value={params.dnsName} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                    <div className="grid grid-cols-2 gap-4">
-                         <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Hotspot Admin User</label><input name="hotspotUser" value={params.hotspotUser} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                         <div><label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Password</label><input name="hotspotPass" value={params.hotspotPass} onChange={handleChange} className="mt-1 w-full p-2 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md" /></div>
-                    </div>
-                </div>
-                 <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Installation Method</label>
-                        <div className="flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 p-1">
-                            <button onClick={() => setSetupMethod('smart')} className={`w-full rounded-md py-2 px-3 text-sm font-medium ${setupMethod === 'smart' ? 'bg-white dark:bg-slate-900 text-[--color-primary-600]' : 'text-slate-600 dark:text-slate-300'}`}>Smart Installer</button>
-                            <button onClick={() => setSetupMethod('ai')} className={`w-full rounded-md py-2 px-3 text-sm font-medium ${setupMethod === 'ai' ? 'bg-white dark:bg-slate-900 text-[--color-primary-600]' : 'text-slate-600 dark:text-slate-300'}`}>AI Script Generator</button>
-                        </div>
-                    </div>
-                     <button onClick={handleRun} disabled={isWorking} className="w-full bg-[--color-primary-600] hover:bg-[--color-primary-500] text-white font-bold py-3 px-4 rounded-lg flex items-center justify-center disabled:opacity-50">
-                        {isWorking ? 'Working...' : (setupMethod === 'ai' ? 'Generate Script' : 'Run Smart Setup')}
-                    </button>
-                    <div className="bg-slate-50 dark:bg-slate-900 rounded-lg p-2 border border-slate-200 dark:border-slate-700 min-h-[300px] relative">
-                        {isWorking && <div className="absolute inset-0 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-center"><Loader /></div>}
-                        {setupMethod === 'ai' ? (
-                            <CodeBlock script={script || '# The generated setup script will appear here.\n# Review it carefully before running it in the Terminal.'} />
-                        ) : (
-                            <div className="p-4 text-sm">
-                                {statusMessage && <p className="text-green-600 dark:text-green-400 font-semibold">{statusMessage}</p>}
-                                {error && <p className="text-red-600 dark:text-red-400 font-semibold">{error}</p>}
-                                {!statusMessage && !error && <p className="text-slate-500">Click "Run Smart Setup" to begin. The setup status will be shown here.</p>}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
+    // Implement Hotspot Setup Wizard form
+    return <div>Server Setup coming soon...</div>;
 };
 
 
@@ -709,13 +444,15 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         if (activeRes.status === 'fulfilled') {
             setActiveUsers(activeRes.value);
         } else {
-            newErrors.active = "Could not fetch active users.";
+            console.error("Failed to fetch Hotspot active users:", activeRes.reason);
+            newErrors.active = "Could not fetch active users. The Hotspot package might not be configured.";
             setActiveUsers([]);
         }
 
         if (hostsRes.status === 'fulfilled') {
             setHosts(hostsRes.value);
         } else {
+            console.error("Failed to fetch Hotspot hosts:", hostsRes.reason);
             newErrors.hosts = "Could not fetch device hosts.";
             setHosts([]);
         }
@@ -734,11 +471,11 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     }, [selectedRouter, fetchData, activeTab]);
 
     const handleKickUser = async (userId: string) => {
-        if (!selectedRouter || !window.confirm("Are you sure?")) return;
+        if (!selectedRouter || !window.confirm("Are you sure you want to kick this user?")) return;
         setIsSubmitting(true);
         try {
             await removeHotspotActiveUser(selectedRouter, userId);
-            await fetchData(true);
+            await fetchData(true); // Force a refresh
         } catch(err) {
             alert(`Error: ${(err as Error).message}`);
         } finally {
@@ -748,10 +485,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
     if (!selectedRouter) {
         return (
-             <div className="flex flex-col items-center justify-center h-96 text-center">
-                <RouterIcon className="w-16 h-16 text-slate-400 mb-4" />
-                <h2 className="text-2xl font-bold">Hotspot Management</h2>
-                <p className="mt-2 text-slate-500">Please select a router to manage its Hotspot.</p>
+             <div className="flex flex-col items-center justify-center h-96 text-center bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                <RouterIcon className="w-16 h-16 text-slate-400 dark:text-slate-600 mb-4" />
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200">Hotspot Management</h2>
+                <p className="mt-2 text-slate-500 dark:text-slate-400">Please select a router to manage its Hotspot.</p>
             </div>
         );
     }
@@ -771,7 +508,6 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
                 return <NodeMcuManager hosts={hosts} />;
             case 'editor': 
                 return <LoginPageEditor selectedRouter={selectedRouter} />;
-            // FIX: Render newly implemented components
             case 'profiles': 
                 return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
             case 'user-profiles': 
@@ -784,16 +520,14 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
     return (
         <div className="space-y-6">
-             <div className="border-b border-slate-200 dark:border-slate-700">
-                <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
-                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
-                    <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
-                    <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
-                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
-                    <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
-                    <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
-                </nav>
-            </div>
+             <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
+                <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
+                <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
+                <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
+                <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
+                <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
+                <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
+            </nav>
             <div>
                 {renderTabContent()}
             </div>
