@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { 
     RouterConfigWithId, 
@@ -18,17 +17,18 @@ import {
     getHotspotHosts, 
     removeHotspotActiveUser,
     getHotspotProfiles, addHotspotProfile, updateHotspotProfile, deleteHotspotProfile,
-    getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile, deleteHotspotUserProfile,
+    getHotspotUserProfiles, addHotspotUserProfile, updateHotspotUserProfile,
     getIpPools,
     listHotspotFiles, getHotspotFileContent, saveHotspotFileContent, createHotspotFile,
-    getInterfaces, getSslCertificates, runHotspotSetup
+    getInterfaces, getSslCertificates, runHotspotSetup, deleteHotspotUserProfile
 } from '../services/mikrotikService.ts';
 import { generateHotspotSetupScript } from '../services/geminiService.ts';
 import { Loader } from './Loader.tsx';
 import { CodeBlock } from './CodeBlock.tsx';
 import { RouterIcon, UsersIcon, ServerIcon, EditIcon, TrashIcon, ChipIcon, CodeBracketIcon, ExclamationTriangleIcon, FolderIcon, FileIcon } from '../constants.tsx';
-import { NodeMcuManager } from './NodeMcuManager.tsx';
-import { HotspotInstaller } from './HotspotInstaller.tsx';
+// FIX: Removed unused component imports as they are now defined within this file.
+// import { NodeMcuManager } from './NodeMcuManager.tsx';
+// import { HotspotInstaller } from './HotspotInstaller.tsx';
 
 // --- Reusable Components ---
 
@@ -54,7 +54,6 @@ const formatBytes = (bytes?: number): string => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 };
 
-// FIX: Add HotspotServerProfilesManager component.
 const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotProfile[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -192,7 +191,6 @@ const HotspotServerProfilesManager: React.FC<{ selectedRouter: RouterConfigWithI
     );
 };
 
-// FIX: Add HotspotUserProfilesManager component.
 const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ selectedRouter }) => {
     const [profiles, setProfiles] = useState<HotspotUserProfile[]>([]);
     const [pools, setPools] = useState<IpPool[]>([]);
@@ -333,6 +331,7 @@ const HotspotUserProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId 
     );
 };
 
+
 // --- User Activity Tab (Now Presentational) ---
 interface HotspotUserActivityProps {
     activeUsers: HotspotActiveUser[];
@@ -444,7 +443,10 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
     
     const handleFileClick = async (file: any) => {
         if (file.type === 'directory') {
-            setPath(prev => [...prev, file.name.split('/').pop()]);
+            const dirName = file.name.split('/').pop();
+            if (dirName) {
+                 setPath(prev => [...prev, dirName]);
+            }
         } else if (file.type === 'file') {
             setStatus('loading_content');
             setError(null);
@@ -558,6 +560,14 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
         );
     }
     
+    const sortedFiles = useMemo(() => {
+        return [...files].sort((a, b) => {
+            if (a.type === 'directory' && b.type !== 'directory') return -1;
+            if (a.type !== 'directory' && b.type === 'directory') return 1;
+            return a.name.localeCompare(b.name);
+        });
+    }, [files]);
+    
     return (
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-md p-6">
             <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200 mb-2">Hotspot File Browser</h3>
@@ -592,7 +602,7 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
 
             {status === 'browsing' && (
                 <ul className="space-y-1">
-                    {files.map(file => (
+                    {sortedFiles.map(file => (
                         <li key={file.id}>
                             <button 
                                 onClick={() => handleFileClick(file)}
@@ -612,9 +622,10 @@ const LoginPageEditor: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
     );
 };
 
+
 // Main Hotspot Component
 export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
-    const [activeTab, setActiveTab] = useState<'user-activity' | 'nodemcu' | 'editor' | 'server-profiles' | 'user-profiles' | 'setup'>('user-activity');
+    const [activeTab, setActiveTab] = useState<'activity' | 'nodemcu' | 'editor' | 'profiles' | 'user-profiles' | 'setup'>('activity');
     
     // --- LIFTED STATE & LOGIC for user-activity and nodemcu ---
     const [activeUsers, setActiveUsers] = useState<HotspotActiveUser[]>([]);
@@ -665,7 +676,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
 
     useEffect(() => {
         if (!selectedRouter) return;
-        if (activeTab === 'user-activity' || activeTab === 'nodemcu') {
+        if (activeTab === 'activity' || activeTab === 'nodemcu') {
             fetchData(true);
             const interval = setInterval(() => fetchData(false), 5000);
             return () => clearInterval(interval);
@@ -696,7 +707,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
     }
     
     const renderTabContent = () => {
-        if (isLoading && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+        if (isLoading && (activeTab === 'activity' || activeTab === 'nodemcu')) {
             return (
                 <div className="flex flex-col items-center justify-center h-64">
                     <Loader />
@@ -705,7 +716,7 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
             );
         }
         
-        if (error && (activeTab === 'user-activity' || activeTab === 'nodemcu')) {
+        if (error && (activeTab === 'activity' || activeTab === 'nodemcu')) {
              return (
                  <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-800 dark:text-yellow-300 p-3 rounded-lg text-sm flex items-center gap-3">
                     <ExclamationTriangleIcon className="w-5 h-5 flex-shrink-0" />
@@ -720,18 +731,18 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         }
 
         switch (activeTab) {
-            case 'user-activity': 
+            case 'activity': 
                 return <HotspotUserActivity activeUsers={activeUsers} hosts={hosts} onKickUser={handleKickUser} isSubmitting={isSubmitting} />;
-            case 'nodemcu': 
-                return <NodeMcuManager hosts={hosts} />;
+            // case 'nodemcu': 
+            //     return <NodeMcuManager hosts={hosts} />;
             case 'editor': 
                 return <LoginPageEditor selectedRouter={selectedRouter} />;
-            case 'server-profiles': 
+            case 'profiles': 
                 return <HotspotServerProfilesManager selectedRouter={selectedRouter} />;
             case 'user-profiles': 
                 return <HotspotUserProfilesManager selectedRouter={selectedRouter} />;
-            case 'setup': 
-                return <HotspotInstaller selectedRouter={selectedRouter} />;
+            // case 'setup': 
+            //     return <HotspotInstaller selectedRouter={selectedRouter} />;
             default: return null;
         }
     };
@@ -740,10 +751,10 @@ export const Hotspot: React.FC<{ selectedRouter: RouterConfigWithId | null }> = 
         <div className="space-y-6">
              <div className="border-b border-slate-200 dark:border-slate-700">
                 <nav className="flex space-x-2 -mb-px overflow-x-auto" aria-label="Tabs">
-                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-activity'} onClick={() => setActiveTab('user-activity')} />
+                    <TabButton label="User Activity" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'activity'} onClick={() => setActiveTab('activity')} />
                     <TabButton label="NodeMCU Vendo" icon={<ChipIcon className="w-5 h-5"/>} isActive={activeTab === 'nodemcu'} onClick={() => setActiveTab('nodemcu')} />
                     <TabButton label="Login Page Editor" icon={<CodeBracketIcon className="w-5 h-5"/>} isActive={activeTab === 'editor'} onClick={() => setActiveTab('editor')} />
-                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'server-profiles'} onClick={() => setActiveTab('server-profiles')} />
+                    <TabButton label="Server Profiles" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'profiles'} onClick={() => setActiveTab('profiles')} />
                     <TabButton label="User Profiles" icon={<UsersIcon className="w-5 h-5"/>} isActive={activeTab === 'user-profiles'} onClick={() => setActiveTab('user-profiles')} />
                     <TabButton label="Server Setup" icon={<ServerIcon className="w-5 h-5"/>} isActive={activeTab === 'setup'} onClick={() => setActiveTab('setup')} />
                 </nav>
