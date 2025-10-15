@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const { open } = require('sqlite');
@@ -362,7 +361,6 @@ app.get('/api/host-status', authenticateToken, async (req, res) => {
     }
 });
 
-// All other routes were here in the last refactor...
 const ztRouter = express.Router();
 ztRouter.use(authenticateToken);
 ztRouter.get('/status', async (req, res) => {
@@ -376,9 +374,140 @@ ztRouter.get('/status', async (req, res) => {
         res.status(500).json(err);
     }
 });
-// ... other zt routes ...
 app.use('/api/zt', ztRouter);
-// ... etc ...
+
+// --- Updater & Backup Routes ---
+app.post('/api/create-backup', authenticateToken, async (req, res) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = `db-backup-${timestamp}.sqlite`;
+    const backupFilePath = path.join(BACKUP_PATH, backupFile);
+    try {
+        await fs.ensureDir(BACKUP_PATH);
+        await fs.copyFile(DB_PATH, backupFilePath);
+        res.json({ message: `Successfully created backup: ${backupFile}` });
+    } catch (error) {
+        res.status(500).json({ message: `Failed to create backup: ${error.message}` });
+    }
+});
+
+app.get('/api/list-backups', authenticateToken, async (req, res) => {
+    try {
+        if (!await fs.pathExists(BACKUP_PATH)) {
+            await fs.mkdirp(BACKUP_PATH);
+            return res.json([]);
+        }
+        const files = await fs.readdir(BACKUP_PATH);
+        const allBackups = files.filter(f => f.endsWith('.tar.gz') || f.endsWith('.sqlite')).sort().reverse();
+        res.json(allBackups);
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to list backups' });
+    }
+});
+
+app.post('/api/delete-backup', authenticateToken, async (req, res) => {
+    const { backupFile } = req.body;
+    if (!backupFile || backupFile.includes('..')) {
+        return res.status(400).json({ message: 'Invalid backup filename.' });
+    }
+    const filePath = path.join(BACKUP_PATH, backupFile);
+    try {
+        await fs.remove(filePath);
+        res.json({ message: 'Backup deleted.' });
+    } catch (error) {
+        res.status(500).json({ message: `Failed to delete backup: ${error.message}` });
+    }
+});
+
+app.get('/download-backup/:filename', authenticateToken, (req, res) => {
+    const filename = req.params.filename;
+    if (filename.includes('..')) return res.status(400).send('Invalid filename.');
+    const filePath = path.join(BACKUP_PATH, filename);
+    res.download(filePath, (err) => {
+        if (err) res.status(404).send('File not found.');
+    });
+});
+
+app.get('/api/current-version', authenticateToken, async (req, res) => {
+    try {
+        const [hash, title, description] = await Promise.all([
+            execPromise('git rev-parse --short HEAD', { cwd: APP_ROOT }),
+            execPromise('git log -1 --pretty=%s', { cwd: APP_ROOT }),
+            execPromise('git log -1 --pretty=%b', { cwd: APP_ROOT }),
+        ]);
+        res.json({ hash, title, description: description.trim() });
+    } catch (e) {
+        res.status(500).json({ message: "Could not get version info. Is this a git repository?" });
+    }
+});
+
+const setupSse = (res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+    });
+};
+
+app.get('/api/update-status', authenticateToken, (req, res) => {
+    setupSse(res);
+    streamCommand(res, 'git', ['fetch']);
+});
+
+app.get('/api/update-app', authenticateToken, (req, res) => {
+    setupSse(res);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const backupFile = `backup-${timestamp}.tar.gz`;
+    const backupFilePath = path.join(BACKUP_PATH, backupFile);
+    sendSse(res, { log: `Creating backup: ${backupFile}` });
+
+    tar.c({ gzip: true, file: backupFilePath, cwd: APP_ROOT, filter: p => !p.startsWith('proxy/backups') }, ['.'])
+        .then(() => {
+            sendSse(res, { log: 'Backup created successfully.' });
+            sendSse(res, { log: 'Pulling latest changes from git...' });
+            streamCommand(res, 'git', ['pull']);
+        })
+        .catch(err => {
+            sendSse(res, { log: `Backup failed: ${err.message}`, isError: true });
+            sendSse(res, { status: 'error', message: 'Backup failed.' });
+            res.end();
+        });
+});
+
+app.get('/api/rollback-app', authenticateToken, (req, res) => {
+    setupSse(res);
+    const { backupFile } = req.query;
+    if (!backupFile || backupFile.includes('..')) {
+        sendSse(res, { log: 'Invalid backup file.', isError: true, status: 'error' });
+        return res.end();
+    }
+    const backupFilePath = path.join(BACKUP_PATH, backupFile);
+
+    fs.pathExists(backupFilePath)
+        .then(exists => {
+            if (!exists) {
+                sendSse(res, { log: 'Backup file not found.', isError: true, status: 'error' });
+                return res.end();
+            }
+            sendSse(res, { log: `Starting rollback from ${backupFile}` });
+            sendSse(res, { log: 'Extracting files...' });
+            tar.x({ file: backupFilePath, cwd: APP_ROOT })
+                .then(() => {
+                    sendSse(res, { log: 'Rollback complete. Restarting services...' });
+                    sendSse(res, { status: 'restarting' });
+                    // Restart logic using pm2
+                    exec('pm2 restart all', (err, stdout) => {
+                        if (err) sendSse(res, { log: `Restart failed: ${err.message}`, isError: true });
+                        else sendSse(res, { log: stdout });
+                        res.end();
+                    });
+                })
+                .catch(err => {
+                    sendSse(res, { log: `Extraction failed: ${err.message}`, isError: true, status: 'error' });
+                    res.end();
+                });
+        });
+});
+
 
 // --- File Fallback for Client-Side Routing ---
 app.get('*', (req, res) => {

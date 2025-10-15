@@ -18,50 +18,61 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         throw new Error('Session expired. Please log in again.');
     }
   
-    const contentType = response.headers.get("content-type");
     if (!response.ok) {
         let errorMsg = `Request failed with status ${response.status}`;
         try {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
         } catch (e) {
-            errorMsg = await response.text();
+            // If parsing JSON fails, try to get text
+            try {
+                errorMsg = await response.text();
+            } catch (e2) { /* ignore */ }
         }
         throw new Error(errorMsg);
     }
 
     if (response.status === 204) {
-        // Return empty array for list endpoints to prevent crashes on .filter
-        if (path === '/api/list-backups') {
+        // Return empty array for list endpoints to prevent crashes
+        if (path.includes('backups')) {
             return [] as unknown as T;
         }
-        // For other endpoints like version info, an empty object might be a safe default
         return {} as T;
     }
 
     const text = await response.text();
+    const contentType = response.headers.get("content-type");
 
     if (contentType && contentType.includes("application/json")) {
         // Handle cases where the body might be empty even with a JSON content type
         if (!text) {
-             if (path === '/api/list-backups') return [] as unknown as T;
+             if (path.includes('backups')) return [] as unknown as T;
              return {} as T;
         }
-        const data = JSON.parse(text);
-        // Ensure list endpoints always return an array
-        if (path === '/api/list-backups' && !Array.isArray(data)) {
-            return [] as unknown as T;
-        }
-        return data as T;
+        return JSON.parse(text) as T;
     }
-
-    // Throw an error for unexpected content types instead of returning text
+    
+    // Fallback for non-JSON 200 OK responses (e.g., server returning index.html)
+    // which can happen if an API endpoint is missing.
+    if (path.includes('backups')) {
+        console.error(`Expected a JSON response from '${path}' but received '${contentType}'. Returning empty array.`);
+        return [] as unknown as T;
+    }
+    
     throw new Error(`Expected a JSON response from '${path}' but received '${contentType}'.`);
 };
 
 // --- Functions for simple fetch calls ---
 export const getCurrentVersion = () => fetchData<VersionInfo>('/api/current-version');
-export const listBackups = () => fetchData<string[]>('/api/list-backups');
+
+export const listBackups = async (): Promise<string[]> => {
+    const allBackups = await fetchData<string[]>('/api/list-backups');
+    if (Array.isArray(allBackups)) {
+        return allBackups.filter(file => file.endsWith('.tar.gz'));
+    }
+    return []; // Always return an array
+};
+
 export const deleteBackup = (backupFile: string) => fetchData('/api/delete-backup', {
     method: 'POST',
     body: JSON.stringify({ backupFile }),

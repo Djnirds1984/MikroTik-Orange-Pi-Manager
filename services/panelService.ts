@@ -1,5 +1,3 @@
-
-
 import type { PanelHostStatus, PanelNtpStatus } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
@@ -21,13 +19,12 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         throw new Error('Session expired. Please log in again.');
     }
   
-    const contentType = response.headers.get("content-type");
     if (!response.ok) {
         let errorMsg = `Request failed with status ${response.status}`;
-        if (contentType && contentType.includes("application/json")) {
+        try {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
-        } else {
+        } catch(e) {
             const textError = await response.text();
             if (textError) errorMsg = textError;
         }
@@ -37,13 +34,14 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     if (response.status === 204) { // No Content
         // For endpoints that return lists, an empty array is a better "no content" representation
         // than null, which can cause .filter/.map errors downstream.
-        if (path.includes('backups') || path.includes('/api/db/')) {
+        if (path.includes('backups') || path.startsWith('/api/db/')) {
             return [] as unknown as T;
         }
         return null as T;
     }
 
     const text = await response.text();
+    const contentType = response.headers.get("content-type");
 
     if (contentType && contentType.includes("application/json")) {
         // Return a default value for empty JSON responses to prevent parsing errors
@@ -59,8 +57,13 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     if (path.startsWith('/api/host/logs')) {
         return text as unknown as T;
     }
-
+    
     // Fallback for non-JSON 200 OK responses (e.g., server returning index.html)
+    if (path.includes('backups') || path.startsWith('/api/db/')) {
+        console.error(`Expected a JSON response from '${path}' but received '${contentType}'. Returning empty array.`);
+        return [] as unknown as T;
+    }
+
     throw new Error(`Expected a JSON response from '${path}' but received '${contentType}'.`);
 };
 
@@ -86,8 +89,12 @@ export const createDatabaseBackup = (): Promise<{ message: string }> => {
     return fetchData<{ message: string }>('/api/create-backup', { method: 'POST' });
 };
 
-export const listDatabaseBackups = (): Promise<string[]> => {
-    return fetchData<string[]>('/api/list-backups');
+export const listDatabaseBackups = async (): Promise<string[]> => {
+    const allBackups = await fetchData<string[]>('/api/list-backups');
+    if (Array.isArray(allBackups)) {
+        return allBackups.filter(file => file.endsWith('.sqlite'));
+    }
+    return []; // Always return an array
 };
 
 export const deleteDatabaseBackup = (backupFile: string): Promise<{ message: string }> => {
