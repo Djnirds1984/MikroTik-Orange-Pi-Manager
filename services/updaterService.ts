@@ -1,6 +1,3 @@
-
-
-
 import { getAuthHeader } from './databaseService.ts';
 import type { VersionInfo } from '../types.ts';
 
@@ -69,6 +66,26 @@ export const deleteBackup = (backupFile: string) => fetchData('/api/delete-backu
     method: 'POST',
     body: JSON.stringify({ backupFile }),
 });
+
+export const downloadBackup = async (backupFile: string): Promise<void> => {
+    const response = await fetch(`/download-backup/${encodeURIComponent(backupFile)}`, {
+        headers: getAuthHeader(),
+    });
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to download backup: ${response.statusText} - ${errorText}`);
+    }
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = backupFile;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+};
 
 
 // --- Streaming Logic using Fetch API ---

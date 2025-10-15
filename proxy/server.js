@@ -16,7 +16,7 @@ const DB_PATH = path.join(__dirname, 'panel.db');
 const JWT_SECRET = 'your_super_secret_key_for_jwt_that_is_very_long_and_secure';
 
 const APP_ROOT = path.join(__dirname, '..');
-const BACKUP_PATH = path.join(APP_ROOT, 'backups');
+const BACKUP_PATH = path.join(__dirname, 'backups');
 
 let db;
 
@@ -354,7 +354,7 @@ app.get('/api/update-app', authenticateToken, (req, res) => {
             const archive = archiver('tar', { gzip: true });
             const output = fs.createWriteStream(path.join(BACKUP_PATH, backupFile));
             archive.pipe(output);
-            archive.glob('**/*', { cwd: APP_ROOT, ignore: ['backups/**', 'node_modules/**', '.git/**'] });
+            archive.glob('**/*', { cwd: APP_ROOT, ignore: ['proxy/backups/**', 'node_modules/**', '.git/**'] });
             await archive.finalize();
             sendSse(res, { log: `Backup created: ${backupFile}` });
 
