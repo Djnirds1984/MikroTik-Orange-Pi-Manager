@@ -37,10 +37,18 @@ export const License: React.FC = () => {
                 headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
                 body: JSON.stringify({ licenseKey }),
             });
-            const data = await res.json();
+
+            const contentType = res.headers.get("content-type");
             if (!res.ok) {
-                throw new Error(data.message || 'Activation failed.');
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.message || `Activation failed with status: ${res.status}`);
+                } else {
+                    throw new Error(`Activation failed. The server returned an unexpected response.`);
+                }
             }
+            
+            await res.json();
             alert('Activation successful! The application will now reload.');
             window.location.reload();
         } catch (err) {

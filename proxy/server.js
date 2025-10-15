@@ -21,6 +21,8 @@ const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
 const NGROK_CONFIG_PATH = path.join(__dirname, 'ngrok-config.json');
 const NGROK_BINARY_PATH = '/usr/local/bin/ngrok';
 const SECRET_KEY = process.env.JWT_SECRET || 'a-very-weak-secret-key-for-dev-only';
+const LICENSE_SECRET_KEY = process.env.LICENSE_SECRET || 'a-long-and-very-secret-string-for-licenses-!@#$%^&*()';
+
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ limit: '5mb' })); // For AI fixer
@@ -381,6 +383,18 @@ async function initDb() {
             await db.exec('PRAGMA user_version = 13;');
             user_version = 13;
         }
+        
+        if (user_version < 14) {
+            console.log('Applying migration v14 (Add license table)...');
+            await db.exec(`
+                CREATE TABLE IF NOT EXISTS license (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                );
+            `);
+            await db.exec('PRAGMA user_version = 14;');
+            user_version = 14;
+        }
 
 
     } catch (err) {
@@ -603,11 +617,74 @@ authRouter.post('/logout', (req, res) => {
 
 app.use('/api/auth', authRouter);
 
-// --- Panel User & Role Management ---
-const panelAdminRouter = express.Router();
-panelAdminRouter.use(protect);
+// --- License Management ---
+const getDeviceId = () => {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // Find the first non-internal MAC address
+            if (!iface.internal && iface.mac) {
+                return iface.mac.replace(/:/g, '').toLowerCase();
+            }
+        }
+    }
+    // Fallback if no MAC found
+    return 'no-mac-address-found-for-id';
+};
 
-// Middleware to check for admin role
+const licenseRouter = express.Router();
+licenseRouter.use(protect);
+
+licenseRouter.get('/device-id', (req, res) => {
+    res.json({ deviceId: getDeviceId() });
+});
+
+licenseRouter.get('/status', async (req, res) => {
+    try {
+        const result = await db.get("SELECT value FROM license WHERE key = 'license_key'");
+        if (!result || !result.value) {
+            return res.json({ licensed: false });
+        }
+        
+        const licenseKey = result.value;
+        jwt.verify(licenseKey, LICENSE_SECRET_KEY, (err, decoded) => {
+            if (err || decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
+                if (err) console.error("License verification error:", err.message);
+                return res.json({ licensed: false });
+            }
+            res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+        });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
+licenseRouter.post('/activate', async (req, res) => {
+    const { licenseKey } = req.body;
+    if (!licenseKey) {
+        return res.status(400).json({ message: 'License key is required.' });
+    }
+
+    jwt.verify(licenseKey, LICENSE_SECRET_KEY, async (err, decoded) => {
+        if (err) {
+            return res.status(400).json({ message: 'Invalid or expired license key.' });
+        }
+        if (decoded.deviceId !== getDeviceId()) {
+            return res.status(400).json({ message: 'License key is for a different device.' });
+        }
+        if (new Date(decoded.expiresAt) < new Date()) {
+            return res.status(400).json({ message: 'License key has expired.' });
+        }
+
+        try {
+            await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
+            res.json({ success: true, message: 'Application activated successfully.' });
+        } catch (e) {
+            res.status(500).json({ message: `Database error: ${e.message}` });
+        }
+    });
+});
+
 const requireAdmin = (req, res, next) => {
     if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
         return next();
@@ -615,6 +692,29 @@ const requireAdmin = (req, res, next) => {
     res.status(403).json({ message: 'Forbidden: Administrator access required.' });
 };
 
+licenseRouter.post('/generate', requireAdmin, (req, res) => {
+    const { deviceId, days } = req.body;
+    if (!deviceId || !days) {
+        return res.status(400).json({ message: 'Device ID and validity days are required.' });
+    }
+    
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + parseInt(days, 10));
+
+    const payload = { deviceId, expiresAt: expiresAt.toISOString() };
+    const licenseKey = jwt.sign(payload, LICENSE_SECRET_KEY);
+
+    res.json({ licenseKey });
+});
+
+app.use('/api/license', licenseRouter);
+
+
+// --- Panel User & Role Management ---
+const panelAdminRouter = express.Router();
+panelAdminRouter.use(protect);
+
+// Middleware to check for admin role
 panelAdminRouter.get('/roles', requireAdmin, async (req, res) => {
     try {
         const roles = await db.all('SELECT id, name, description FROM roles');

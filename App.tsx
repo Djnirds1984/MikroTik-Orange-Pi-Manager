@@ -238,7 +238,12 @@ const AppRouter: React.FC = () => {
             const checkLicense = async () => {
                 try {
                     const res = await fetch('/api/license/status', { headers: getAuthHeader() });
-                    if (!res.ok) { throw new Error('Failed to fetch license status'); }
+                    if (!res.ok) { 
+                        // If status fails, but it's not a JSON error, we might be getting HTML.
+                        // For safety, assume unlicensed unless we get a clear `licensed: true`.
+                        setLicenseStatus({ isLoading: false, licensed: false });
+                        return;
+                    }
                     const data: LicenseStatus = await res.json();
                     setLicenseStatus({ isLoading: false, licensed: data.licensed });
                 } catch (error) {
@@ -271,7 +276,8 @@ const AppRouter: React.FC = () => {
         );
     }
     
-    if (!licenseStatus.licensed) {
+    // Admins can bypass the license check to access Super Admin tools.
+    if (!licenseStatus.licensed && user.role.name.toLowerCase() !== 'administrator') {
         return <License />;
     }
 
