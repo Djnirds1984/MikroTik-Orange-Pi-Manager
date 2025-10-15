@@ -18,7 +18,8 @@ export const useVoucherPlans = (routerId: string | null) => {
         setIsLoading(true);
         setError(null);
         try {
-            const data = await dbApi.get<VoucherPlanWithId[]>(`/voucher-plans?routerId=${routerId}`);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            const data = await dbApi.get<VoucherPlanWithId[]>(`/voucher_plans?routerId=${routerId}`);
             setPlans(data);
         } catch (err) {
             setError((err as Error).message);
@@ -44,7 +45,8 @@ export const useVoucherPlans = (routerId: string | null) => {
                 routerId: routerId,
                 currency: planConfig.currency || currency,
             };
-            await dbApi.post('/voucher-plans', newPlan);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.post('/voucher_plans', newPlan);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to add voucher plan:", err);
@@ -54,7 +56,8 @@ export const useVoucherPlans = (routerId: string | null) => {
 
     const updatePlan = async (updatedPlan: VoucherPlanWithId) => {
         try {
-            await dbApi.patch(`/voucher-plans/${updatedPlan.id}`, updatedPlan);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.patch(`/voucher_plans/${updatedPlan.id}`, updatedPlan);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to update voucher plan:", err);
@@ -64,11 +67,11 @@ export const useVoucherPlans = (routerId: string | null) => {
 
     const deletePlan = async (planId: string) => {
         try {
-            await dbApi.delete(`/voucher-plans/${planId}`);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.delete(`/voucher_plans/${planId}`);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to delete voucher plan:", err);
-            throw err;
         }
     };
 

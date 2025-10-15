@@ -49,9 +49,11 @@ export const dbApi = {
 };
 
 export const getPanelSettings = (): Promise<PanelSettings> => {
-    return dbApi.get<PanelSettings>('/panel-settings');
+    // FIX: Use snake_case for the API endpoint to match the database table name.
+    return dbApi.get<PanelSettings>('/panel_settings');
 };
 
 export const savePanelSettings = (settings: Partial<PanelSettings>): Promise<{ message: string }> => {
-    return dbApi.post<{ message: string }>('/panel-settings', settings);
+    // FIX: Use snake_case for the API endpoint to match the database table name.
+    return dbApi.post<{ message: string }>('/panel_settings', settings);
 };

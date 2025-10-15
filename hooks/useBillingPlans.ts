@@ -17,7 +17,8 @@ export const useBillingPlans = (routerId: string | null) => {
         setIsLoading(true);
         setError(null);
         try {
-            const data = await dbApi.get<BillingPlanWithId[]>(`/billing-plans?routerId=${routerId}`);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            const data = await dbApi.get<BillingPlanWithId[]>(`/billing_plans?routerId=${routerId}`);
             // FIX: Provide a fallback currency for plans created before this update.
             const dataWithFallback = data.map(plan => ({
                 ...plan,
@@ -47,7 +48,8 @@ export const useBillingPlans = (routerId: string | null) => {
                 id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 routerId: routerId,
             };
-            await dbApi.post('/billing-plans', newPlan);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.post('/billing_plans', newPlan);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to add billing plan:", err);
@@ -56,7 +58,8 @@ export const useBillingPlans = (routerId: string | null) => {
 
     const updatePlan = async (updatedPlan: BillingPlanWithId) => {
         try {
-            await dbApi.patch(`/billing-plans/${updatedPlan.id}`, updatedPlan);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.patch(`/billing_plans/${updatedPlan.id}`, updatedPlan);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to update billing plan:", err);
@@ -65,7 +68,8 @@ export const useBillingPlans = (routerId: string | null) => {
 
     const deletePlan = async (planId: string) => {
         try {
-            await dbApi.delete(`/billing-plans/${planId}`);
+            // FIX: Use snake_case for the API endpoint to match the database table name.
+            await dbApi.delete(`/billing_plans/${planId}`);
             await fetchPlans();
         } catch (err) {
             console.error("Failed to delete billing plan:", err);
