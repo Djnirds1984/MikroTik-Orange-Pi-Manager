@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "postinstall": "npm install --prefix proxy && npm install --prefix api-backend",
     "dev": "vite",
     "build": "vite build --outDir dist",
     "preview": "vite preview"
