@@ -18,7 +18,6 @@ export const useVoucherPlans = (routerId: string | null) => {
         setIsLoading(true);
         setError(null);
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             const data = await dbApi.get<VoucherPlanWithId[]>(`/voucher_plans?routerId=${routerId}`);
             setPlans(data);
         } catch (err) {
@@ -45,7 +44,6 @@ export const useVoucherPlans = (routerId: string | null) => {
                 routerId: routerId,
                 currency: planConfig.currency || currency,
             };
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.post('/voucher_plans', newPlan);
             await fetchPlans();
         } catch (err) {
@@ -56,7 +54,6 @@ export const useVoucherPlans = (routerId: string | null) => {
 
     const updatePlan = async (updatedPlan: VoucherPlanWithId) => {
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.patch(`/voucher_plans/${updatedPlan.id}`, updatedPlan);
             await fetchPlans();
         } catch (err) {
@@ -67,7 +64,6 @@ export const useVoucherPlans = (routerId: string | null) => {
 
     const deletePlan = async (planId: string) => {
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.delete(`/voucher_plans/${planId}`);
             await fetchPlans();
         } catch (err) {

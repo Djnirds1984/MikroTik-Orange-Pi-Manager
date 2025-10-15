@@ -76,7 +76,7 @@ const initializeDatabase = async () => {
         if (!superadminUser) {
             const superadminRoleId = (await db.get("SELECT id FROM roles WHERE name = 'Superadmin'")).id;
             const hashedPassword = await bcrypt.hash('superadmin12345', 10);
-            await db.run("INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)", 'superadmin', hashedPassword, superadminRoleId);
+            await db.run("INSERT INTO users (username, password, role_id) VALUES (?, ?, ?, ?)", 'superadmin', hashedPassword, superadminRoleId);
         }
 
         console.log('Database initialized successfully.');
@@ -88,6 +88,8 @@ const initializeDatabase = async () => {
 
 // --- Middleware ---
 app.use(express.json());
+// Serve locale files specifically
+app.use('/locales', express.static(path.join(__dirname, '../locales')));
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Cache-control middleware for API routes to prevent stale license status

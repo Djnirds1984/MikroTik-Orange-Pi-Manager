@@ -17,9 +17,7 @@ export const useBillingPlans = (routerId: string | null) => {
         setIsLoading(true);
         setError(null);
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             const data = await dbApi.get<BillingPlanWithId[]>(`/billing_plans?routerId=${routerId}`);
-            // FIX: Provide a fallback currency for plans created before this update.
             const dataWithFallback = data.map(plan => ({
                 ...plan,
                 currency: plan.currency || 'USD'
@@ -48,7 +46,6 @@ export const useBillingPlans = (routerId: string | null) => {
                 id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 routerId: routerId,
             };
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.post('/billing_plans', newPlan);
             await fetchPlans();
         } catch (err) {
@@ -58,7 +55,6 @@ export const useBillingPlans = (routerId: string | null) => {
 
     const updatePlan = async (updatedPlan: BillingPlanWithId) => {
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.patch(`/billing_plans/${updatedPlan.id}`, updatedPlan);
             await fetchPlans();
         } catch (err) {
@@ -68,7 +64,6 @@ export const useBillingPlans = (routerId: string | null) => {
 
     const deletePlan = async (planId: string) => {
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.delete(`/billing_plans/${planId}`);
             await fetchPlans();
         } catch (err) {

@@ -19,7 +19,6 @@ export const useCompanySettings = () => {
         setIsLoading(true);
         setError(null);
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             const data = await dbApi.get<CompanySettings>('/company_settings');
             setSettings(s => ({...s, ...data}));
         } catch (err) {
@@ -36,7 +35,6 @@ export const useCompanySettings = () => {
 
     const updateSettings = async (updatedSettings: CompanySettings) => {
         try {
-            // FIX: Use snake_case for the API endpoint to match the database table name.
             await dbApi.post('/company_settings', updatedSettings);
             await fetchSettings(); // Re-fetch to confirm changes
         } catch (err) {
