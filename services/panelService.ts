@@ -1,3 +1,4 @@
+
 import type { PanelHostStatus, PanelNtpStatus } from '../types.ts';
 import { getAuthHeader } from './databaseService.ts';
 
@@ -41,7 +42,14 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     }
     
     // This will handle the text/plain response for logs
-    return response.text() as unknown as Promise<T>;
+    if (path.startsWith('/api/host/logs')) {
+        return response.text() as unknown as Promise<T>;
+    }
+
+    // If we land here, we got a 200 OK but not with the expected JSON content-type.
+    // This is likely a server misconfiguration (e.g., fallback to index.html).
+    const textResponse = await response.text();
+    throw new Error(`Expected a JSON response from '${path}' but received '${contentType}'. Response body started with: ${textResponse.substring(0, 150)}...`);
 };
 
 export const getPanelHostStatus = (): Promise<PanelHostStatus> => {

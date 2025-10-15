@@ -18,6 +18,27 @@ const JWT_SECRET = 'your_super_secret_key_for_jwt_that_is_very_long_and_secure';
 
 let db;
 
+// --- Helper for Host Status ---
+function getCPUUsage() {
+    return new Promise((resolve) => {
+        // top -bn1 gets a single snapshot. grep 'Cpu(s)' gets the CPU line.
+        // sed extracts the idle percentage. awk calculates 100 - idle %.
+        exec("top -bn1 | grep 'Cpu(s)' | sed 's/.*, *\\([0-9.]*\\)%* id.*/\\1/' | awk '{print 100 - $1}'", (err, stdout) => {
+            if (err) {
+                console.error("Failed to get CPU usage with 'top', falling back to load average.", err);
+                const load = os.loadavg();
+                const numCPUs = os.cpus().length || 1;
+                // loadavg is over 1, 5, 15 minutes. Not ideal for realtime, but a decent fallback.
+                resolve(Math.min((load[0] / numCPUs) * 100, 100));
+                return;
+            }
+            const usage = parseFloat(stdout.trim());
+            resolve(isNaN(usage) ? 0 : usage);
+        });
+    });
+}
+
+
 // --- Database Initialization and Migrations ---
 const initializeDatabase = async () => {
     try {
@@ -184,6 +205,79 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/status', authenticateToken, (req, res) => {
     res.json(req.user);
 });
+
+// --- Host Status API ---
+app.get('/api/host-status', authenticateToken, async (req, res) => {
+    try {
+        const diskUsagePromise = new Promise((resolve) => {
+            // Using -k to get sizes in 1K blocks to avoid parsing 'G', 'M', etc.
+            exec("df -k /", (err, stdout) => {
+                if (err) {
+                    console.error("Failed to get disk usage with 'df':", err);
+                    return resolve({ total: 'N/A', used: 'N/A', free: 'N/A', percent: 0 });
+                }
+                try {
+                    const lines = stdout.trim().split('\n');
+                    // Start from the last line and go up in case of wrapped lines
+                    for (let i = lines.length - 1; i > 0; i--) {
+                        const parts = lines[i].trim().split(/\s+/);
+                        if (parts[parts.length - 1] === '/') {
+                            const [_filesystem, total, used, free, percentStr] = parts;
+                            const formatKB = (kb) => {
+                                const bytes = parseInt(kb, 10) * 1024;
+                                if (bytes === 0) return '0 B';
+                                const k = 1024;
+                                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+                            };
+                            resolve({
+                                total: formatKB(total),
+                                used: formatKB(used),
+                                free: formatKB(free),
+                                percent: parseFloat(percentStr) || 0
+                            });
+                            return;
+                        }
+                    }
+                    throw new Error('Could not find root mount point');
+                } catch (parseError) {
+                    console.error("Failed to parse 'df' output:", parseError, "Output:", stdout);
+                    resolve({ total: 'N/A', used: 'N/A', free: 'N/A', percent: 0 });
+                }
+            });
+        });
+
+        const [cpuUsage, disk] = await Promise.all([getCPUUsage(), diskUsagePromise]);
+
+        const totalMemory = os.totalmem();
+        const freeMemory = os.freemem();
+        const usedMemory = totalMemory - freeMemory;
+
+        const formatBytes = (bytes) => {
+             if (bytes === 0) return '0 B';
+             const k = 1024;
+             const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+             const i = Math.floor(Math.log(bytes) / Math.log(k));
+             return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + sizes[i];
+        }
+
+        res.json({
+            cpuUsage: cpuUsage,
+            memory: {
+                total: formatBytes(totalMemory),
+                free: formatBytes(freeMemory),
+                used: formatBytes(usedMemory),
+                percent: (usedMemory / totalMemory) * 100
+            },
+            disk: disk
+        });
+
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+});
+
 
 // --- Generic Database API ---
 
