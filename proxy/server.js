@@ -120,7 +120,6 @@ const authenticateToken = async (req, res, next) => {
     }
 };
 
-// FIX: Middleware to convert kebab-case to snake_case for DB resource names
 const snakeCaseResource = (req, res, next) => {
     if (req.params.resource) {
         req.params.resource = req.params.resource.replace(/-/g, '_');
@@ -187,8 +186,33 @@ app.get('/api/auth/status', authenticateToken, (req, res) => {
 });
 
 // --- Generic Database API ---
+
+// Specific handlers for settings to override the generic one and fix kebab-case issue from old clients
+const getSettings = async (tableName, res) => {
+    try {
+        const rows = await db.all(`SELECT * FROM ${tableName}`);
+        const settings = rows.reduce((acc, row) => {
+            acc[row.key] = row.value;
+            return acc;
+        }, {});
+        res.json(settings);
+    } catch (e) {
+        res.status(500).json({ message: e.message });
+    }
+};
+
+app.get('/api/db/company-settings', authenticateToken, (req, res) => getSettings('company_settings', res));
+app.get('/api/db/panel-settings', authenticateToken, (req, res) => getSettings('panel_settings', res));
+
+
 app.get('/api/db/:resource', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
+        // Special handling for key-value tables in case they are called with snake_case
+        if (req.params.resource === 'company_settings' || req.params.resource === 'panel_settings') {
+            return await getSettings(req.params.resource, res);
+        }
+        
+        // Original generic handler for list-based tables
         const data = await db.all(`SELECT * FROM ${req.params.resource}`);
         res.json(data);
     } catch(e) { res.status(500).json({ message: e.message }); }
@@ -196,13 +220,36 @@ app.get('/api/db/:resource', authenticateToken, snakeCaseResource, async (req, r
 
 app.post('/api/db/:resource', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
-        const columns = Object.keys(req.body).join(', ');
-        const placeholders = Object.keys(req.body).map(() => '?').join(', ');
-        const values = Object.values(req.body);
-        await db.run(`INSERT OR REPLACE INTO ${req.params.resource} (${columns}) VALUES (${placeholders})`, values);
-        res.status(201).json({ message: 'Created/Replaced' });
-    } catch(e) { res.status(500).json({ message: e.message }); }
+        if (req.params.resource === 'company_settings' || req.params.resource === 'panel_settings') {
+            const settings = req.body;
+            await db.exec('BEGIN TRANSACTION');
+            try {
+                for (const key in settings) {
+                    if (Object.prototype.hasOwnProperty.call(settings, key)) {
+                        const value = settings[key];
+                        const dbValue = (value === null || value === undefined) ? null : String(value);
+                        await db.run(`INSERT OR REPLACE INTO ${req.params.resource} (key, value) VALUES (?, ?)`, [key, dbValue]);
+                    }
+                }
+                await db.exec('COMMIT');
+                res.status(201).json({ message: 'Settings updated' });
+            } catch (e) {
+                await db.exec('ROLLBACK');
+                throw e; // Re-throw to be caught by outer catch
+            }
+        } else {
+            // Original generic handler
+            const columns = Object.keys(req.body).join(', ');
+            const placeholders = Object.keys(req.body).map(() => '?').join(', ');
+            const values = Object.values(req.body);
+            await db.run(`INSERT OR REPLACE INTO ${req.params.resource} (${columns}) VALUES (${placeholders})`, values);
+            res.status(201).json({ message: 'Created/Replaced' });
+        }
+    } catch(e) { 
+        res.status(500).json({ message: e.message }); 
+    }
 });
+
 
 app.patch('/api/db/:resource/:id', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
