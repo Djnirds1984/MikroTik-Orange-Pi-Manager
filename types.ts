@@ -20,7 +20,15 @@ export type View =
   | 'logs'
   | 'panel_roles'
   | 'help'
-  | 'mikrotik_files';
+  | 'mikrotik_files'
+  | 'license'
+  | 'super_admin';
+
+export interface LicenseStatus {
+  licensed: boolean;
+  expires?: string;
+  deviceId?: string;
+}
 
 export interface RouterConfig {
   name: string;

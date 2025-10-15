@@ -25,6 +25,8 @@ import { SuperRouter } from './components/SuperRouter.tsx';
 import { Logs } from './components/Logs.tsx';
 import { PanelRoles } from './components/PanelRoles.tsx';
 import { MikrotikFiles } from './components/MikrotikFiles.tsx';
+import { License } from './components/License.tsx';
+import { SuperAdmin } from './components/SuperAdmin.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -33,7 +35,9 @@ import { useCompanySettings } from './hooks/useCompanySettings.ts';
 import { LocalizationProvider, useLocalization } from './contexts/LocalizationContext.tsx';
 import { ThemeProvider } from './contexts/ThemeContext.tsx';
 import { useAuth } from './contexts/AuthContext.tsx';
-import type { View } from './types.ts';
+import type { View, LicenseStatus } from './types.ts';
+import { getAuthHeader } from './services/databaseService.ts';
+
 
 const useMediaQuery = (query: string): boolean => {
   const getMatches = (query: string): boolean => {
@@ -169,6 +173,10 @@ const AppContent: React.FC = () => {
         return <Logs selectedRouter={selectedRouter} />;
       case 'panel_roles':
         return <PanelRoles />;
+      case 'license':
+          return <License />;
+      case 'super_admin':
+          return <SuperAdmin />;
       default:
         return <Dashboard selectedRouter={selectedRouter} />;
     }
@@ -213,6 +221,7 @@ const AppContent: React.FC = () => {
 const AppRouter: React.FC = () => {
     const { user, isLoading, hasUsers } = useAuth();
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
+    const [licenseStatus, setLicenseStatus] = useState<{ isLoading: boolean; licensed: boolean; }>({ isLoading: true, licensed: false });
 
     useEffect(() => {
         if (!isLoading) {
@@ -223,8 +232,28 @@ const AppRouter: React.FC = () => {
             }
         }
     }, [isLoading, hasUsers]);
+    
+    useEffect(() => {
+        if (user) {
+            const checkLicense = async () => {
+                try {
+                    const res = await fetch('/api/license/status', { headers: getAuthHeader() });
+                    if (!res.ok) { throw new Error('Failed to fetch license status'); }
+                    const data: LicenseStatus = await res.json();
+                    setLicenseStatus({ isLoading: false, licensed: data.licensed });
+                } catch (error) {
+                    console.error(error);
+                    setLicenseStatus({ isLoading: false, licensed: false });
+                }
+            };
+            checkLicense();
+        } else if (!isLoading) {
+            // If there's no user and we're not loading auth, we don't need to check license
+            setLicenseStatus({ isLoading: false, licensed: false });
+        }
+    }, [user, isLoading]);
 
-    if (isLoading) {
+    if (isLoading || (user && licenseStatus.isLoading)) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
                 <Loader />
@@ -240,6 +269,10 @@ const AppRouter: React.FC = () => {
                 {authView === 'forgot' && <ForgotPassword onSwitchToLogin={() => setAuthView('login')} />}
             </AuthLayout>
         );
+    }
+    
+    if (!licenseStatus.licensed) {
+        return <License />;
     }
 
     return <AppContent />;

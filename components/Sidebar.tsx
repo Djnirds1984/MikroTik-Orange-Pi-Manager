@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon, KeyIcon } from '../constants.tsx';
+import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon, KeyIcon, LockClosedIcon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import type { View, CompanySettings } from '../types.ts';
 
@@ -70,6 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     { id: 'updater', label: t('sidebar.updater'), icon: <UpdateIcon className="w-6 h-6" /> },
     { id: 'super_router', label: t('sidebar.super_router'), icon: <ShieldCheckIcon className="w-6 h-6" /> },
     { id: 'logs', label: t('sidebar.logs'), icon: <CodeBracketIcon className="w-6 h-6" /> },
+    { id: 'license', label: t('sidebar.license'), icon: <KeyIcon className="w-6 h-6" /> },
+    { id: 'super_admin', label: t('sidebar.super_admin'), icon: <LockClosedIcon className="w-6 h-6" /> },
   ], [t]);
 
   return (
@@ -94,7 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
               <CloseIcon className="w-6 h-6" />
           </button>
       </div>
-      <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto">
+      <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto flex flex-col justify-between">
         <ul className="space-y-2">
           {navItems.map((item) => (
             <NavItem
@@ -106,6 +108,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
             />
           ))}
         </ul>
+        <div className="text-center text-xs text-slate-400 dark:text-slate-600 mt-4">
+            v1.0 Beta
+        </div>
       </div>
     </aside>
   );

@@ -1,4 +1,3 @@
-
 {
     "app": {
         "loading_data": "Loading application data..."
@@ -21,7 +20,9 @@
         "super_router": "Super Router",
         "logs": "System Logs",
         "panel_roles": "Panel Roles",
-        "mikrotik_files": "Mikrotik Files"
+        "mikrotik_files": "Mikrotik Files",
+        "license": "License",
+        "super_admin": "Super Admin"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -41,7 +42,9 @@
         "super_router": "Host Router Configuration",
         "logs": "Log Viewer",
         "panel_roles": "Panel Role Management",
-        "mikrotik_files": "Mikrotik File Editor"
+        "mikrotik_files": "Mikrotik File Editor",
+        "license": "Application Licensing",
+        "super_admin": "Super Admin: License Generator"
     },
     "topbar": {
         "add_router_title": "Go to Routers page to add a new router",

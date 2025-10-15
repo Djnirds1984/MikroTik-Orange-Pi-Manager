@@ -1,4 +1,3 @@
-
 {
     "app": {
         "loading_data": "Carregando dados do aplicativo..."
@@ -21,7 +20,9 @@
         "super_router": "Super Roteador",
         "logs": "Logs do Sistema",
         "panel_roles": "Funções do Painel",
-        "mikrotik_files": "Arquivos Mikrotik"
+        "mikrotik_files": "Arquivos Mikrotik",
+        "license": "Licença",
+        "super_admin": "Super Admin"
     },
     "titles": {
         "dashboard": "Painel",
@@ -41,7 +42,9 @@
         "super_router": "Configuração do Roteador Host",
         "logs": "Visualizador de Logs",
         "panel_roles": "Gerenciamento de Funções do Painel",
-        "mikrotik_files": "Editor de Arquivos Mikrotik"
+        "mikrotik_files": "Editor de Arquivos Mikrotik",
+        "license": "Licenciamento de Aplicativo",
+        "super_admin": "Super Admin: Gerador de Licença"
     },
     "topbar": {
         "add_router_title": "Vá para a página de Roteadores para adicionar um novo roteador",

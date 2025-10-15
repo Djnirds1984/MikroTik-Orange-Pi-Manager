@@ -1,4 +1,3 @@
-
 {
     "app": {
         "loading_data": "Nilo-load ang data ng application..."
@@ -21,7 +20,9 @@
         "super_router": "Super Router",
         "logs": "Mga Log ng System",
         "panel_roles": "Mga Tungkulin ng Panel",
-        "mikrotik_files": "Mga File ng Mikrotik"
+        "mikrotik_files": "Mga File ng Mikrotik",
+        "license": "Lisensya",
+        "super_admin": "Super Admin"
     },
     "titles": {
         "dashboard": "Dashboard",
@@ -41,7 +42,9 @@
         "super_router": "Pagsasaayos ng Host Router",
         "logs": "Tingnan ang Log",
         "panel_roles": "Pamamahala ng Tungkulin ng Panel",
-        "mikrotik_files": "Editor ng File ng Mikrotik"
+        "mikrotik_files": "Editor ng File ng Mikrotik",
+        "license": "Paglilisensya ng Application",
+        "super_admin": "Super Admin: Tagabuo ng Lisensya"
     },
     "topbar": {
         "add_router_title": "Pumunta sa pahina ng Mga Router para magdagdag ng bagong router",
