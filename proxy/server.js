@@ -1,3 +1,4 @@
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -673,7 +674,7 @@ licenseRouter.get('/device-id', (req, res) => {
         const deviceId = getDeviceId();
         res.json({ deviceId });
     } catch (e) {
-        res.status(500).json({ message: (e as Error).message });
+        res.status(500).json({ message: e.message });
     }
 });
 
@@ -685,7 +686,7 @@ licenseRouter.get('/status', async (req, res) => {
         }
         
         const licenseKey = result.value;
-        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY) as jwt.JwtPayload;
+        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
         if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
             return res.json({ licensed: false });
@@ -695,11 +696,11 @@ licenseRouter.get('/status', async (req, res) => {
 
     } catch (e) {
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
-            console.error("License verification error:", (e as Error).message);
+            console.error("License verification error:", e.message);
             return res.json({ licensed: false }); // Fail safely to unlicensed
         }
-        console.error("Error during license status check:", (e as Error).message);
-        res.status(500).json({ message: (e as Error).message });
+        console.error("Error during license status check:", e.message);
+        res.status(500).json({ message: e.message });
     }
 });
 
@@ -710,7 +711,7 @@ licenseRouter.post('/activate', async (req, res) => {
     }
 
     try {
-        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY) as jwt.JwtPayload;
+        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
         if (decoded.deviceId !== getDeviceId()) {
             return res.status(400).json({ message: 'License key is for a different device.' });
@@ -725,7 +726,7 @@ licenseRouter.post('/activate', async (req, res) => {
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
             return res.status(400).json({ message: 'Invalid or expired license key.' });
         }
-        res.status(500).json({ message: `Activation error: ${(e as Error).message}` });
+        res.status(500).json({ message: `Activation error: ${e.message}` });
     }
 });
 
