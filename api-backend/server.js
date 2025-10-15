@@ -6,6 +6,8 @@ const http = require('http');
 const https = require('https');
 const WebSocket = require('ws');
 const { Client } = require('ssh2');
+const { exec } = require('child_process');
+const path = require('path');
 
 const app = express();
 const PORT = 3002;
@@ -137,6 +139,57 @@ const getRouterConfig = async (req, res, next) => {
         res.status(500).json({ message: errorMessage });
     }
 };
+
+// --- New Updater & Cache Endpoints ---
+
+// New endpoint to clear the router config cache
+app.post('/api/cache/reset', (req, res) => {
+    routerConfigCache.clear();
+    trafficStatsCache.clear(); // Also clear traffic stats cache
+    console.log('API caches (router config, traffic stats) have been cleared.');
+    res.status(200).json({ message: 'API caches cleared successfully.' });
+});
+
+// New endpoint to check for updates
+app.get('/api/updater/check', async (req, res) => {
+    await handleApiRequest(req, res, () => {
+        return new Promise((resolve, reject) => {
+            // Executes commands from the project root directory
+            const projectRoot = path.join(__dirname, '..');
+            const command = 'git fetch origin && git rev-parse HEAD && git rev-parse origin/main';
+
+            exec(command, { cwd: projectRoot }, (error, stdout, stderr) => {
+                if (error) {
+                    console.error('Git check error:', stderr);
+                    if (stderr.includes('no upstream configured') || stderr.includes('not a git repository')) {
+                        return resolve({ updateAvailable: false, message: 'This is not a git repository or it has no upstream branch configured.' });
+                    }
+                    return reject(new Error(stderr || 'Failed to check for updates.'));
+                }
+                const [local, remote] = stdout.trim().split('\n');
+                const updateAvailable = local !== remote;
+                const message = updateAvailable ? 'An update is available.' : 'Your application is up to date.';
+                resolve({ updateAvailable, message, localHash: local, remoteHash: remote });
+            });
+        });
+    });
+});
+
+// New endpoint to trigger the update process via WebSocket
+app.post('/api/updater/start', (req, res) => {
+    // This endpoint triggers the update process on all connected updater WebSocket clients.
+    if (updaterWss && updaterWss.clients.size > 0) {
+        updaterWss.clients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'command', command: 'start-update' }));
+            }
+        });
+        res.status(200).json({ message: 'Update process initiated.' });
+    } else {
+        res.status(400).json({ message: 'No updater client connected. Please go to the Updater page and try again.' });
+    }
+});
+
 
 // Special endpoint for testing connection without a saved ID
 app.post('/mt-api/test-connection', async (req, res) => {
@@ -468,11 +521,12 @@ app.all('/mt-api/:routerId/*', getRouterConfig, async (req, res) => {
     });
 });
 
-// --- WebSocket Server for SSH ---
+// --- WebSocket Server for SSH & Updater---
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws/ssh' });
+const sshWss = new WebSocket.Server({ noServer: true });
+const updaterWss = new WebSocket.Server({ noServer: true });
 
-wss.on('connection', (ws) => {
+sshWss.on('connection', (ws) => {
     console.log('SSH WS Client connected');
     const ssh = new Client();
 
@@ -520,6 +574,89 @@ wss.on('connection', (ws) => {
         console.log('SSH WS Client disconnected');
         ssh.end();
     });
+});
+
+updaterWss.on('connection', (ws) => {
+    console.log('Updater WS Client connected');
+    ws.send(JSON.stringify({ type: 'log', data: 'Updater WebSocket connection established. Ready to receive update command.' }));
+
+    ws.on('message', (message) => {
+        try {
+            const msg = JSON.parse(message);
+            if (msg.type === 'command' && msg.command === 'start-update') {
+                console.log('Starting update process via WebSocket command...');
+                
+                const projectRoot = path.join(__dirname, '..');
+                const commands = [
+                    'git reset --hard origin/main',
+                    'npm install --prefix proxy',
+                    'npm install --prefix api-backend',
+                ];
+
+                const executeSequentially = (index) => {
+                    if (index >= commands.length) {
+                        ws.send(JSON.stringify({ type: 'log', data: '\n--- RESTARTING SERVERS ---' }));
+                        ws.send(JSON.stringify({ type: 'log', data: 'Application will restart. This page should reload automatically in 10-15 seconds.' }));
+                        
+                        exec('pm2 restart all', { cwd: projectRoot }, (err, stdout, stderr) => {
+                             if (ws.readyState === WebSocket.OPEN) {
+                                if (err) {
+                                    ws.send(JSON.stringify({ type: 'log', data: `PM2 restart command failed: ${stderr}`}));
+                                } else {
+                                    ws.send(JSON.stringify({ type: 'log', data: `PM2 restart command issued: ${stdout}`}));
+                                }
+                                ws.close();
+                            }
+                        });
+                        return;
+                    }
+
+                    ws.send(JSON.stringify({ type: 'log', data: `\n> ${commands[index]}` }));
+                    const proc = exec(commands[index], { cwd: projectRoot });
+                    
+                    const sendToClient = (data) => {
+                        if (ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: 'log', data: data.toString().trim() }));
+                        }
+                    };
+
+                    proc.stdout.on('data', sendToClient);
+                    proc.stderr.on('data', sendToClient);
+                    proc.on('close', (code) => {
+                        if (code !== 0) {
+                            ws.send(JSON.stringify({ type: 'log', data: `\n--- ERROR: Command failed with code ${code}. Aborting update. ---` }));
+                        } else {
+                            executeSequentially(index + 1);
+                        }
+                    });
+                };
+
+                executeSequentially(0);
+            }
+        } catch (e) {
+            console.error("Error processing Updater WS message:", e);
+        }
+    });
+
+    ws.on('close', () => {
+        console.log('Updater WS Client disconnected');
+    });
+});
+
+server.on('upgrade', (request, socket, head) => {
+    const { pathname } = new URL(request.url, `http://${request.headers.host}`);
+  
+    if (pathname === '/ws/ssh') {
+      sshWss.handleUpgrade(request, socket, head, (ws) => {
+        sshWss.emit('connection', ws, request);
+      });
+    } else if (pathname === '/ws/updater') {
+      updaterWss.handleUpgrade(request, socket, head, (ws) => {
+        updaterWss.emit('connection', ws, request);
+      });
+    } else {
+      socket.destroy();
+    }
 });
 
 server.listen(PORT, () => {
