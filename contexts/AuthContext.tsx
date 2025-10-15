@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 interface PanelUser {
     username: string;
     role: string;
+    is_superadmin?: boolean;
 }
 
 interface AuthContextType {
@@ -25,28 +26,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Define permissions based on roles. This is an assumption.
 const permissions: Record<string, string[]> = {
-    admin: [
-        'dashboard:view',
-        'scripting:view',
-        'routers:view', 'routers:create', 'routers:edit', 'routers:delete',
-        'network:view',
-        'terminal:view',
-        'pppoe:view', 'pppoe_users:delete',
-        'billing:view',
-        'sales:view', 'sales_report:delete',
-        'inventory:view',
-        'hotspot:view',
-        'zerotier:view',
-        'company:view',
-        'system:view',
-        'updater:view',
-        'super_router:view',
-        'logs:view',
-        'panel_roles:view',
-        'help:view',
-        'mikrotik_files:view',
-        'license:view',
-        'super_admin:view'
+    Administrator: [
+        '*:*',
     ],
     user: [ // A more restricted user for example
         'dashboard:view',
@@ -198,11 +179,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const hasPermission = (permission: string): boolean => {
         if (!user) return false;
-        if (user.role === 'super_admin') return true; // Super admin has all permissions
+        // Superadmin role from the DB has this flag set
+        if (user.is_superadmin) return true;
+        
         const userPermissions = permissions[user.role] || [];
+        
+        // Block super_admin pages if not super_admin
+        if (permission.startsWith('super_admin:') && !user.is_superadmin) {
+            return false;
+        }
+
         // Check for wildcard (e.g., 'routers:*') or specific permission
         const [resource] = permission.split(':');
-        return userPermissions.includes(permission) || userPermissions.includes(`${resource}:*`);
+        return userPermissions.includes(permission) || userPermissions.includes(`${resource}:*`) || userPermissions.includes('*:*');
     };
 
     const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission };

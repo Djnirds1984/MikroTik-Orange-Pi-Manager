@@ -34,6 +34,11 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     }
     
     if (response.status === 204) { // No Content
+        // For endpoints that return lists, an empty array is a better "no content" representation
+        // than null, which can cause .filter/.map errors downstream.
+        if (path.includes('backups')) {
+            return [] as unknown as T;
+        }
         return null as T;
     }
 
