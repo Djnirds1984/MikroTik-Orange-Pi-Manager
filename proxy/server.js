@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -28,6 +27,12 @@ const LICENSE_SECRET_KEY = process.env.LICENSE_SECRET || 'a-long-and-very-secret
 
 app.use(express.json({ limit: '5mb' }));
 app.use(express.text({ limit: '5mb' })); // For AI fixer
+
+// Middleware to prevent caching of API responses
+app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+});
 
 // Ensure backup directory exists
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
@@ -660,7 +665,7 @@ const getDeviceId = () => {
 
         return 'no-unique-id-found';
     } catch (e) {
-        console.error("Error getting Device ID:", e);
+        console.error("Error getting Device ID:", e.message);
         // Throwing the error so the route handler can catch it and send a 500
         throw new Error('Could not determine a stable Device ID for this host.');
     }
@@ -686,19 +691,22 @@ licenseRouter.get('/status', async (req, res) => {
         }
         
         const licenseKey = result.value;
-        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
+        try {
+            const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
-        if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
-            return res.json({ licensed: false });
+            if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
+                return res.json({ licensed: false });
+            }
+
+            res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+        } catch (e) {
+            if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
+                console.error("License verification error:", e.message);
+                return res.json({ licensed: false }); // Fail safely to unlicensed
+            }
+            throw e;
         }
-
-        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
-
     } catch (e) {
-        if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
-            console.error("License verification error:", e.message);
-            return res.json({ licensed: false }); // Fail safely to unlicensed
-        }
         console.error("Error during license status check:", e.message);
         res.status(500).json({ message: e.message });
     }
@@ -732,10 +740,14 @@ licenseRouter.post('/activate', async (req, res) => {
 
 
 const requireAdmin = (req, res, next) => {
-    if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
-        return next();
+    try {
+        if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
+            return next();
+        }
+        res.status(403).json({ message: 'Forbidden: Administrator access required.' });
+    } catch(e) {
+         res.status(403).json({ message: 'Forbidden: Administrator access required.' });
     }
-    res.status(403).json({ message: 'Forbidden: Administrator access required.' });
 };
 
 licenseRouter.post('/generate', requireAdmin, (req, res) => {

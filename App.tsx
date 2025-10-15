@@ -278,7 +278,11 @@ const AppRouter: React.FC = () => {
     
     // Admins can bypass the license check to access Super Admin tools.
     if (!licenseStatus.licensed && user.role.name.toLowerCase() !== 'administrator') {
-        return <License />;
+        return (
+            <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-4">
+                <License />
+            </div>
+        );
     }
 
     return <AppContent />;
