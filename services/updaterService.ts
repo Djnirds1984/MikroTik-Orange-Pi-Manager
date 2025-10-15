@@ -1,5 +1,6 @@
 
 
+
 import { getAuthHeader } from './databaseService.ts';
 import type { VersionInfo } from '../types.ts';
 
@@ -23,10 +24,10 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
     const contentType = response.headers.get("content-type");
     if (!response.ok) {
         let errorMsg = `Request failed with status ${response.status}`;
-        if (contentType && contentType.includes("application/json")) {
+        try {
             const errorData = await response.json();
             errorMsg = errorData.message || errorMsg;
-        } else {
+        } catch (e) {
             errorMsg = await response.text();
         }
         throw new Error(errorMsg);
@@ -41,15 +42,24 @@ const fetchData = async <T>(path: string, options: RequestInit = {}): Promise<T>
         return {} as T;
     }
 
+    const text = await response.text();
+
     if (contentType && contentType.includes("application/json")) {
         // Handle cases where the body might be empty even with a JSON content type
-        const text = await response.text();
-        return text ? JSON.parse(text) : [] as unknown as T;
+        if (!text) {
+             if (path === '/api/list-backups') return [] as unknown as T;
+             return {} as T;
+        }
+        const data = JSON.parse(text);
+        // Ensure list endpoints always return an array
+        if (path === '/api/list-backups' && !Array.isArray(data)) {
+            return [] as unknown as T;
+        }
+        return data as T;
     }
 
     // Throw an error for unexpected content types instead of returning text
-    const textResponse = await response.text();
-    throw new Error(`Expected a JSON response from '${path}' but received '${contentType}'. Response body: ${textResponse.substring(0, 150)}...`);
+    throw new Error(`Expected a JSON response from '${path}' but received '${contentType}'.`);
 };
 
 // --- Functions for simple fetch calls ---
