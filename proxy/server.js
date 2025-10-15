@@ -90,6 +90,10 @@ const initializeDatabase = async () => {
 app.use(express.json());
 // Serve locale files specifically
 app.use('/locales', express.static(path.join(__dirname, '../locales')));
+// Serve env.js from the project root
+app.get('/env.js', (req, res) => {
+    res.sendFile(path.join(__dirname, '..', 'env.js'));
+});
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Cache-control middleware for API routes to prevent stale license status
