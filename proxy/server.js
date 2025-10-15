@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const { open } = require('sqlite');
@@ -84,11 +83,24 @@ const initializeDatabase = async () => {
             CREATE TABLE IF NOT EXISTS voucher_plans ( id TEXT PRIMARY KEY, routerId TEXT, name TEXT, duration_minutes INTEGER, price REAL, currency TEXT, mikrotik_profile_name TEXT );
             CREATE TABLE IF NOT EXISTS license ( id INTEGER PRIMARY KEY, key TEXT, expires_at TEXT, device_id TEXT );
         `);
-
+        
+        // Seed default roles
         const superadminRole = await db.get("SELECT id FROM roles WHERE name = 'Superadmin'");
         if (!superadminRole) {
-            await db.run("INSERT INTO roles (name, permissions, is_deletable, is_editable, is_superadmin) VALUES (?, ?, ?, ?, ?)", 'Superadmin', '["*:*"]', false, false, true);
+            await db.run("INSERT INTO roles (name, permissions, is_deletable, is_editable, is_superadmin) VALUES (?, ?, ?, ?, ?)", 'Superadmin', JSON.stringify(['*:*']), false, false, true);
         }
+        
+        const adminRole = await db.get("SELECT id FROM roles WHERE name = 'Administrator'");
+        if (!adminRole) {
+            const adminPermissions = [
+                'dashboard:view', 'scripting:use', 'terminal:use', 'routers:*', 'network:*',
+                'pppoe:*', 'billing:*', 'sales:*', 'inventory:*', 'hotspot:*',
+                'panel_hotspot:*', 'zerotier:*', 'mikrotik_files:*', 'company:edit',
+                'system_settings:edit', 'updater:use', 'super_router:use', 'logs:view', 'help:view'
+            ];
+            await db.run("INSERT INTO roles (name, permissions, is_deletable, is_editable, is_superadmin) VALUES (?, ?, ?, ?, ?)", 'Administrator', JSON.stringify(adminPermissions), true, true, false);
+        }
+
 
         const superadminUser = await db.get("SELECT id FROM users WHERE username = 'superadmin'");
         if (!superadminUser) {
@@ -122,8 +134,16 @@ const authenticateToken = async (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const user = await db.get('SELECT u.id, u.username, r.name as role, r.is_superadmin FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?', decoded.id);
+        const user = await db.get('SELECT u.id, u.username, r.name as role, r.permissions, r.is_superadmin FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id = ?', decoded.id);
         if (!user) return res.status(403).json({ message: 'User not found' });
+        
+        // Parse permissions from JSON string
+        try {
+            user.permissions = JSON.parse(user.permissions);
+        } catch(e) {
+            user.permissions = [];
+        }
+        
         req.user = user;
         next();
     } catch (err) {
@@ -142,10 +162,10 @@ app.get('/api/auth/has-users', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const user = await db.get('SELECT u.id, u.username, u.password, r.name as role, r.is_superadmin FROM users u JOIN roles r ON u.role_id = r.id WHERE u.username = ?', username);
+        const user = await db.get('SELECT u.id, u.username, u.password, r.name as role, r.permissions, r.is_superadmin FROM users u JOIN roles r ON u.role_id = r.id WHERE u.username = ?', username);
         if (user && await bcrypt.compare(password, user.password)) {
             const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
-            res.json({ token, user: { id: user.id, username: user.username, role: user.role, is_superadmin: !!user.is_superadmin } });
+            res.json({ token, user: { id: user.id, username: user.username, role: user.role, permissions: JSON.parse(user.permissions || '[]'), is_superadmin: !!user.is_superadmin } });
         } else {
             res.status(401).json({ message: 'Invalid credentials' });
         }
@@ -182,6 +202,61 @@ app.get('/api/host-status', authenticateToken, async (req, res) => {
         res.json({ cpuUsage, memory: { total: formatBytes(totalMemory), free: formatBytes(freeMemory), used: formatBytes(usedMemory), percent: (usedMemory / totalMemory) * 100 }, disk });
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
+
+// --- Panel Management API (Superadmin only) ---
+const isSuperAdmin = (req, res, next) => {
+    if (!req.user || !req.user.is_superadmin) {
+        return res.status(403).json({ message: 'Forbidden: Super administrator access required.' });
+    }
+    next();
+};
+
+const panelManagementRouter = express.Router();
+panelManagementRouter.use(isSuperAdmin);
+
+panelManagementRouter.get('/users', async (req, res) => {
+    try {
+        const users = await db.all('SELECT u.id, u.username, r.name as role FROM users u JOIN roles r ON u.role_id = r.id');
+        res.json(users);
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+panelManagementRouter.get('/roles', async (req, res) => {
+    try {
+        const roles = await db.all('SELECT id, name FROM roles WHERE is_superadmin = FALSE');
+        res.json(roles);
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+panelManagementRouter.post('/users', async (req, res) => {
+    const { username, password, role_id } = req.body;
+    if (!username || !password || !role_id) return res.status(400).json({ message: 'Username, password, and role_id are required.' });
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        await db.run('INSERT INTO users (username, password, role_id) VALUES (?, ?, ?)', username, hashedPassword, role_id);
+        res.status(201).json({ message: 'User created successfully' });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+panelManagementRouter.patch('/users/:id', async (req, res) => {
+    const { role_id } = req.body;
+    if (!role_id) return res.status(400).json({ message: 'role_id is required.' });
+    try {
+        await db.run('UPDATE users SET role_id = ? WHERE id = ?', role_id, req.params.id);
+        res.json({ message: 'User role updated successfully' });
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+panelManagementRouter.delete('/users/:id', async (req, res) => {
+    if (req.user.id == req.params.id) return res.status(400).json({ message: 'Cannot delete yourself.' });
+    try {
+        await db.run('DELETE FROM users WHERE id = ?', req.params.id);
+        res.status(204).send();
+    } catch (e) { res.status(500).json({ message: e.message }); }
+});
+
+app.use('/api/panel-management', authenticateToken, panelManagementRouter);
+
 
 // --- Generic DB API ---
 app.get('/api/db/:resource', authenticateToken, async (req, res) => {

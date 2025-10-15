@@ -2,9 +2,11 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 // PanelUser type is missing from types.ts. I'll define it here based on usage.
 interface PanelUser {
+    id: number;
     username: string;
     role: string;
     is_superadmin?: boolean;
+    permissions?: string[];
 }
 
 interface AuthContextType {
@@ -23,19 +25,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Define permissions based on roles. This is an assumption.
-const permissions: Record<string, string[]> = {
-    Administrator: [
-        '*:*',
-    ],
-    user: [ // A more restricted user for example
-        'dashboard:view',
-        'pppoe:view',
-        'sales:view',
-        'help:view',
-    ]
-};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<PanelUser | null>(null);
@@ -179,19 +168,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const hasPermission = (permission: string): boolean => {
         if (!user) return false;
-        // Superadmin role from the DB has this flag set
+        // Superadmin flag is the ultimate override
         if (user.is_superadmin) return true;
-        
-        const userPermissions = permissions[user.role] || [];
-        
-        // Block super_admin pages if not super_admin
-        if (permission.startsWith('super_admin:') && !user.is_superadmin) {
-            return false;
-        }
 
-        // Check for wildcard (e.g., 'routers:*') or specific permission
-        const [resource] = permission.split(':');
-        return userPermissions.includes(permission) || userPermissions.includes(`${resource}:*`) || userPermissions.includes('*:*');
+        if (!user.permissions) return false;
+        
+        const [requiredResource] = permission.split(':', 1);
+
+        // Check for 'resource:*' or '*:*' wildcards, or the exact permission
+        return user.permissions.some(p => 
+            p === permission || 
+            p === `${requiredResource}:*` || 
+            p === '*:*'
+        );
     };
 
     const value = { user, token, isLoading, hasUsers, error, login, register, logout, getSecurityQuestions, resetPassword, clearError, hasPermission };

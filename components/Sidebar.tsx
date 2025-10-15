@@ -22,6 +22,7 @@ import {
     LockClosedIcon
 } from '../constants';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
     currentView: View;
@@ -67,30 +68,31 @@ const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
     const { t } = useLocalization();
+    const { hasPermission } = useAuth();
 
     const navItems = [
-        { id: 'dashboard', label: t('sidebar.dashboard'), icon: <EthernetIcon className="w-6 h-6" /> },
-        { id: 'scripting', label: t('sidebar.ai_scripting'), icon: <CodeBracketIcon className="w-6 h-6" /> },
-        { id: 'terminal', label: t('sidebar.terminal'), icon: <TerminalIcon className="w-6 h-6" /> },
-        { id: 'routers', label: t('sidebar.routers'), icon: <RouterIcon className="w-6 h-6" /> },
-        { id: 'network', label: t('sidebar.network'), icon: <ShareIcon className="w-6 h-6" /> },
-        { id: 'pppoe', label: t('sidebar.pppoe'), icon: <UsersIcon className="w-6 h-6" /> },
-        { id: 'billing', label: t('sidebar.billing_plans'), icon: <CurrencyDollarIcon className="w-6 h-6" /> },
-        { id: 'sales', label: t('sidebar.sales_report'), icon: <ReceiptPercentIcon className="w-6 h-6" /> },
-        { id: 'inventory', label: t('sidebar.inventory'), icon: <ArchiveBoxIcon className="w-6 h-6" /> },
-        { id: 'hotspot', label: t('sidebar.hotspot'), icon: <WifiIcon className="w-6 h-6" /> },
-        { id: 'panel_hotspot', label: t('sidebar.panel_hotspot'), icon: <ReceiptPercentIcon className="w-6 h-6" /> },
-        { id: 'zerotier', label: t('sidebar.zerotier'), icon: <ZeroTierIcon className="w-6 h-6" /> },
-        { id: 'mikrotik_files', label: t('sidebar.mikrotik_files'), icon: <FolderIcon className="w-6 h-6" /> },
-        { id: 'company', label: t('sidebar.company'), icon: <BuildingOffice2Icon className="w-6 h-6" /> },
-        { id: 'system', label: t('sidebar.system_settings'), icon: <CogIcon className="w-6 h-6" /> },
-        { id: 'updater', label: t('sidebar.updater'), icon: <UpdateIcon className="w-6 h-6" /> },
-        { id: 'super_router', label: t('sidebar.super_router'), icon: <ShieldCheckIcon className="w-6 h-6" /> },
-        { id: 'logs', label: t('sidebar.logs'), icon: <CodeBracketIcon className="w-6 h-6" /> },
-        { id: 'panel_roles', label: t('sidebar.panel_roles'), icon: <LockClosedIcon className="w-6 h-6" /> },
-        { id: 'license', label: t('sidebar.license'), icon: <KeyIcon className="w-6 h-6" /> },
-        { id: 'help', label: t('sidebar.help'), icon: <QuestionMarkCircleIcon className="w-6 h-6" /> },
-        { id: 'super_admin', label: t('sidebar.super_admin'), icon: <ShieldCheckIcon className="w-6 h-6" /> }
+        { id: 'dashboard', label: t('sidebar.dashboard'), icon: <EthernetIcon className="w-6 h-6" />, permission: 'dashboard:view' },
+        { id: 'scripting', label: t('sidebar.ai_scripting'), icon: <CodeBracketIcon className="w-6 h-6" />, permission: 'scripting:use' },
+        { id: 'terminal', label: t('sidebar.terminal'), icon: <TerminalIcon className="w-6 h-6" />, permission: 'terminal:use' },
+        { id: 'routers', label: t('sidebar.routers'), icon: <RouterIcon className="w-6 h-6" />, permission: 'routers:view' },
+        { id: 'network', label: t('sidebar.network'), icon: <ShareIcon className="w-6 h-6" />, permission: 'network:view' },
+        { id: 'pppoe', label: t('sidebar.pppoe'), icon: <UsersIcon className="w-6 h-6" />, permission: 'pppoe:view' },
+        { id: 'billing', label: t('sidebar.billing_plans'), icon: <CurrencyDollarIcon className="w-6 h-6" />, permission: 'billing:view' },
+        { id: 'sales', label: t('sidebar.sales_report'), icon: <ReceiptPercentIcon className="w-6 h-6" />, permission: 'sales:view' },
+        { id: 'inventory', label: t('sidebar.inventory'), icon: <ArchiveBoxIcon className="w-6 h-6" />, permission: 'inventory:view' },
+        { id: 'hotspot', label: t('sidebar.hotspot'), icon: <WifiIcon className="w-6 h-6" />, permission: 'hotspot:view' },
+        { id: 'panel_hotspot', label: t('sidebar.panel_hotspot'), icon: <ReceiptPercentIcon className="w-6 h-6" />, permission: 'panel_hotspot:view' },
+        { id: 'zerotier', label: t('sidebar.zerotier'), icon: <ZeroTierIcon className="w-6 h-6" />, permission: 'zerotier:view' },
+        { id: 'mikrotik_files', label: t('sidebar.mikrotik_files'), icon: <FolderIcon className="w-6 h-6" />, permission: 'mikrotik_files:view' },
+        { id: 'company', label: t('sidebar.company'), icon: <BuildingOffice2Icon className="w-6 h-6" />, permission: 'company:view' },
+        { id: 'system', label: t('sidebar.system_settings'), icon: <CogIcon className="w-6 h-6" />, permission: 'system_settings:view' },
+        { id: 'updater', label: t('sidebar.updater'), icon: <UpdateIcon className="w-6 h-6" />, permission: 'updater:use' },
+        { id: 'super_router', label: t('sidebar.super_router'), icon: <ShieldCheckIcon className="w-6 h-6" />, permission: 'super_router:use' },
+        { id: 'logs', label: t('sidebar.logs'), icon: <CodeBracketIcon className="w-6 h-6" />, permission: 'logs:view' },
+        { id: 'panel_roles', label: t('sidebar.panel_roles'), icon: <LockClosedIcon className="w-6 h-6" />, permission: 'panel_roles:view' },
+        { id: 'license', label: t('sidebar.license'), icon: <KeyIcon className="w-6 h-6" />, permission: 'license:view' },
+        { id: 'help', label: 'Help', icon: <QuestionMarkCircleIcon className="w-6 h-6" />, permission: 'help:view' },
+        { id: 'super_admin', label: t('sidebar.super_admin'), icon: <ShieldCheckIcon className="w-6 h-6" />, permission: 'super_admin:view' }
     ];
 
     return (
@@ -118,13 +120,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
              <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto">
                 <ul className="space-y-2">
                     {navItems.map(item => (
-                        <NavItem
-                            key={item.id}
-                            label={item.label}
-                            icon={item.icon}
-                            isActive={currentView === item.id}
-                            onClick={() => setCurrentView(item.id as View)}
-                        />
+                        hasPermission(item.permission) && (
+                            <NavItem
+                                key={item.id}
+                                label={item.label}
+                                icon={item.icon}
+                                isActive={currentView === item.id}
+                                onClick={() => setCurrentView(item.id as View)}
+                            />
+                        )
                     ))}
                 </ul>
             </div>
