@@ -120,6 +120,15 @@ const authenticateToken = async (req, res, next) => {
     }
 };
 
+// FIX: Middleware to convert kebab-case to snake_case for DB resource names
+const snakeCaseResource = (req, res, next) => {
+    if (req.params.resource) {
+        req.params.resource = req.params.resource.replace(/-/g, '_');
+    }
+    next();
+};
+
+
 // --- Auth Routes ---
 app.get('/api/auth/has-users', async (req, res) => {
     try {
@@ -178,14 +187,14 @@ app.get('/api/auth/status', authenticateToken, (req, res) => {
 });
 
 // --- Generic Database API ---
-app.get('/api/db/:resource', authenticateToken, async (req, res) => {
+app.get('/api/db/:resource', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
         const data = await db.all(`SELECT * FROM ${req.params.resource}`);
         res.json(data);
     } catch(e) { res.status(500).json({ message: e.message }); }
 });
 
-app.post('/api/db/:resource', authenticateToken, async (req, res) => {
+app.post('/api/db/:resource', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
         const columns = Object.keys(req.body).join(', ');
         const placeholders = Object.keys(req.body).map(() => '?').join(', ');
@@ -195,7 +204,7 @@ app.post('/api/db/:resource', authenticateToken, async (req, res) => {
     } catch(e) { res.status(500).json({ message: e.message }); }
 });
 
-app.patch('/api/db/:resource/:id', authenticateToken, async (req, res) => {
+app.patch('/api/db/:resource/:id', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
         const updates = Object.keys(req.body).map(key => `${key} = ?`).join(', ');
         const values = [...Object.values(req.body), req.params.id];
@@ -204,7 +213,7 @@ app.patch('/api/db/:resource/:id', authenticateToken, async (req, res) => {
     } catch(e) { res.status(500).json({ message: e.message }); }
 });
 
-app.delete('/api/db/:resource/:id', authenticateToken, async (req, res) => {
+app.delete('/api/db/:resource/:id', authenticateToken, snakeCaseResource, async (req, res) => {
     try {
         await db.run(`DELETE FROM ${req.params.resource} WHERE id = ?`, req.params.id);
         res.status(204).send();
