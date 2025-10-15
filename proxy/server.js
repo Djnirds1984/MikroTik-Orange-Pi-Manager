@@ -12,6 +12,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const os = require('os');
 const fsPromises = require('fs').promises;
+const crypto = require('crypto');
 
 const app = express();
 const PORT = 3001;
@@ -619,24 +620,61 @@ app.use('/api/auth', authRouter);
 
 // --- License Management ---
 const getDeviceId = () => {
-    const interfaces = os.networkInterfaces();
-    for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            // Find the first non-internal MAC address
-            if (!iface.internal && iface.mac) {
-                return iface.mac.replace(/:/g, '').toLowerCase();
+    try {
+        const interfaces = os.networkInterfaces();
+        const prioritizedInterfaces = ['eth0', 'wlan0', 'en0', 'end0']; // Common names for ethernet, wifi on Linux/macOS/embedded
+
+        // 1. Try to find a MAC from a prioritized interface
+        for (const name of prioritizedInterfaces) {
+            if (interfaces[name]) {
+                for (const iface of interfaces[name]) {
+                    if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                        return iface.mac.replace(/:/g, '').toLowerCase();
+                    }
+                }
             }
         }
+
+        // 2. Fallback to the first available non-internal, non-zero MAC address
+        for (const name of Object.keys(interfaces).sort()) {
+            // Skip virtual interfaces
+            if (name.startsWith('veth') || name.startsWith('br-') || name.startsWith('docker') || name === 'lo') {
+                continue;
+            }
+            for (const iface of interfaces[name]) {
+                if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
+                    return iface.mac.replace(/:/g, '').toLowerCase();
+                }
+            }
+        }
+        
+        // 3. Last resort fallback to /etc/machine-id
+        if (fs.existsSync('/etc/machine-id')) {
+            const machineId = fs.readFileSync('/etc/machine-id').toString().trim();
+            if (machineId) {
+                // Not a MAC, but a stable unique ID. We can hash it to make it shorter and less revealing.
+                return crypto.createHash('sha1').update(machineId).digest('hex').substring(0, 12);
+            }
+        }
+
+        return 'no-unique-id-found';
+    } catch (e) {
+        console.error("Error getting Device ID:", e);
+        // Throwing the error so the route handler can catch it and send a 500
+        throw new Error('Could not determine a stable Device ID for this host.');
     }
-    // Fallback if no MAC found
-    return 'no-mac-address-found-for-id';
 };
 
 const licenseRouter = express.Router();
 licenseRouter.use(protect);
 
 licenseRouter.get('/device-id', (req, res) => {
-    res.json({ deviceId: getDeviceId() });
+    try {
+        const deviceId = getDeviceId();
+        res.json({ deviceId });
+    } catch (e) {
+        res.status(500).json({ message: (e as Error).message });
+    }
 });
 
 licenseRouter.get('/status', async (req, res) => {
@@ -647,15 +685,21 @@ licenseRouter.get('/status', async (req, res) => {
         }
         
         const licenseKey = result.value;
-        jwt.verify(licenseKey, LICENSE_SECRET_KEY, (err, decoded) => {
-            if (err || decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
-                if (err) console.error("License verification error:", err.message);
-                return res.json({ licensed: false });
-            }
-            res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
-        });
+        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY) as jwt.JwtPayload;
+
+        if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
+            return res.json({ licensed: false });
+        }
+
+        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+
     } catch (e) {
-        res.status(500).json({ message: e.message });
+        if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
+            console.error("License verification error:", (e as Error).message);
+            return res.json({ licensed: false }); // Fail safely to unlicensed
+        }
+        console.error("Error during license status check:", (e as Error).message);
+        res.status(500).json({ message: (e as Error).message });
     }
 });
 
@@ -665,25 +709,26 @@ licenseRouter.post('/activate', async (req, res) => {
         return res.status(400).json({ message: 'License key is required.' });
     }
 
-    jwt.verify(licenseKey, LICENSE_SECRET_KEY, async (err, decoded) => {
-        if (err) {
-            return res.status(400).json({ message: 'Invalid or expired license key.' });
-        }
+    try {
+        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY) as jwt.JwtPayload;
+
         if (decoded.deviceId !== getDeviceId()) {
             return res.status(400).json({ message: 'License key is for a different device.' });
         }
         if (new Date(decoded.expiresAt) < new Date()) {
             return res.status(400).json({ message: 'License key has expired.' });
         }
-
-        try {
-            await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
-            res.json({ success: true, message: 'Application activated successfully.' });
-        } catch (e) {
-            res.status(500).json({ message: `Database error: ${e.message}` });
+        
+        await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
+        res.json({ success: true, message: 'Application activated successfully.' });
+    } catch (e) {
+        if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
+            return res.status(400).json({ message: 'Invalid or expired license key.' });
         }
-    });
+        res.status(500).json({ message: `Activation error: ${(e as Error).message}` });
+    }
 });
+
 
 const requireAdmin = (req, res, next) => {
     if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
