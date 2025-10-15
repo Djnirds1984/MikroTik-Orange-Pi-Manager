@@ -1,5 +1,4 @@
-
-import { URL, fileURLToPath } from 'url';
+import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -17,8 +16,7 @@ export default defineConfig(({ mode }) => {
       },
       resolve: {
         alias: {
-          // @ts-ignore
-          '@': fileURLToPath(new URL('.', import.meta.url)),
+          '@': path.resolve(__dirname, '.'),
         }
       }
     };

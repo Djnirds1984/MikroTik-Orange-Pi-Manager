@@ -1,5 +1,0 @@
-{
-  "name": "MikroTik Orange Pi Manager",
-  "description": "A MikroTik management dashboard and AI script assistant, designed for Orange Pi. Monitor your router's status and generate RouterOS scripts with AI.",
-  "requestFramePermissions": []
-}
