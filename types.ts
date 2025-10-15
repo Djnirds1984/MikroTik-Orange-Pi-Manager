@@ -12,6 +12,8 @@ export type View =
   | 'sales'
   | 'inventory'
   | 'hotspot'
+  // FIX: Add panel_hotspot to the View type for completeness
+  | 'panel_hotspot'
   | 'zerotier'
   | 'company'
   | 'system'
