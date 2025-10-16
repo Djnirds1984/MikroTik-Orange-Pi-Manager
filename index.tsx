@@ -1,8 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// FIX: Corrected import paths to be relative.
-import App from './App';
-import { AuthProvider } from './contexts/AuthContext';
+import App from './App.tsx';
+import { AuthProvider } from './contexts/AuthContext.tsx';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

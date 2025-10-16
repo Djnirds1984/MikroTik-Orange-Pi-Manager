@@ -28,7 +28,7 @@ This two-process model provides a robust separation of concerns, ensuring the ap
 
 -   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
 -   **Backend:** Node.js, Express.js, Axios (for MikroTik REST API)
--   **Database:** SQLite (`sqlite` with `sqlite3` driver)
+-   **Database:** SQLite (`@vscode/sqlite3`)
 -   **AI:** Google Gemini API (`@google/genai`)
 
 ---
@@ -51,27 +51,16 @@ This new, more reliable method starts each server as a separate, named process.
    cd MikroTik-Orange-Pi-Manager
    ```
 
-2. **Install ALL Dependencies:**
-   First, install the dependencies for the main project and the UI server.
+2. **Install Dependencies for Both Servers:**
    ```bash
-   # Install root dependencies (Vite, etc.) and UI server dependencies
-   npm install
+   # Install for UI Server
    npm install --prefix proxy
-   ```
-
-3. **Install Backend Dependencies (with compilation):**
-   Install the API backend dependencies, forcing the `sqlite3` database driver to compile from source. This is critical for ARM devices.
-   ```bash
-   npm install --prefix api-backend --build-from-source
-   ```
-
-4. **Build the Frontend:**
-   You must build the React application into static files.
-   ```bash
-   npm run build
-   ```
    
-5. **Start the Application with PM2:**
+   # Install for API Backend Server
+   npm install --prefix api-backend
+   ```
+
+3. **Start the Application with PM2:**
    **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running these commands.**
    ```bash
    # First, stop and delete any old running processes to ensure a clean start
@@ -85,13 +74,13 @@ This new, more reliable method starts each server as a separate, named process.
    pm2 start ./api-backend/server.js --name mikrotik-api-backend
    ```
 
-6. **Check the status:**
+4. **Check the status:**
    ```bash
    pm2 list
    # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
    ```
    
-7. **Access the application:**
+5. **Access the application:**
    Open your web browser and navigate to **`http://localhost:3001`**. The UI served from port 3001 will automatically communicate with the backend on port 3002.
 
 ---
@@ -104,10 +93,10 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 
 -   An Orange Pi One (or similar SBC) with Armbian/Debian and SSH access.
 -   Node.js v20+, Git, and PM2 installed.
--   **Build Tools:** The application has dependencies that need to be compiled from source. Ensure you have the necessary build tools installed:
+-   **Build Tools:** The application has dependencies that may need to be compiled from source. Ensure you have the necessary build tools installed:
     ```bash
     sudo apt-get update
-    sudo apt-get install -y build-essential python3
+    sudo apt-get install -y build-essential
     ```
 
 ### **Step 1: MikroTik Router Configuration**
@@ -136,18 +125,8 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
 2.  **Install/Update Dependencies:**
     Run these commands to ensure all necessary packages for both servers are installed.
     ```bash
-    # Install root dependencies (for building) and UI server dependencies
-    npm install
     npm install --prefix proxy
-    
-    # Install backend dependencies, forcing compilation of the database driver
-    npm install --prefix api-backend --build-from-source
-    ```
-
-3. **Build the Frontend Application:**
-    This step compiles the React app into static files that can be served.
-    ```bash
-    npm run build
+    npm install --prefix api-backend
     ```
 
 ### **Step 3: Start and Manage the Application with PM2**
