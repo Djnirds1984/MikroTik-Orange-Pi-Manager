@@ -1,6 +1,7 @@
 
 
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -30,6 +31,7 @@ import { PanelRoles } from './components/PanelRoles.tsx';
 import { MikrotikFiles } from './components/MikrotikFiles.tsx';
 import { License } from './components/License.tsx';
 import { SuperAdmin } from './components/SuperAdmin.tsx';
+import { UnlicensedComponent } from './components/UnlicensedComponent.tsx';
 import { useRouters } from './hooks/useRouters.ts';
 import { useSalesData } from './hooks/useSalesData.ts';
 import { useInventoryData } from './hooks/useInventoryData.ts';
@@ -135,6 +137,15 @@ const AppContent: React.FC<AppContentProps> = ({ licenseStatus, onLicenseChange 
         );
     }
 
+    const licensedViews: View[] = [
+        'dashboard', 'scripting', 'terminal', 'network', 'pppoe', 'billing', 'sales',
+        'inventory', 'hotspot', 'mikrotik_files', 'zerotier', 'super_router', 'logs'
+    ];
+
+    if (!licenseStatus?.licensed && licensedViews.includes(currentView)) {
+        return <UnlicensedComponent setCurrentView={setCurrentView} />;
+    }
+
     switch (currentView) {
       case 'dashboard':
         return <Dashboard selectedRouter={selectedRouter} />;
@@ -172,7 +183,7 @@ const AppContent: React.FC<AppContentProps> = ({ licenseStatus, onLicenseChange 
       case 'company':
           return <Company settings={companySettings} onSave={updateCompanySettings} />;
       case 'system':
-          return <SystemSettings selectedRouter={selectedRouter} />;
+          return <SystemSettings selectedRouter={selectedRouter} licenseStatus={licenseStatus} />;
       case 'updater':
         return <Updater />;
       case 'super_router':
@@ -198,6 +209,7 @@ const AppContent: React.FC<AppContentProps> = ({ licenseStatus, onLicenseChange 
         companySettings={companySettings}
         isOpen={isSidebarOpen}
         setIsOpen={setIsSidebarOpen}
+        licenseStatus={licenseStatus}
       />
       {isSidebarOpen && !isLargeScreen && (
         <div 

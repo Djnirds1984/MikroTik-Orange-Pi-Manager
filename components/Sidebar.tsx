@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon, KeyIcon, LockClosedIcon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
-import type { View, CompanySettings } from '../types.ts';
+import type { View, CompanySettings, LicenseStatus } from '../types.ts';
 import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface SidebarProps {
@@ -10,6 +10,7 @@ interface SidebarProps {
   companySettings: CompanySettings;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
+  licenseStatus: LicenseStatus | null;
 }
 
 const NavItem: React.FC<{
@@ -17,16 +18,20 @@ const NavItem: React.FC<{
   label: string;
   isActive: boolean;
   onClick: () => void;
-}> = ({ icon, label, isActive, onClick }) => {
+  disabled?: boolean;
+}> = ({ icon, label, isActive, onClick, disabled }) => {
   return (
     <li>
       <button
-        onClick={onClick}
+        onClick={disabled ? undefined : onClick}
         className={`flex items-center w-full p-3 text-base font-normal rounded-lg transition duration-75 group ${
           isActive
             ? 'bg-[--color-primary-600] text-white'
+            : disabled
+            ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed bg-slate-100 dark:bg-slate-800'
             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
         }`}
+        disabled={disabled}
       >
         {icon}
         <span className="flex-1 ml-3 text-left whitespace-nowrap">{label}</span>
@@ -49,7 +54,7 @@ const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
 );
 
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen, licenseStatus }) => {
   const { user } = useAuth();
   const { t } = useLocalization();
   
@@ -92,6 +97,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     });
   }, [navItems, user]);
 
+  const licensedViews: View[] = [
+      'dashboard', 'scripting', 'terminal', 'network', 'pppoe', 'billing', 'sales',
+      'inventory', 'hotspot', 'mikrotik_files', 'zerotier', 'super_router', 'logs'
+  ];
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-64 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0 ${
@@ -123,6 +133,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
               icon={item.icon}
               isActive={currentView === item.id}
               onClick={() => setCurrentView(item.id as View)}
+              disabled={!licenseStatus?.licensed && licensedViews.includes(item.id as View)}
             />
           ))}
         </ul>

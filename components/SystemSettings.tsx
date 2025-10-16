@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import type { RouterConfigWithId, PanelSettings, PanelNtpStatus } from '../types.ts';
+import type { RouterConfigWithId, PanelSettings, PanelNtpStatus, LicenseStatus } from '../types.ts';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import { useTheme } from '../contexts/ThemeContext.tsx';
 import { initializeAiClient } from '../services/geminiService.ts';
@@ -292,8 +292,13 @@ const DatabaseManager: React.FC = () => {
 };
 
 
+interface SystemSettingsProps {
+    selectedRouter: RouterConfigWithId | null;
+    licenseStatus: LicenseStatus | null;
+}
+
 // --- Main Component ---
-export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | null }> = ({ selectedRouter }) => {
+export const SystemSettings: React.FC<SystemSettingsProps> = ({ selectedRouter, licenseStatus }) => {
     const { language, currency, setLanguage, setCurrency } = useLocalization();
     const { logout } = useAuth();
     const [localSettings, setLocalSettings] = useState({ language, currency });
@@ -402,6 +407,15 @@ export const SystemSettings: React.FC<{ selectedRouter: RouterConfigWithId | nul
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">
+             {!licenseStatus?.licensed && (
+                <div className="p-4 rounded-lg bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700/50 text-yellow-900 dark:text-yellow-200 flex items-center gap-3">
+                    <KeyIcon className="w-6 h-6 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                    <div>
+                        <h4 className="font-bold">Panel Unlicensed</h4>
+                        <p className="text-sm">Please activate your panel on the License page to ensure all features work correctly.</p>
+                    </div>
+                </div>
+            )}
             <SettingsCard title="Panel Settings" icon={<CogIcon className="w-6 h-6" />}>
                 <div className="space-y-6">
                     <ThemeSwitcher />
