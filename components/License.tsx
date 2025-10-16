@@ -29,27 +29,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
             }
         };
         fetchDeviceId();
-
-        const pollLicenseStatus = async () => {
-            try {
-                const res = await fetch('/api/license/status', { headers: getAuthHeader() });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.licensed) {
-                        onActivationSuccess();
-                        // Interval will be cleared on unmount
-                    }
-                }
-            } catch (error) {
-                // Silently ignore polling errors, the user can still activate manually.
-                console.error('License poll failed:', error);
-            }
-        };
-
-        const intervalId = setInterval(pollLicenseStatus, 5000); // Poll every 5 seconds
-
-        return () => clearInterval(intervalId);
-    }, [onActivationSuccess]);
+    }, []);
 
     const handleActivate = async (e: React.FormEvent) => {
         e.preventDefault();

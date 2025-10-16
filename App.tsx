@@ -224,7 +224,6 @@ const AppRouter: React.FC = () => {
     const [licenseStatus, setLicenseStatus] = useState<{ isLoading: boolean; licensed: boolean; }>({ isLoading: true, licensed: false });
 
     const checkLicense = useCallback(async () => {
-        setLicenseStatus(prev => ({ ...prev, isLoading: true }));
         try {
             const res = await fetch('/api/license/status', { headers: getAuthHeader() });
             if (!res.ok) {
@@ -232,7 +231,12 @@ const AppRouter: React.FC = () => {
                 return;
             }
             const data: LicenseStatus = await res.json();
-            setLicenseStatus({ isLoading: false, licensed: data.licensed });
+            setLicenseStatus(prev => {
+                if (prev.licensed !== data.licensed || prev.isLoading) {
+                    return { isLoading: false, licensed: data.licensed };
+                }
+                return prev;
+            });
         } catch (error) {
             console.error(error);
             setLicenseStatus({ isLoading: false, licensed: false });
@@ -249,13 +253,27 @@ const AppRouter: React.FC = () => {
         }
     }, [isLoading, hasUsers]);
     
+    // Initial license check
     useEffect(() => {
         if (user) {
+            setLicenseStatus(prev => ({ ...prev, isLoading: true }));
             checkLicense();
         } else if (!isLoading) {
             setLicenseStatus({ isLoading: false, licensed: false });
         }
     }, [user, isLoading, checkLicense]);
+    
+    // Polling effect
+    useEffect(() => {
+        if (user && !licenseStatus.licensed && !licenseStatus.isLoading) {
+            const intervalId = setInterval(checkLicense, 5000);
+            return () => clearInterval(intervalId);
+        }
+    }, [user, licenseStatus.licensed, licenseStatus.isLoading, checkLicense]);
+
+    const handleActivationSuccess = () => {
+        setLicenseStatus({ isLoading: false, licensed: true });
+    };
 
     if (isLoading || (user && licenseStatus.isLoading)) {
         return (
@@ -277,7 +295,7 @@ const AppRouter: React.FC = () => {
     
     // Admins can bypass the license check to access Super Admin tools.
     if (!licenseStatus.licensed && user.role.name.toLowerCase() !== 'administrator') {
-        return <License onActivationSuccess={checkLicense} />;
+        return <License onActivationSuccess={handleActivationSuccess} />;
     }
 
     return <AppContent />;
