@@ -12,7 +12,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
     const [licenseKey, setLicenseKey] = useState('');
     const [isLoading, setIsLoading] = useState(true);
     const [isActivating, setIsActivating] = useState(false);
-    const [error, setError] = useState<string | null>(null);
+    const [debugMessage, setDebugMessage] = useState<string>('[DEBUG]\n- Awaiting activation attempt...');
 
     useEffect(() => {
         const fetchDeviceId = async () => {
@@ -23,7 +23,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
                 const data = await res.json();
                 setDeviceId(data.deviceId);
             } catch (err) {
-                setError((err as Error).message);
+                setDebugMessage(`[DEBUG] Error fetching device ID: ${(err as Error).message}`);
             } finally {
                 setIsLoading(false);
             }
@@ -54,7 +54,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
     const handleActivate = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsActivating(true);
-        setError(null);
+        setDebugMessage('[DEBUG]\n- Validating license key with server...');
         try {
             const res = await fetch('/api/license/activate', {
                 method: 'POST',
@@ -74,6 +74,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
             }
             
             await res.json();
+            setDebugMessage('[DEBUG]\n- Activation successful! Redirecting...');
             onActivationSuccess();
         } catch (err) {
             const errorMessage = (err as Error).message;
@@ -87,7 +88,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
                 detailedError += `\n\n[DEBUG]\n- An unexpected server error occurred. Check the panel's server logs for more details ('pm2 logs mikrotik-manager').`;
             }
             
-            setError(detailedError);
+            setDebugMessage(detailedError);
         } finally {
             setIsActivating(false);
         }
@@ -97,6 +98,8 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
         navigator.clipboard.writeText(deviceId);
         alert('Device ID copied to clipboard!');
     };
+
+    const isError = debugMessage.toLowerCase().includes('failed') || debugMessage.toLowerCase().includes('error');
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-4">
@@ -111,7 +114,13 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
 
                 {isLoading && <div className="flex justify-center my-8"><Loader /></div>}
                 
-                {error && <div className="my-6 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md text-sm whitespace-pre-wrap">{error}</div>}
+                <div className={`my-6 p-3 rounded-md text-sm whitespace-pre-wrap ${
+                    isError
+                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                        : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                }`}>
+                    {debugMessage}
+                </div>
 
                 {deviceId && !isLoading && (
                     <div className="my-8">
