@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Loader } from './Loader.tsx';
 import { KeyIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from '../constants.tsx';
@@ -123,8 +122,15 @@ export const License: React.FC<LicenseProps> = ({ onLicenseChange, licenseStatus
                     </p>
                 </div>
                 
-                {!deviceId && <div className="flex justify-center my-8"><Loader /></div>}
+                {!deviceId && !licenseStatus?.error && <div className="flex justify-center my-8"><Loader /></div>}
                 
+                {licenseStatus?.error && (
+                    <div className="my-4 text-sm p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border border-red-300 dark:border-red-700">
+                        <p className="font-bold">Server Error:</p>
+                        <p>{licenseStatus.error}</p>
+                    </div>
+                )}
+
                 {deviceId && (
                     <div className="my-8">
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your Device ID</label>

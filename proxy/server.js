@@ -1,4 +1,3 @@
-
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -687,28 +686,36 @@ licenseRouter.get('/device-id', (req, res) => {
 
 licenseRouter.get('/status', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    let deviceId;
+    try {
+        deviceId = getDeviceId();
+    } catch (idError) {
+        console.error("CRITICAL: Could not determine Device ID.", idError.message);
+        return res.status(500).json({ message: 'Could not determine a stable Device ID for this host.' });
+    }
+
     try {
         const result = await db.get("SELECT value FROM license WHERE key = 'license_key'");
         if (!result || !result.value) {
-            return res.json({ licensed: false });
+            return res.json({ licensed: false, deviceId });
         }
         
         const licenseKey = result.value;
         const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
-        if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
-            return res.json({ licensed: false });
+        if (decoded.deviceId !== deviceId || new Date(decoded.expiresAt) < new Date()) {
+            return res.json({ licensed: false, deviceId });
         }
 
-        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId, licenseKey });
 
     } catch (e) {
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
             console.error("License verification error:", e.message);
-            return res.json({ licensed: false }); // Fail safely to unlicensed
+            return res.json({ licensed: false, deviceId });
         }
         console.error("Error during license status check:", e.message);
-        res.status(500).json({ message: e.message });
+        res.json({ licensed: false, deviceId, error: e.message });
     }
 });
 
@@ -717,24 +724,25 @@ licenseRouter.post('/activate', async (req, res) => {
     if (!licenseKey) {
         return res.status(400).json({ message: 'License key is required.' });
     }
+    
+    let deviceId;
+    try {
+        deviceId = getDeviceId();
+    } catch (idError) {
+        return res.status(500).json({ message: 'Could not determine Device ID to validate license against.' });
+    }
 
     try {
         const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
-        if (decoded.deviceId !== getDeviceId()) {
+        if (decoded.deviceId !== deviceId) {
             return res.status(400).json({ message: 'License key is for a different device.' });
         }
         if (new Date(decoded.expiresAt) < new Date()) {
             return res.status(400).json({ message: 'License key has expired.' });
         }
 
-        // Use INSERT OR REPLACE for an atomic and simpler update/insert operation.
-        const result = await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
-
-        if (result.changes === 0) {
-            // This is highly unlikely but would indicate a write failure.
-            throw new Error('Database write operation failed: no rows were changed.');
-        }
+        await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
 
         res.json({ success: true, message: 'Application activated successfully.' });
     } catch (e) {
@@ -743,6 +751,15 @@ licenseRouter.post('/activate', async (req, res) => {
         }
         console.error(`[LICENSE] Activation error: ${e.message}`);
         res.status(500).json({ message: `Activation error: ${e.message}` });
+    }
+});
+
+licenseRouter.post('/revoke', async (req, res) => {
+    try {
+        await db.run("DELETE FROM license WHERE key = 'license_key'");
+        res.json({ success: true, message: "License revoked." });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
     }
 });
 

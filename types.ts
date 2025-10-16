@@ -1,4 +1,5 @@
 
+
 import React from 'react';
 
 export type View =
@@ -30,6 +31,8 @@ export interface LicenseStatus {
   expires?: string;
   deviceId?: string;
   licenseKey?: string;
+  // FIX: Add optional error property to match potential API responses.
+  error?: string;
 }
 
 export interface RouterConfig {

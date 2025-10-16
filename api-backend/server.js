@@ -1,5 +1,3 @@
-
-
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -195,8 +193,15 @@ const getRouterConfig = async (req, res, next) => {
 
 app.get('/api/license/status', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    let deviceId;
     try {
-        const deviceId = getDeviceId();
+        deviceId = getDeviceId();
+    } catch (idError) {
+        console.error("CRITICAL: Could not determine Device ID on API backend.", idError.message);
+        return res.status(500).json({ message: 'Could not determine a stable Device ID for this host.' });
+    }
+
+    try {
         const result = await axios.get(`${DB_SERVER_URL}/api/db/license/license_key`, {
              headers: { 'Authorization': req.headers.authorization }
         }).then(res => res.data).catch(() => null);
@@ -217,15 +222,10 @@ app.get('/api/license/status', async (req, res) => {
     } catch (e) {
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
             console.error("License verification error:", e.message);
-            try {
-                const deviceId = getDeviceId();
-                return res.json({ licensed: false, deviceId });
-            } catch (idError) {
-                return res.status(500).json({ message: idError.message });
-            }
+            return res.json({ licensed: false, deviceId });
         }
         console.error("Error during license status check:", e.message);
-        res.status(500).json({ message: e.message });
+        res.json({ licensed: false, deviceId, error: e.message });
     }
 });
 
