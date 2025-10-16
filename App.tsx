@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -260,16 +261,22 @@ const AppRouter: React.FC = () => {
     
     // Initial license check and polling
     useEffect(() => {
+        let intervalId: number | undefined;
         if (user) {
             setIsLicenseLoading(true);
             checkLicense();
             
-            const intervalId = setInterval(checkLicense, 5000); // Poll every 5 seconds
-            return () => clearInterval(intervalId);
+            intervalId = setInterval(checkLicense, 5000); // Poll every 5 seconds
         } else if (!isLoading) {
             setIsLicenseLoading(false);
             setLicenseStatus(null);
         }
+
+        return () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
     }, [user, isLoading, checkLicense]);
 
     const handleLicenseChange = () => {

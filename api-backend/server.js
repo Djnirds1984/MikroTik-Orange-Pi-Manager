@@ -1,4 +1,5 @@
 
+
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
@@ -6,10 +7,15 @@ const http = require('http');
 const https = require('https');
 const WebSocket = require('ws');
 const { Client } = require('ssh2');
+const os = require('os');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const fs = require('fs');
 
 const app = express();
 const PORT = 3002;
 const DB_SERVER_URL = 'http://localhost:3001'; // The main panel server runs on port 3001
+const LICENSE_SECRET_KEY = process.env.LICENSE_SECRET || 'a-long-and-very-secret-string-for-licenses-!@#$%^&*()';
 
 app.use(cors()); // Allow all origins as it's proxied by Nginx
 app.use(express.json());
@@ -18,6 +24,55 @@ app.use(express.json());
 const routerConfigCache = new Map();
 // In-memory cache for calculating traffic stats
 const trafficStatsCache = new Map();
+
+const getDeviceId = () => {
+    try {
+        // 1. Prioritize /etc/machine-id as it's very stable on systemd-based systems
+        if (fs.existsSync('/etc/machine-id')) {
+            const machineId = fs.readFileSync('/etc/machine-id').toString().trim();
+            if (machineId) {
+                // Return a consistent hash of it
+                return crypto.createHash('sha1').update(machineId).digest('hex').substring(0, 12);
+            }
+        }
+
+        // 2. Fallback to a sorted list of MAC addresses if machine-id is not available
+        const interfaces = os.networkInterfaces();
+        const macs = [];
+
+        for (const name of Object.keys(interfaces)) {
+            // Skip virtual, loopback, and docker interfaces for stability
+            if (name.startsWith('veth') || name.startsWith('br-') || name.startsWith('docker') || name === 'lo') {
+                continue;
+            }
+            for (const iface of interfaces[name]) {
+                if (iface.mac && iface.mac !== '00:00:00:00:00:00' && !iface.internal) {
+                    macs.push(iface.mac.replace(/:/g, '').toLowerCase());
+                }
+            }
+        }
+        
+        if (macs.length === 0) {
+             // 3. Last resort fallback to hostname
+             const hostname = os.hostname();
+             if (hostname) {
+                 return crypto.createHash('sha1').update(hostname).digest('hex').substring(0, 12);
+             }
+             throw new Error('Could not determine a stable Device ID for this host.');
+        }
+
+        // Sort to ensure a deterministic order and pick the first one
+        macs.sort();
+        // FIX: Hash the MAC address to ensure a consistent ID format
+        return crypto.createHash('sha1').update(macs[0]).digest('hex').substring(0, 12);
+
+    } catch (e) {
+        console.error("Error getting Device ID:", e);
+        // Throwing the error so the route handler can catch it and send a 500
+        throw new Error('Could not determine a stable Device ID for this host.');
+    }
+};
+
 
 const handleApiRequest = async (req, res, action) => {
     try {
@@ -137,6 +192,43 @@ const getRouterConfig = async (req, res, next) => {
         res.status(500).json({ message: errorMessage });
     }
 };
+
+app.get('/api/license/status', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+        const deviceId = getDeviceId();
+        const result = await axios.get(`${DB_SERVER_URL}/api/db/license/license_key`, {
+             headers: { 'Authorization': req.headers.authorization }
+        }).then(res => res.data).catch(() => null);
+
+        if (!result || !result.value) {
+            return res.json({ licensed: false, deviceId });
+        }
+        
+        const licenseKey = result.value;
+        const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
+
+        if (decoded.deviceId !== deviceId || new Date(decoded.expiresAt) < new Date()) {
+            return res.json({ licensed: false, deviceId });
+        }
+
+        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+
+    } catch (e) {
+        if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
+            console.error("License verification error:", e.message);
+            try {
+                const deviceId = getDeviceId();
+                return res.json({ licensed: false, deviceId });
+            } catch (idError) {
+                return res.status(500).json({ message: idError.message });
+            }
+        }
+        console.error("Error during license status check:", e.message);
+        res.status(500).json({ message: e.message });
+    }
+});
+
 
 // Special endpoint for testing connection without a saved ID
 app.post('/mt-api/test-connection', async (req, res) => {

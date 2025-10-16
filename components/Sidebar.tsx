@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { MikroTikLogoIcon, EthernetIcon, EditIcon, RouterIcon, VlanIcon, UpdateIcon, SignalIcon, UsersIcon, ZeroTierIcon, WifiIcon, CogIcon, CurrencyDollarIcon, ShareIcon, ArchiveBoxIcon, BuildingOffice2Icon, ShieldCheckIcon, CodeBracketIcon, ReceiptPercentIcon, KeyIcon, LockClosedIcon } from '../constants.tsx';
 import { useLocalization } from '../contexts/LocalizationContext.tsx';
 import type { View, CompanySettings } from '../types.ts';
+import { useAuth } from '../contexts/AuthContext.tsx';
 
 interface SidebarProps {
   currentView: View;
@@ -49,6 +50,7 @@ const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, companySettings, isOpen, setIsOpen }) => {
+  const { user } = useAuth();
   const { t } = useLocalization();
   
   const navItems = useMemo(() => [
@@ -74,6 +76,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
     { id: 'super_admin', label: t('sidebar.super_admin'), icon: <LockClosedIcon className="w-6 h-6" /> },
   ], [t]);
 
+  const filteredNavItems = useMemo(() => {
+    if (!user) return [];
+    const isAdmin = user.role.name.toLowerCase() === 'administrator';
+    return navItems.filter(item => {
+      if ((item.id === 'super_admin' || item.id === 'panel_roles') && !isAdmin) {
+        return false;
+      }
+      return true;
+    });
+  }, [navItems, user]);
+
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-50 w-64 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out lg:sticky lg:translate-x-0 ${
@@ -98,7 +111,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
       </div>
       <div className="h-[calc(100vh-4rem)] px-3 py-4 overflow-y-auto flex flex-col justify-between">
         <ul className="space-y-2">
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <NavItem
               key={item.id}
               label={item.label}
