@@ -461,6 +461,7 @@ authRouter.post('/register', async (req, res) => {
         return res.status(400).json({ message: 'Username, password, and three security questions are required.' });
     }
     
+    let transactionStarted = false;
     try {
         const row = await db.get("SELECT COUNT(*) as count FROM users");
         if (row.count > 0) {
@@ -468,6 +469,7 @@ authRouter.post('/register', async (req, res) => {
         }
 
         await db.exec('BEGIN TRANSACTION;');
+        transactionStarted = true;
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const userId = `user_${Date.now()}`;
@@ -490,6 +492,7 @@ authRouter.post('/register', async (req, res) => {
         }
         
         await db.exec('COMMIT;');
+        transactionStarted = false;
         
         const userRecord = await db.get('SELECT users.*, roles.id as roleId, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id WHERE users.id = ?', userId);
         const userPayload = await buildUserPayload(userRecord);
@@ -497,7 +500,9 @@ authRouter.post('/register', async (req, res) => {
         res.status(201).json({ token, user: userPayload });
 
     } catch (e) {
-        await db.exec('ROLLBACK;');
+        if (transactionStarted) {
+            try { await db.exec('ROLLBACK;'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
+        }
         if (e.message.includes('UNIQUE constraint failed')) {
             return res.status(409).json({ message: 'Username already exists.' });
         }
@@ -839,6 +844,7 @@ panelAdminRouter.get('/roles/:roleId/permissions', requireAdmin, async (req, res
 });
 
 panelAdminRouter.put('/roles/:roleId/permissions', requireAdmin, async (req, res) => {
+    let transactionStarted = false;
     try {
         const { roleId } = req.params;
         const { permissionIds } = req.body;
@@ -853,16 +859,20 @@ panelAdminRouter.put('/roles/:roleId/permissions', requireAdmin, async (req, res
         }
 
         await db.exec('BEGIN TRANSACTION;');
+        transactionStarted = true;
         await db.run('DELETE FROM role_permissions WHERE role_id = ?', roleId);
         for (const permId of permissionIds) {
             await db.run('INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)', roleId, permId);
         }
         await db.exec('COMMIT;');
+        transactionStarted = false;
         
         res.json({ message: 'Permissions updated successfully.' });
 
     } catch (e) {
-        await db.exec('ROLLBACK;');
+        if (transactionStarted) {
+            try { await db.exec('ROLLBACK;'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
+        }
         res.status(500).json({ message: e.message });
     }
 });
@@ -1049,15 +1059,20 @@ const createSettingsHandler = (tableName) => async (req, res) => {
     } catch (e) { res.status(500).json({ message: e.message }); }
 };
 const createSettingsSaver = (tableName) => async (req, res) => {
+    let transactionStarted = false;
     try {
         await db.exec('BEGIN TRANSACTION;');
+        transactionStarted = true;
         for (const [key, value] of Object.entries(req.body)) {
             await db.run(`INSERT OR REPLACE INTO ${tableName} (key, value) VALUES (?, ?);`, key, JSON.stringify(value));
         }
         await db.exec('COMMIT;');
+        transactionStarted = false;
         res.json({ message: 'Settings saved.' });
     } catch (e) {
-        await db.exec('ROLLBACK;');
+        if (transactionStarted) {
+            try { await db.exec('ROLLBACK;'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
+        }
         res.status(500).json({ message: e.message });
     }
 };
