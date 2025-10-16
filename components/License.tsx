@@ -1,122 +1,143 @@
+
 import React, { useState, useEffect } from 'react';
 import { Loader } from './Loader.tsx';
-import { KeyIcon } from '../constants.tsx';
+import { KeyIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from '../constants.tsx';
+import type { LicenseStatus } from '../types.ts';
 import { getAuthHeader } from '../services/databaseService.ts';
 
 interface LicenseProps {
-    onActivationSuccess: () => void;
+    onLicenseChange: () => void;
+    licenseStatus: LicenseStatus | null;
 }
 
-export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
-    const [deviceId, setDeviceId] = useState('');
-    const [licenseKey, setLicenseKey] = useState('');
-    const [isLoading, setIsLoading] = useState(true);
-    const [isActivating, setIsActivating] = useState(false);
-    const [debugMessage, setDebugMessage] = useState<string>('[DEBUG]\n- Awaiting activation attempt...');
+export const License: React.FC<LicenseProps> = ({ onLicenseChange, licenseStatus }) => {
+    const [newLicenseKey, setNewLicenseKey] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [message, setMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null);
 
-    useEffect(() => {
-        const fetchDeviceId = async () => {
-            setIsLoading(true);
-            try {
-                const res = await fetch('/api/license/device-id', { headers: getAuthHeader() });
-                if (!res.ok) throw new Error('Failed to fetch device ID');
-                const data = await res.json();
-                setDeviceId(data.deviceId);
-            } catch (err) {
-                setDebugMessage(`[DEBUG] Error fetching device ID: ${(err as Error).message}`);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        fetchDeviceId();
-    }, []);
+    const deviceId = licenseStatus?.deviceId;
 
     const handleActivate = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsActivating(true);
-        setDebugMessage('[DEBUG]\n- Validating license key with server...');
+        setIsSubmitting(true);
+        setMessage(null);
         try {
             const res = await fetch('/api/license/activate', {
                 method: 'POST',
                 headers: { ...getAuthHeader(), 'Content-Type': 'application/json' },
-                body: JSON.stringify({ licenseKey }),
+                body: JSON.stringify({ licenseKey: newLicenseKey }),
             });
 
-            const contentType = res.headers.get("content-type");
+            const data = await res.json();
             if (!res.ok) {
-                if (contentType && contentType.indexOf("application/json") !== -1) {
-                    const errorData = await res.json();
-                    throw new Error(errorData.message || `Activation failed with status: ${res.status}`);
-                } else {
-                     const errorText = await res.text();
-                    throw new Error(errorText || `Activation failed. The server returned an unexpected response.`);
-                }
+                throw new Error(data.message || `Activation failed with status: ${res.status}`);
             }
             
-            await res.json();
-            setDebugMessage('[DEBUG]\n- Activation successful! Reloading panel...');
-            // Add a small delay so the user can read the success message before reload
-            setTimeout(() => {
-                onActivationSuccess();
-            }, 1000);
+            setMessage({ type: 'success', text: 'License activated successfully! Refreshing...' });
+            setTimeout(onLicenseChange, 1000); 
         } catch (err) {
-            const errorMessage = (err as Error).message;
-            let detailedError = `Activation Failed: ${errorMessage}`;
-
-            if (errorMessage.includes('different device')) {
-                detailedError += `\n\n[DEBUG]\n- Frontend Device ID: ${deviceId}\n- Ensure the license was generated using this exact ID.`;
-            } else if (errorMessage.includes('Invalid or expired')) {
-                detailedError += `\n\n[DEBUG]\n- The key may be malformed, expired, or was generated with a different secret key on the server. Please regenerate the key.`;
-            } else {
-                detailedError += `\n\n[DEBUG]\n- An unexpected server error occurred. Check the panel's server logs for more details ('pm2 logs mikrotik-manager').`;
-            }
-            
-            setDebugMessage(detailedError);
+            setMessage({ type: 'error', text: (err as Error).message });
         } finally {
-            setIsActivating(false);
+            setIsSubmitting(false);
         }
     };
     
-    const copyToClipboard = () => {
-        navigator.clipboard.writeText(deviceId);
-        alert('Device ID copied to clipboard!');
+    const handleRevoke = async () => {
+        if (!window.confirm('Are you sure you want to permanently revoke this license? The panel will become unlicensed.')) return;
+        setIsSubmitting(true);
+        setMessage(null);
+        try {
+            const res = await fetch('/api/license/revoke', {
+                method: 'POST',
+                headers: getAuthHeader(),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message);
+            
+            setMessage({ type: 'success', text: 'License revoked. Refreshing...' });
+            setTimeout(onLicenseChange, 1000);
+        } catch (err) {
+            setMessage({ type: 'error', text: (err as Error).message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+    
+    const copyToClipboard = (text: string | undefined) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        alert('Copied to clipboard!');
     };
 
-    const isError = debugMessage.toLowerCase().includes('failed') || debugMessage.toLowerCase().includes('error');
+    if (licenseStatus?.licensed) {
+        return (
+            <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl bg-white dark:bg-slate-800 p-8 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
+                    <div className="text-center">
+                        <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                        <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Application Licensed</h2>
+                        <p className="mt-2 text-slate-500 dark:text-slate-400">
+                           This panel is activated. Expires on: {new Date(licenseStatus.expires || '').toLocaleDateString()}
+                        </p>
+                    </div>
+
+                    <div className="my-6 space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your Device ID</label>
+                            <input type="text" readOnly value={licenseStatus.deviceId} className="w-full p-3 font-mono text-sm bg-slate-100 dark:bg-slate-700 border rounded-md" />
+                        </div>
+                         <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Active License Key</label>
+                            <div className="flex items-center gap-2">
+                                <textarea readOnly value={licenseStatus.licenseKey} className="flex-grow p-3 font-mono text-xs bg-slate-100 dark:bg-slate-700 border rounded-md resize-none" rows={3} />
+                                <button onClick={() => copyToClipboard(licenseStatus.licenseKey)} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500 self-start">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {message && (
+                        <div className={`my-4 text-sm p-3 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                            {message.text}
+                        </div>
+                    )}
+                    
+                    <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-700">
+                         <button onClick={handleRevoke} disabled={isSubmitting} className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50">
+                            {isSubmitting ? <Loader /> : <TrashIcon className="w-5 h-5" />}
+                            Revoke License
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex items-center justify-center p-4">
             <div className="w-full max-w-2xl bg-white dark:bg-slate-800 p-8 rounded-lg shadow-lg border border-slate-200 dark:border-slate-700">
                 <div className="text-center">
-                    <KeyIcon className="w-16 h-16 text-[--color-primary-500] mx-auto mb-4" />
+                    <ExclamationTriangleIcon className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Application is Unlicensed</h2>
                     <p className="mt-2 text-slate-500 dark:text-slate-400">
                         Please provide your Device ID to the administrator to receive a license key.
                     </p>
                 </div>
-
-                {isLoading && <div className="flex justify-center my-8"><Loader /></div>}
                 
-                <div className={`my-6 p-3 rounded-md text-sm whitespace-pre-wrap ${
-                    isError
-                        ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                        : 'bg-slate-100 dark:bg-slate-900/50 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
-                }`}>
-                    {debugMessage}
-                </div>
-
-                {deviceId && !isLoading && (
+                {!deviceId && <div className="flex justify-center my-8"><Loader /></div>}
+                
+                {deviceId && (
                     <div className="my-8">
                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Your Device ID</label>
                         <div className="flex items-center gap-2">
-                            <input
-                                type="text"
-                                readOnly
-                                value={deviceId}
-                                className="flex-grow p-3 font-mono text-sm bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md"
-                            />
-                            <button onClick={copyToClipboard} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500">Copy</button>
+                            <input type="text" readOnly value={deviceId} className="flex-grow p-3 font-mono text-sm bg-slate-100 dark:bg-slate-700 border rounded-md" />
+                            <button onClick={() => copyToClipboard(deviceId)} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 rounded-md hover:bg-slate-300 dark:hover:bg-slate-500">Copy</button>
                         </div>
+                    </div>
+                )}
+                
+                {message && (
+                    <div className={`my-4 text-sm p-3 rounded-md ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                        {message.text}
                     </div>
                 )}
                 
@@ -125,8 +146,8 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
                         <label htmlFor="licenseKey" className="block text-sm font-medium text-slate-700 dark:text-slate-300">License Key</label>
                         <textarea
                             id="licenseKey"
-                            value={licenseKey}
-                            onChange={(e) => setLicenseKey(e.target.value)}
+                            value={newLicenseKey}
+                            onChange={(e) => setNewLicenseKey(e.target.value)}
                             required
                             rows={4}
                             className="mt-1 block w-full bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm py-2 px-3 text-slate-900 dark:text-white focus:outline-none focus:ring-[--color-primary-500] focus:border-[--color-primary-500] font-mono text-xs"
@@ -136,10 +157,10 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
                      <div>
                         <button
                             type="submit"
-                            disabled={isActivating || !deviceId}
+                            disabled={isSubmitting || !deviceId}
                             className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-[--color-primary-600] hover:bg-[--color-primary-700] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[--color-primary-500] disabled:opacity-50"
                         >
-                            {isActivating ? <Loader /> : 'Validate & Activate'}
+                            {isSubmitting ? <Loader /> : 'Validate & Activate'}
                         </button>
                     </div>
                 </form>

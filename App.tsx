@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -71,7 +72,12 @@ const useMediaQuery = (query: string): boolean => {
   return matches;
 };
 
-const AppContent: React.FC = () => {
+interface AppContentProps {
+    licenseStatus: LicenseStatus | null;
+    onLicenseChange: () => void;
+}
+
+const AppContent: React.FC<AppContentProps> = ({ licenseStatus, onLicenseChange }) => {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const isLargeScreen = useMediaQuery('(min-width: 1024px)');
   const [isSidebarOpen, setIsSidebarOpen] = useState(isLargeScreen);
@@ -174,7 +180,7 @@ const AppContent: React.FC = () => {
       case 'panel_roles':
         return <PanelRoles />;
       case 'license':
-          return <License onActivationSuccess={() => {}} />;
+          return <License onLicenseChange={onLicenseChange} licenseStatus={licenseStatus} />;
       case 'super_admin':
           return <SuperAdmin />;
       default:
@@ -221,25 +227,24 @@ const AppContent: React.FC = () => {
 const AppRouter: React.FC = () => {
     const { user, isLoading, hasUsers } = useAuth();
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
-    const [licenseStatus, setLicenseStatus] = useState<{ isLoading: boolean; licensed: boolean; }>({ isLoading: true, licensed: false });
+    const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
+    const [isLicenseLoading, setIsLicenseLoading] = useState(true);
 
     const checkLicense = useCallback(async () => {
         try {
             const res = await fetch('/api/license/status', { headers: getAuthHeader() });
-            if (!res.ok) {
-                setLicenseStatus({ isLoading: false, licensed: false });
+             if (!res.ok) {
+                console.error('Failed to fetch license status:', res.statusText);
+                setLicenseStatus(null);
                 return;
             }
             const data: LicenseStatus = await res.json();
-            setLicenseStatus(prev => {
-                if (prev.licensed !== data.licensed || prev.isLoading) {
-                    return { isLoading: false, licensed: data.licensed };
-                }
-                return prev;
-            });
+            setLicenseStatus(data);
         } catch (error) {
             console.error(error);
-            setLicenseStatus({ isLoading: false, licensed: false });
+            setLicenseStatus(null); // Treat errors as unlicensed
+        } finally {
+            setIsLicenseLoading(false);
         }
     }, []);
 
@@ -253,31 +258,26 @@ const AppRouter: React.FC = () => {
         }
     }, [isLoading, hasUsers]);
     
-    // Initial license check
+    // Initial license check and polling
     useEffect(() => {
         if (user) {
-            setLicenseStatus(prev => ({ ...prev, isLoading: true }));
+            setIsLicenseLoading(true);
             checkLicense();
+            
+            const intervalId = setInterval(checkLicense, 5000); // Poll every 5 seconds
+            return () => clearInterval(intervalId);
         } else if (!isLoading) {
-            setLicenseStatus({ isLoading: false, licensed: false });
+            setIsLicenseLoading(false);
+            setLicenseStatus(null);
         }
     }, [user, isLoading, checkLicense]);
-    
-    // Polling effect
-    useEffect(() => {
-        if (user && !licenseStatus.licensed && !licenseStatus.isLoading) {
-            const intervalId = setInterval(checkLicense, 5000);
-            return () => clearInterval(intervalId);
-        }
-    }, [user, licenseStatus.licensed, licenseStatus.isLoading, checkLicense]);
 
-    const handleActivationSuccess = () => {
-        // A full reload ensures that all state is refetched from the server,
-        // including the new license status, avoiding any client-side race conditions.
-        window.location.reload();
+    const handleLicenseChange = () => {
+        setIsLicenseLoading(true);
+        checkLicense();
     };
 
-    if (isLoading || (user && licenseStatus.isLoading)) {
+    if (isLoading || isLicenseLoading) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-slate-100 dark:bg-slate-950">
                 <Loader />
@@ -295,12 +295,11 @@ const AppRouter: React.FC = () => {
         );
     }
     
-    // Admins can bypass the license check to access Super Admin tools.
-    if (!licenseStatus.licensed && user.role.name.toLowerCase() !== 'administrator') {
-        return <License onActivationSuccess={handleActivationSuccess} />;
+    if (!licenseStatus?.licensed && user.role.name.toLowerCase() !== 'administrator') {
+        return <License onLicenseChange={handleLicenseChange} licenseStatus={licenseStatus} />;
     }
 
-    return <AppContent />;
+    return <AppContent onLicenseChange={handleLicenseChange} licenseStatus={licenseStatus} />;
 };
 
 const App: React.FC = () => (

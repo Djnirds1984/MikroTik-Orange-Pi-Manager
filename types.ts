@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export type View =
@@ -28,6 +29,7 @@ export interface LicenseStatus {
   licensed: boolean;
   expires?: string;
   deviceId?: string;
+  licenseKey?: string;
 }
 
 export interface RouterConfig {
