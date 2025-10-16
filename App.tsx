@@ -272,7 +272,9 @@ const AppRouter: React.FC = () => {
     }, [user, licenseStatus.licensed, licenseStatus.isLoading, checkLicense]);
 
     const handleActivationSuccess = () => {
-        setLicenseStatus({ isLoading: false, licensed: true });
+        // A full reload ensures that all state is refetched from the server,
+        // including the new license status, avoiding any client-side race conditions.
+        window.location.reload();
     };
 
     if (isLoading || (user && licenseStatus.isLoading)) {

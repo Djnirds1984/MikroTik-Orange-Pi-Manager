@@ -54,8 +54,11 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
             }
             
             await res.json();
-            setDebugMessage('[DEBUG]\n- Activation successful! Redirecting...');
-            onActivationSuccess();
+            setDebugMessage('[DEBUG]\n- Activation successful! Reloading panel...');
+            // Add a small delay so the user can read the success message before reload
+            setTimeout(() => {
+                onActivationSuccess();
+            }, 1000);
         } catch (err) {
             const errorMessage = (err as Error).message;
             let detailedError = `Activation Failed: ${errorMessage}`;
