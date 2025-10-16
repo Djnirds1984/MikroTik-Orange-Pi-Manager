@@ -29,7 +29,13 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
             }
         };
         fetchDeviceId();
-    }, []);
+
+        const intervalId = setInterval(() => {
+            onActivationSuccess();
+        }, 5000); // Poll every 5 seconds to check for license activation
+
+        return () => clearInterval(intervalId);
+    }, [onActivationSuccess]);
 
     const handleActivate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,7 +59,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
             }
             
             await res.json();
-            alert('Activation successful! Redirecting to the dashboard.');
+            alert('Activation successful! The dashboard will now load.');
             onActivationSuccess();
         } catch (err) {
             setError((err as Error).message);
