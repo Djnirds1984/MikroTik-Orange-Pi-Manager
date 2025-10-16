@@ -663,7 +663,8 @@ const getDeviceId = () => {
 
         // Sort to ensure a deterministic order and pick the first one
         macs.sort();
-        return macs[0];
+        // FIX: Hash the MAC address to ensure a consistent ID format
+        return crypto.createHash('sha1').update(macs[0]).digest('hex').substring(0, 12);
 
     } catch (e) {
         console.error("Error getting Device ID:", e);
