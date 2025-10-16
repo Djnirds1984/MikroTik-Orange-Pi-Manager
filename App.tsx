@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
@@ -230,6 +231,7 @@ const AppRouter: React.FC = () => {
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
     const [licenseStatus, setLicenseStatus] = useState<LicenseStatus | null>(null);
     const [isLicenseLoading, setIsLicenseLoading] = useState(true);
+    let licenseCheckInterval = React.useRef<number | null>(null);
 
     const checkLicense = useCallback(async () => {
         try {
@@ -261,20 +263,25 @@ const AppRouter: React.FC = () => {
     
     // Initial license check and polling
     useEffect(() => {
-        let intervalId: number | undefined;
         if (user) {
             setIsLicenseLoading(true);
             checkLicense();
             
-            intervalId = setInterval(checkLicense, 5000); // Poll every 5 seconds
+            if (licenseCheckInterval.current) {
+                clearInterval(licenseCheckInterval.current);
+            }
+            licenseCheckInterval.current = window.setInterval(checkLicense, 5000); // Poll every 5 seconds
         } else if (!isLoading) {
             setIsLicenseLoading(false);
             setLicenseStatus(null);
+             if (licenseCheckInterval.current) {
+                clearInterval(licenseCheckInterval.current);
+            }
         }
 
         return () => {
-            if (intervalId) {
-                clearInterval(intervalId);
+            if (licenseCheckInterval.current) {
+                clearInterval(licenseCheckInterval.current);
             }
         };
     }, [user, isLoading, checkLicense]);
@@ -302,7 +309,8 @@ const AppRouter: React.FC = () => {
         );
     }
     
-    if (!licenseStatus?.licensed && user.role.name.toLowerCase() !== 'administrator') {
+    const userRole = user.role.name.toLowerCase();
+    if (!licenseStatus?.licensed && userRole !== 'administrator' && userRole !== 'superadmin') {
         return <License onLicenseChange={handleLicenseChange} licenseStatus={licenseStatus} />;
     }
 

@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const app = express();
 const PORT = 3001;
 const DB_PATH = path.join(__dirname, 'panel.db');
+const SUPERADMIN_DB_PATH = path.join(__dirname, 'superadmin.db');
 const BACKUP_DIR = path.join(__dirname, 'backups');
 const API_BACKEND_FILE = path.join(__dirname, '..', 'api-backend', 'server.js');
 const NGROK_CONFIG_PATH = path.join(__dirname, 'ngrok-config.json');
@@ -32,8 +33,33 @@ app.use(express.text({ limit: '5mb' })); // For AI fixer
 fs.mkdirSync(BACKUP_DIR, { recursive: true });
 
 let db;
+let superadminDb;
 
 // --- Database Initialization and Migrations ---
+async function initSuperadminDb() {
+    try {
+        superadminDb = await open({
+            filename: SUPERADMIN_DB_PATH,
+            driver: sqlite3.Database
+        });
+        console.log('Connected to the superadmin database.');
+
+        await superadminDb.exec('CREATE TABLE IF NOT EXISTS superadmin (username TEXT PRIMARY KEY, password TEXT NOT NULL);');
+
+        const superadminUser = await superadminDb.get("SELECT COUNT(*) as count FROM superadmin");
+        if (superadminUser.count === 0) {
+            console.log('No superadmin found. Creating default superadmin...');
+            const defaultPassword = 'superadmin';
+            const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+            await superadminDb.run('INSERT INTO superadmin (username, password) VALUES (?, ?)', 'superadmin', hashedPassword);
+            console.log('Default superadmin created with username "superadmin" and password "superadmin".');
+        }
+    } catch (err) {
+        console.error('Failed to initialize superadmin database:', err);
+        process.exit(1);
+    }
+}
+
 async function initDb() {
     try {
         db = await open({
@@ -515,12 +541,29 @@ authRouter.post('/login', async (req, res) => {
         return res.status(400).json({ message: 'Username and password are required.' });
     }
     try {
+        // --- Superadmin Check ---
+        const superadmin = await superadminDb.get('SELECT * FROM superadmin WHERE username = ?', username);
+        if (superadmin) {
+            const isMatch = await bcrypt.compare(password, superadmin.password);
+            if (isMatch) {
+                const superadminPayload = {
+                    id: 'superadmin',
+                    username: superadmin.username,
+                    role: { id: 'role_superadmin', name: 'Superadmin' },
+                    permissions: ['*:*'] // Superadmin gets all permissions
+                };
+                const token = jwt.sign(superadminPayload, SECRET_KEY, { expiresIn: '7d' });
+                return res.json({ token, user: superadminPayload });
+            }
+        }
+
+        // --- Regular User Check ---
         const user = await db.get('SELECT users.*, roles.id as roleId, roles.name as roleName FROM users JOIN roles ON users.role_id = roles.id WHERE username = ?', username);
         if (!user) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
+        const isMatchRegular = await bcrypt.compare(password, user.password);
+        if (!isMatchRegular) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
         
@@ -765,7 +808,8 @@ licenseRouter.post('/revoke', async (req, res) => {
 
 
 const requireAdmin = (req, res, next) => {
-    if (req.user && (req.user.role.name.toLowerCase() === 'administrator' || req.user.permissions.includes('*:*'))) {
+    const roleName = req.user?.role?.name?.toLowerCase();
+    if (req.user && (roleName === 'administrator' || roleName === 'superadmin' || req.user.permissions.includes('*:*'))) {
         return next();
     }
     res.status(403).json({ message: 'Forbidden: Administrator access required.' });
@@ -1912,7 +1956,7 @@ app.get('*', (req, res) => {
 });
 
 // --- Start Server ---
-initDb().then(() => {
+Promise.all([initDb(), initSuperadminDb()]).then(() => {
     app.listen(PORT, () => {
         console.log(`MikroTik Manager UI server running. Listening on http://localhost:${PORT}`);
     });

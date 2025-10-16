@@ -79,8 +79,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
   const filteredNavItems = useMemo(() => {
     if (!user) return [];
     const isAdmin = user.role.name.toLowerCase() === 'administrator';
+    const isSuperadmin = user.role.name.toLowerCase() === 'superadmin';
+
     return navItems.filter(item => {
-      if ((item.id === 'super_admin' || item.id === 'panel_roles') && !isAdmin) {
+      if (item.id === 'super_admin' && !isSuperadmin) {
+        return false;
+      }
+      if (item.id === 'panel_roles' && !isAdmin && !isSuperadmin) {
         return false;
       }
       return true;
