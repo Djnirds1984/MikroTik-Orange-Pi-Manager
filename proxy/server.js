@@ -688,24 +688,31 @@ licenseRouter.get('/device-id', (req, res) => {
 licenseRouter.get('/status', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     try {
+        const deviceId = getDeviceId();
         const result = await db.get("SELECT value FROM license WHERE key = 'license_key'");
+        
         if (!result || !result.value) {
-            return res.json({ licensed: false });
+            return res.json({ licensed: false, deviceId });
         }
         
         const licenseKey = result.value;
         const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
-        if (decoded.deviceId !== getDeviceId() || new Date(decoded.expiresAt) < new Date()) {
-            return res.json({ licensed: false });
+        if (decoded.deviceId !== deviceId || new Date(decoded.expiresAt) < new Date()) {
+            return res.json({ licensed: false, deviceId });
         }
-
-        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId });
+        
+        res.json({ licensed: true, expires: decoded.expiresAt, deviceId: decoded.deviceId, licenseKey: licenseKey });
 
     } catch (e) {
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
             console.error("License verification error:", e.message);
-            return res.json({ licensed: false }); // Fail safely to unlicensed
+            try {
+                const deviceId = getDeviceId();
+                return res.json({ licensed: false, deviceId });
+            } catch (idError) {
+                 return res.status(500).json({ message: idError.message });
+            }
         }
         console.error("Error during license status check:", e.message);
         res.status(500).json({ message: e.message });
@@ -743,6 +750,15 @@ licenseRouter.post('/activate', async (req, res) => {
         }
         console.error(`[LICENSE] Activation error: ${e.message}`);
         res.status(500).json({ message: `Activation error: ${e.message}` });
+    }
+});
+
+licenseRouter.post('/revoke', async (req, res) => {
+    try {
+        await db.run("DELETE FROM license WHERE key = 'license_key'");
+        res.json({ success: true, message: 'License revoked.' });
+    } catch (e) {
+        res.status(500).json({ message: e.message });
     }
 });
 
@@ -1887,11 +1903,11 @@ app.get('/api/restore-backup', protect, (req, res) => {
 
 
 // --- Static file serving ---
-app.use(express.static(path.join(__dirname, '..')));
+app.use(express.static(path.join(__dirname, '..', 'dist')));
 
 // SPA Fallback:
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+    res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'));
 });
 
 // --- Start Server ---
