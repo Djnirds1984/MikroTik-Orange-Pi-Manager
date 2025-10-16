@@ -684,6 +684,7 @@ licenseRouter.get('/device-id', (req, res) => {
 });
 
 licenseRouter.get('/status', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
     try {
         const result = await db.get("SELECT value FROM license WHERE key = 'license_key'");
         if (!result || !result.value) {
