@@ -68,15 +68,26 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
                     const errorData = await res.json();
                     throw new Error(errorData.message || `Activation failed with status: ${res.status}`);
                 } else {
-                    throw new Error(`Activation failed. The server returned an unexpected response.`);
+                     const errorText = await res.text();
+                    throw new Error(errorText || `Activation failed. The server returned an unexpected response.`);
                 }
             }
             
             await res.json();
-            // No alert, just trigger success to switch views smoothly.
             onActivationSuccess();
         } catch (err) {
-            setError((err as Error).message);
+            const errorMessage = (err as Error).message;
+            let detailedError = `Activation Failed: ${errorMessage}`;
+
+            if (errorMessage.includes('different device')) {
+                detailedError += `\n\n[DEBUG]\n- Frontend Device ID: ${deviceId}\n- Ensure the license was generated using this exact ID.`;
+            } else if (errorMessage.includes('Invalid or expired')) {
+                detailedError += `\n\n[DEBUG]\n- The key may be malformed, expired, or was generated with a different secret key on the server. Please regenerate the key.`;
+            } else {
+                detailedError += `\n\n[DEBUG]\n- An unexpected server error occurred. Check the panel's server logs for more details ('pm2 logs mikrotik-manager').`;
+            }
+            
+            setError(detailedError);
         } finally {
             setIsActivating(false);
         }
@@ -100,7 +111,7 @@ export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
 
                 {isLoading && <div className="flex justify-center my-8"><Loader /></div>}
                 
-                {error && <div className="my-6 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md text-sm">{error}</div>}
+                {error && <div className="my-6 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-md text-sm whitespace-pre-wrap">{error}</div>}
 
                 {deviceId && !isLoading && (
                     <div className="my-8">
