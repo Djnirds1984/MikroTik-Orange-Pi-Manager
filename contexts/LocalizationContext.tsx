@@ -45,7 +45,7 @@ export const LocalizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
             // Wait until authentication is resolved
             if (isAuthLoading) {
                 // If auth is still loading, do nothing yet. This effect will re-run when it's done.
-                 setIsLoading(false);
+                // The isLoading state remains true, which is correct.
                 return;
             }
 
