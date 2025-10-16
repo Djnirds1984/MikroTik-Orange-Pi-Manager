@@ -684,7 +684,7 @@ licenseRouter.get('/device-id', (req, res) => {
 });
 
 licenseRouter.get('/status', async (req, res) => {
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Cache-Control', 'no-store');
     try {
         const result = await db.get("SELECT value FROM license WHERE key = 'license_key'");
         if (!result || !result.value) {
@@ -716,6 +716,7 @@ licenseRouter.post('/activate', async (req, res) => {
         return res.status(400).json({ message: 'License key is required.' });
     }
 
+    let transactionStarted = false;
     try {
         const decoded = jwt.verify(licenseKey, LICENSE_SECRET_KEY);
 
@@ -726,9 +727,21 @@ licenseRouter.post('/activate', async (req, res) => {
             return res.status(400).json({ message: 'License key has expired.' });
         }
         
-        await db.run("INSERT OR REPLACE INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
+        await db.exec('BEGIN TRANSACTION;');
+        transactionStarted = true;
+        
+        // Use explicit DELETE and INSERT for robustness
+        await db.run("DELETE FROM license WHERE key = 'license_key'");
+        await db.run("INSERT INTO license (key, value) VALUES ('license_key', ?)", licenseKey);
+
+        await db.exec('COMMIT;');
+        transactionStarted = false;
+
         res.json({ success: true, message: 'Application activated successfully.' });
     } catch (e) {
+        if (transactionStarted) {
+            try { await db.exec('ROLLBACK;'); } catch (rbErr) { console.error('Rollback failed:', rbErr); }
+        }
         if (e instanceof jwt.JsonWebTokenError || e instanceof jwt.TokenExpiredError) {
             return res.status(400).json({ message: 'Invalid or expired license key.' });
         }
