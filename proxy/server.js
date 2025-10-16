@@ -627,43 +627,44 @@ app.use('/api/auth', authRouter);
 // --- License Management ---
 const getDeviceId = () => {
     try {
-        const interfaces = os.networkInterfaces();
-        const prioritizedInterfaces = ['eth0', 'wlan0', 'en0', 'end0']; // Common names for ethernet, wifi on Linux/macOS/embedded
-
-        // 1. Try to find a MAC from a prioritized interface
-        for (const name of prioritizedInterfaces) {
-            if (interfaces[name]) {
-                for (const iface of interfaces[name]) {
-                    if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
-                        return iface.mac.replace(/:/g, '').toLowerCase();
-                    }
-                }
-            }
-        }
-
-        // 2. Fallback to the first available non-internal, non-zero MAC address
-        for (const name of Object.keys(interfaces).sort()) {
-            // Skip virtual interfaces
-            if (name.startsWith('veth') || name.startsWith('br-') || name.startsWith('docker') || name === 'lo') {
-                continue;
-            }
-            for (const iface of interfaces[name]) {
-                if (iface.mac && iface.mac !== '00:00:00:00:00:00') {
-                    return iface.mac.replace(/:/g, '').toLowerCase();
-                }
-            }
-        }
-        
-        // 3. Last resort fallback to /etc/machine-id
+        // 1. Prioritize /etc/machine-id as it's very stable on systemd-based systems
         if (fs.existsSync('/etc/machine-id')) {
             const machineId = fs.readFileSync('/etc/machine-id').toString().trim();
             if (machineId) {
-                // Not a MAC, but a stable unique ID. We can hash it to make it shorter and less revealing.
+                // Return a consistent hash of it
                 return crypto.createHash('sha1').update(machineId).digest('hex').substring(0, 12);
             }
         }
 
-        return 'no-unique-id-found';
+        // 2. Fallback to a sorted list of MAC addresses if machine-id is not available
+        const interfaces = os.networkInterfaces();
+        const macs = [];
+
+        for (const name of Object.keys(interfaces)) {
+            // Skip virtual, loopback, and docker interfaces for stability
+            if (name.startsWith('veth') || name.startsWith('br-') || name.startsWith('docker') || name === 'lo') {
+                continue;
+            }
+            for (const iface of interfaces[name]) {
+                if (iface.mac && iface.mac !== '00:00:00:00:00:00' && !iface.internal) {
+                    macs.push(iface.mac.replace(/:/g, '').toLowerCase());
+                }
+            }
+        }
+        
+        if (macs.length === 0) {
+             // 3. Last resort fallback to hostname
+             const hostname = os.hostname();
+             if (hostname) {
+                 return crypto.createHash('sha1').update(hostname).digest('hex').substring(0, 12);
+             }
+             throw new Error('Could not determine a stable Device ID for this host.');
+        }
+
+        // Sort to ensure a deterministic order and pick the first one
+        macs.sort();
+        return macs[0];
+
     } catch (e) {
         console.error("Error getting Device ID:", e);
         // Throwing the error so the route handler can catch it and send a 500
