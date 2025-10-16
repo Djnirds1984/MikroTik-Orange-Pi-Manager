@@ -2,7 +2,7 @@
 
 A modern, responsive web dashboard for managing your MikroTik routers, specifically designed to be lightweight enough to run on an Orange Pi or similar single-board computer. It features a real-time monitoring dashboard and a powerful AI Script Assistant powered by the Google Gemini API.
 
-![Screenshot of the MikroTik Orange Pi Manager Dashboard](./screenshot.png) <!-- Assuming a screenshot will be added later -->
+![Screenshot of the MikroTik Orange Pi Manager Dashboard](./screenshot.png)
 
 ## Features
 
@@ -19,87 +19,32 @@ A modern, responsive web dashboard for managing your MikroTik routers, specifica
 
 To improve stability and reliability, this project uses a **two-process architecture**.
 
-1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its *only* job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
-2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server that uses the official **MikroTik REST API**. It handles all communication with your routers and exposes API endpoints (e.g., `/api/system-info`) that the frontend calls. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
+1.  **Frontend UI Server (`mikrotik-manager`):** This is a lightweight Node.js/Express server. Its primary job is to serve the static frontend files (HTML, CSS, JavaScript) that make up the user interface. It runs on port **3001**.
+2.  **API Backend Server (`mikrotik-api-backend`):** This is a separate, dedicated Node.js/Express server that acts as a proxy to the official **MikroTik REST API**. It handles all communication with your routers. This separation means that if an API request fails, it will not crash the user interface. It runs on port **3002**.
 
-This two-process model provides a robust separation of concerns, ensuring the application remains stable.
-
-### Tech Stack
-
--   **Frontend:** React 19, TypeScript, Tailwind CSS, Recharts
--   **Backend:** Node.js, Express.js, Axios (for MikroTik REST API)
--   **Database:** SQLite (`@vscode/sqlite3`)
--   **AI:** Google Gemini API (`@google/genai`)
+This two-process model provides a robust separation of concerns, ensuring the application remains stable and responsive.
 
 ---
 
-## Running Locally for Development
+## Deployment Guide (Orange Pi / Debian)
 
-### **Prerequisites**
-- **Node.js**: Ensure you have Node.js v20.x or later installed.
-- **PM2**: `npm install -g pm2`
-- **(Optional) Gemini API Key**: For the "AI Script" feature to work, you need a Google Gemini API key.
+This is the recommended way to run the panel in a production environment.
+
+### 1. Prerequisites
+
+-   An Orange Pi or similar SBC running a Debian-based OS (like Armbian) with SSH access.
+-   **Node.js v20.x or newer.**
+-   **Essential Tools:** `git`, `pm2`, and `build-essential`.
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y git build-essential
+    sudo npm install -g pm2
+    ```
+-   **(Optional) Gemini API Key**: For the "AI Scripting" feature to work, you need a Google Gemini API key.
     1.  Get your key from [Google AI Studio](https://aistudio.google.com/app/apikey).
     2.  Open the `env.js` file and replace `"YOUR_GEMINI_API_KEY_HERE"` with your actual key.
 
-### **Installation and Startup**
-This new, more reliable method starts each server as a separate, named process.
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Djnirds1984/MikroTik-Orange-Pi-Manager.git
-   cd MikroTik-Orange-Pi-Manager
-   ```
-
-2. **Install Dependencies for Both Servers:**
-   ```bash
-   # Install for UI Server
-   npm install --prefix proxy
-   
-   # Install for API Backend Server
-   npm install --prefix api-backend
-   ```
-
-3. **Start the Application with PM2:**
-   **IMPORTANT: Ensure you are in the project's root directory (`MikroTik-Orange-Pi-Manager`) before running these commands.**
-   ```bash
-   # First, stop and delete any old running processes to ensure a clean start
-   # NOTE: This command only removes the apps from PM2's list, it does NOT delete any of your files.
-   pm2 delete all
-   
-   # Start the UI server on port 3001
-   pm2 start ./proxy/server.js --name mikrotik-manager
-
-   # Start the API backend server on port 3002
-   pm2 start ./api-backend/server.js --name mikrotik-api-backend
-   ```
-
-4. **Check the status:**
-   ```bash
-   pm2 list
-   # You should see both 'mikrotik-manager' and 'mikrotik-api-backend' online.
-   ```
-   
-5. **Access the application:**
-   Open your web browser and navigate to **`http://localhost:3001`**. The UI served from port 3001 will automatically communicate with the backend on port 3002.
-
----
-
-## Deployment on Orange Pi One (Step-by-Step Guide)
-
-This guide shows how to deploy both servers using simple `pm2` commands for reliable process management.
-
-### **Prerequisites**
-
--   An Orange Pi One (or similar SBC) with Armbian/Debian and SSH access.
--   Node.js v20+, Git, and PM2 installed.
--   **Build Tools:** The application has dependencies that may need to be compiled from source. Ensure you have the necessary build tools installed:
-    ```bash
-    sudo apt-get update
-    sudo apt-get install -y build-essential
-    ```
-
-### **Step 1: MikroTik Router Configuration**
+### 2. MikroTik Router Configuration
 
 -   **Enable REST API:** You must enable the **REST API** on your router. In the terminal, run:
     ```routeros
@@ -114,59 +59,70 @@ This guide shows how to deploy both servers using simple `pm2` commands for reli
     /zerotier set enabled=yes
     ```
 
-### **Step 2: Prepare the Application**
+### 3. Installation & Startup
 
-1.  **Navigate to the Project Directory:**
-    Your project should be located at `/var/www/html/MikroTik-Orange-Pi-Manager`.
+1.  **Clone the Repository:**
     ```bash
-    cd /var/www/html/MikroTik-Orange-Pi-Manager
+    git clone https://github.com/Djnirds1984/MikroTik-Orange-Pi-Manager.git
+    cd MikroTik-Orange-Pi-Manager
     ```
 
-2.  **Install/Update Dependencies:**
-    Run these commands to ensure all necessary packages for both servers are installed.
+2.  **Install Dependencies:**
+    Run these commands from the project's **root directory** to install packages for both servers.
     ```bash
+    # Install for UI Server (proxy)
     npm install --prefix proxy
+   
+    # Install for API Backend Server
     npm install --prefix api-backend
     ```
 
-### **Step 3: Start and Manage the Application with PM2**
-
-1.  **Stop and Delete Old Processes (CRITICAL STEP):**
-    Before starting, always clear out any old or lingering processes to prevent conflicts. **Note:** This command only removes the apps from PM2's process list; it does **not** delete any of your project files or backups.
+3.  **Start with PM2:**
+    These commands start both servers as persistent, named processes.
     ```bash
+    # First, stop and delete any old running processes to ensure a clean start.
+    # This only removes apps from PM2's list, it does NOT delete your files.
     pm2 delete all
-    ```
 
-2.  **Start Both Servers:**
-    **IMPORTANT: Ensure you are in the project's root directory (`/var/www/html/MikroTik-Orange-Pi-Manager`) before running these commands.**
-    ```bash
-    # Start the UI server on port 3001
+    # Start the UI server (port 3001)
     pm2 start ./proxy/server.js --name mikrotik-manager
 
-    # Start the API backend server on port 3002
+    # Start the API backend (port 3002)
     pm2 start ./api-backend/server.js --name mikrotik-api-backend
     ```
 
-3.  **Verify the Status:**
-    Check that both processes (`mikrotik-manager` and `mikrotik-api-backend`) are online and running without errors.
-    ```bash
-    pm2 list
-    ```
-
 4.  **Save the Process List:**
-    This command saves the current process list. If the server reboots, `pm2` will automatically restart your applications.
+    This ensures `pm2` will automatically restart your applications on server reboot.
     ```bash
     pm2 save
     ```
 
-5.  **Viewing Logs:**
-    To see the logs for both servers in real-time:
-    ```bash
-    pm2 logs
-    ```
+5.  **Access the Panel:**
+    Open your browser and navigate to `http://<your_orange_pi_ip>:3001`.
 
-### **Step 4: Access the Panel**
-Open your browser and navigate to `http://<your_orange_pi_ip>:3001`.
+---
+
+## Updating the Panel
+
+To update the panel to the latest version from GitHub:
+
+1.  **Navigate to the project directory:**
+    ```bash
+    cd /path/to/MikroTik-Orange-Pi-Manager
+    ```
+2.  **Pull the latest changes:**
+    ```bash
+    git pull
+    ```
+3.  **Re-install dependencies** in case they have changed:
+    ```bash
+    npm install --prefix proxy
+    npm install --prefix api-backend
+    ```
+4.  **Restart the servers** to apply the updates:
+    ```bash
+    pm2 restart all
+    ```
 
 ---
 

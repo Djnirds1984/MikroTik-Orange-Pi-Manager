@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, c
           ))}
         </ul>
         <div className="text-center text-xs text-slate-400 dark:text-slate-600 mt-4">
-            v1.0 Beta
+            v1.0 Beta 2
         </div>
       </div>
     </aside>
