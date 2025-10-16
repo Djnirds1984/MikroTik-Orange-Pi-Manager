@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar.tsx';
 import { TopBar } from './components/TopBar.tsx';
 import { Dashboard } from './components/Dashboard.tsx';
@@ -174,7 +174,7 @@ const AppContent: React.FC = () => {
       case 'panel_roles':
         return <PanelRoles />;
       case 'license':
-          return <License />;
+          return <License onActivationSuccess={() => {}} />;
       case 'super_admin':
           return <SuperAdmin />;
       default:
@@ -223,6 +223,22 @@ const AppRouter: React.FC = () => {
     const [authView, setAuthView] = useState<'login' | 'register' | 'forgot'>('login');
     const [licenseStatus, setLicenseStatus] = useState<{ isLoading: boolean; licensed: boolean; }>({ isLoading: true, licensed: false });
 
+    const checkLicense = useCallback(async () => {
+        setLicenseStatus(prev => ({ ...prev, isLoading: true }));
+        try {
+            const res = await fetch('/api/license/status', { headers: getAuthHeader() });
+            if (!res.ok) {
+                setLicenseStatus({ isLoading: false, licensed: false });
+                return;
+            }
+            const data: LicenseStatus = await res.json();
+            setLicenseStatus({ isLoading: false, licensed: data.licensed });
+        } catch (error) {
+            console.error(error);
+            setLicenseStatus({ isLoading: false, licensed: false });
+        }
+    }, []);
+
     useEffect(() => {
         if (!isLoading) {
             if (!hasUsers) {
@@ -235,28 +251,11 @@ const AppRouter: React.FC = () => {
     
     useEffect(() => {
         if (user) {
-            const checkLicense = async () => {
-                try {
-                    const res = await fetch('/api/license/status', { headers: getAuthHeader() });
-                    if (!res.ok) { 
-                        // If status fails, but it's not a JSON error, we might be getting HTML.
-                        // For safety, assume unlicensed unless we get a clear `licensed: true`.
-                        setLicenseStatus({ isLoading: false, licensed: false });
-                        return;
-                    }
-                    const data: LicenseStatus = await res.json();
-                    setLicenseStatus({ isLoading: false, licensed: data.licensed });
-                } catch (error) {
-                    console.error(error);
-                    setLicenseStatus({ isLoading: false, licensed: false });
-                }
-            };
             checkLicense();
         } else if (!isLoading) {
-            // If there's no user and we're not loading auth, we don't need to check license
             setLicenseStatus({ isLoading: false, licensed: false });
         }
-    }, [user, isLoading]);
+    }, [user, isLoading, checkLicense]);
 
     if (isLoading || (user && licenseStatus.isLoading)) {
         return (
@@ -278,7 +277,7 @@ const AppRouter: React.FC = () => {
     
     // Admins can bypass the license check to access Super Admin tools.
     if (!licenseStatus.licensed && user.role.name.toLowerCase() !== 'administrator') {
-        return <License />;
+        return <License onActivationSuccess={checkLicense} />;
     }
 
     return <AppContent />;

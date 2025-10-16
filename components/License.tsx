@@ -3,7 +3,11 @@ import { Loader } from './Loader.tsx';
 import { KeyIcon } from '../constants.tsx';
 import { getAuthHeader } from '../services/databaseService.ts';
 
-export const License: React.FC = () => {
+interface LicenseProps {
+    onActivationSuccess: () => void;
+}
+
+export const License: React.FC<LicenseProps> = ({ onActivationSuccess }) => {
     const [deviceId, setDeviceId] = useState('');
     const [licenseKey, setLicenseKey] = useState('');
     const [isLoading, setIsLoading] = useState(true);
@@ -49,8 +53,8 @@ export const License: React.FC = () => {
             }
             
             await res.json();
-            alert('Activation successful! The application will now reload.');
-            window.location.reload();
+            alert('Activation successful! Redirecting to the dashboard.');
+            onActivationSuccess();
         } catch (err) {
             setError((err as Error).message);
         } finally {
