@@ -83,15 +83,52 @@ const handleApiRequest = async (req, res, action) => {
         }
     } catch (error) {
         const isAxiosError = !!error.isAxiosError;
-        console.error("API Request Error:", isAxiosError ? `[${error.config.method.toUpperCase()}] ${error.config.url} - ${error.message}` : error);
+        console.error("API Request Error:", isAxiosError && error.config ? `[${error.config.method.toUpperCase()}] ${error.config.url} - ${error.message}` : error);
+
         if (isAxiosError && error.response) {
+            // This block handles explicit API error responses from MikroTik (e.g., 400, 404, 500)
             console.error("Axios Response Data:", error.response.data);
             const status = error.response.status || 500;
             let message = `MikroTik REST API Error: ${error.response.data.message || 'Bad Request'}`;
             if (error.response.data.detail) message += ` - ${error.response.data.detail}`;
             res.status(status).json({ message });
         } else {
-            res.status(500).json({ message: error.message || 'An internal server error occurred.' });
+            // This block handles network-level errors where no response was received
+            let userMessage = 'An internal server error occurred.';
+            const config = error.config || {};
+            const baseURL = config.baseURL || '';
+
+            let host = 'the router';
+            let port = 'the specified port';
+            
+            try {
+                if (baseURL) {
+                    const url = new URL(baseURL);
+                    host = url.hostname;
+                    port = url.port;
+                } else if (error.address) {
+                    host = error.address;
+                } else if (error.hostname) {
+                    host = error.hostname;
+                }
+                
+                if (error.port) {
+                    port = error.port;
+                }
+            } catch (e) {
+                console.error("Could not parse host/port from error", e);
+            }
+
+            if (error.code === 'ECONNREFUSED') {
+                userMessage = `Connection refused at ${host}:${port}. Please verify the router's IP/port, ensure the API service (www/www-ssl) is enabled, and check for firewalls.`;
+            } else if (error.code === 'ENOTFOUND') {
+                userMessage = `Could not find router at "${host}". Please check that the IP address or hostname is correct and accessible.`;
+            } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED' || (error.message && error.message.toLowerCase().includes('timeout'))) {
+                userMessage = `Connection to ${host} timed out. The device may be offline or unreachable.`;
+            } else {
+                userMessage = error.message || userMessage;
+            }
+            res.status(500).json({ message: userMessage });
         }
     }
 };
