@@ -4,7 +4,6 @@ const fs = require('fs');
 const { exec } = require('child_process');
 const sqlite3 = require('@vscode/sqlite3');
 const { open } = require('sqlite');
-const esbuild = require('esbuild');
 const archiver = require('archiver');
 const fsExtra = require('fs-extra');
 const tar = require('tar');
@@ -951,27 +950,6 @@ panelAdminRouter.put('/roles/:roleId/permissions', requireAdmin, async (req, res
 
 
 app.use('/api', panelAdminRouter);
-
-
-// --- ESBuild Middleware for TS/TSX ---
-app.use(async (req, res, next) => {
-    if (req.path.endsWith('.tsx') || req.path.endsWith('.ts')) {
-        try {
-            const filePath = path.join(__dirname, '..', req.path);
-            const source = await fs.promises.readFile(filePath, 'utf8');
-            const result = await esbuild.transform(source, {
-                loader: req.path.endsWith('.tsx') ? 'tsx' : 'ts',
-                format: 'esm'
-            });
-            res.type('application/javascript').send(result.code);
-        } catch (error) {
-            console.error(`esbuild error: ${error}`);
-            res.status(500).send('Error compiling TypeScript file.');
-        }
-    } else {
-        next();
-    }
-});
 
 // --- API Endpoints ---
 
@@ -1948,12 +1926,26 @@ app.get('/api/restore-backup', protect, (req, res) => {
 
 
 // --- Static file serving ---
-app.use(express.static(path.join(__dirname, '..')));
+const distPath = path.join(__dirname, '..', 'dist');
 
-// SPA Fallback:
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
+// Serve env.js separately as it is not in the dist folder but is referenced by index.html
+app.get('/env.js', (req, res) => {
+    const envPath = path.join(__dirname, '..', 'env.js');
+    if (fs.existsSync(envPath)) {
+        res.sendFile(envPath);
+    } else {
+        // Fallback for production where it might not exist
+        res.type('application/javascript').send('window.process = { env: {} };');
+    }
 });
+
+app.use(express.static(distPath));
+
+// SPA Fallback: MUST be after all other routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+});
+
 
 // --- Start Server ---
 Promise.all([initDb(), initSuperadminDb()]).then(() => {
