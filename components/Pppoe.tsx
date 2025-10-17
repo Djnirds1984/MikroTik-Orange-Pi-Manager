@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { RouterConfigWithId, PppProfile, IpPool, PppProfileData, PppSecret, PppActiveConnection, SaleRecord, BillingPlanWithId, Customer, PppSecretData, PppServer, PppServerData, Interface } from '../types.ts';
 import { 
@@ -78,7 +80,8 @@ const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
         } catch (err) { alert(`Error deleting profile: ${(err as Error).message}`); }
     };
     
-    const ProfileFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
+    // FIX: Pass isSubmitting to disable save button during submission
+    const ProfileFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData, isSubmitting }) => {
         const [profile, setProfile] = useState<Partial<PppProfileData>>({ name: '', 'local-address': '', 'remote-address': '', 'rate-limit': '' });
         
         useEffect(() => {
@@ -123,7 +126,8 @@ const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
 
     return (
         <div>
-            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} />
+            {/* FIX: Pass isSubmitting prop to modal */}
+            <ProfileFormModal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setEditingProfile(null); }} onSave={handleSave} initialData={editingProfile} isSubmitting={isSubmitting} />
             <div className="flex justify-end mb-4">
                 <button onClick={() => { setEditingProfile(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">Add New Profile</button>
             </div>
@@ -143,6 +147,101 @@ const ProfilesManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sel
         </div>
     );
 }
+
+// FIX: Pass isSubmitting to disable save button during submission
+const UserFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData, plans, customers, isSubmitting }) => {
+    const [secret, setSecret] = useState({ name: '', password: '', profile: '' }); // profile is plan ID
+    const [customer, setCustomer] = useState({ fullName: '', address: '', contactNumber: '', email: '' });
+    const [showPass, setShowPass] = useState(false);
+
+    // This effect initializes the form state when the modal opens or the user-to-edit changes.
+    // It's designed to not overwrite user input if the component re-renders for other reasons.
+    useEffect(() => {
+        if (!isOpen) {
+            return;
+        }
+
+        if (initialData) {
+            const linkedCustomer = customers.find(c => c.username === initialData.name);
+            const linkedPlan = plans.find(p => p.pppoeProfile === initialData.profile);
+            
+            setSecret({ name: initialData.name, password: '', profile: linkedPlan?.id || '' });
+            setCustomer({ 
+                fullName: linkedCustomer?.fullName || '', 
+                address: linkedCustomer?.address || '', 
+                contactNumber: linkedCustomer?.contactNumber || '', 
+                email: linkedCustomer?.email || '' 
+            });
+        } else {
+            // Only set the initial state for a new user form.
+            setSecret({ name: '', password: '', profile: plans.length > 0 ? plans[0].id : '' });
+            setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
+        }
+    }, [isOpen, initialData]);
+
+    // This separate effect handles setting the default profile once plans are loaded,
+    // without re-clobbering the whole state.
+    useEffect(() => {
+        if (isOpen && !initialData && plans.length > 0 && !secret.profile) {
+            setSecret(s => ({...s, profile: plans[0].id}));
+        }
+    }, [isOpen, initialData, plans, secret.profile]);
+
+
+    if (!isOpen) return null;
+    
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const selectedPlan = plans.find(p => p.id === secret.profile);
+        
+        const secretPayload: PppSecretData = {
+            name: secret.name,
+            service: 'pppoe',
+            profile: initialData?.profile || 'default', // Default to original profile
+            comment: initialData?.comment || '',
+            disabled: initialData?.disabled || 'false',
+        };
+
+        if (selectedPlan) {
+            secretPayload.profile = selectedPlan.pppoeProfile;
+        }
+
+        if (secret.password) {
+            secretPayload.password = secret.password;
+        }
+        onSave(secretPayload, customer);
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+                <div className="p-6 overflow-y-auto">
+                     <h3 className="text-xl font-bold mb-4">{initialData ? `Edit User: ${initialData.name}` : 'Add New User'}</h3>
+                     <div className="space-y-4">
+                        <div><label>Username</label><input type="text" value={secret.name} onChange={e => setSecret(s => ({...s, name: e.target.value}))} disabled={!!initialData} required className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700 disabled:opacity-50" /></div>
+                        <div className="relative"><label>Password</label><input type={showPass ? 'text' : 'password'} value={secret.password} onChange={e => setSecret(s => ({...s, password: e.target.value}))} placeholder={initialData ? "Leave blank to keep old" : ""} required={!initialData} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-9">{showPass ? <EyeSlashIcon className="w-5 h-5"/> : <EyeIcon className="w-5 h-5"/>}</button></div>
+                        <div><label>Billing Plan</label><select value={secret.profile} onChange={e => setSecret(s => ({...s, profile: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700">
+                            <option value="">-- No Change --</option>
+                            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        </select></div>
+                        <hr className="my-4 border-slate-200 dark:border-slate-700" />
+                        <h4 className="font-semibold">Customer Information (Optional)</h4>
+                        <div><label>Full Name</label><input type="text" value={customer.fullName} onChange={e => setCustomer(c => ({...c, fullName: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                        <div><label>Full Address</label><input type="text" value={customer.address} onChange={e => setCustomer(c => ({...c, address: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label>Contact Number</label><input type="text" value={customer.contactNumber} onChange={e => setCustomer(c => ({...c, contactNumber: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                            <div><label>Email</label><input type="email" value={customer.email} onChange={e => setCustomer(c => ({...c, email: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
+                        </div>
+                     </div>
+                </div>
+                 <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3 flex-shrink-0"><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={isSubmitting}>Save</button></div>
+            </form>
+            </div>
+        </div>
+    )
+};
+
 
 // --- Users Management Sub-component ---
 const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (saleData: Omit<SaleRecord, 'id'>) => Promise<void> }> = ({ selectedRouter, addSale }) => {
@@ -266,91 +365,21 @@ const UsersManager: React.FC<{ selectedRouter: RouterConfigWithId, addSale: (sal
         }
     };
     
-    const UserFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
-        const [secret, setSecret] = useState({ name: '', password: '', profile: '' }); // profile is plan ID
-        const [customer, setCustomer] = useState({ fullName: '', address: '', contactNumber: '', email: '' });
-        const [showPass, setShowPass] = useState(false);
-
-        useEffect(() => {
-            if(isOpen) {
-                if (initialData) {
-                    const linkedCustomer = customers.find(c => c.username === initialData.name);
-                    const linkedPlan = plans.find(p => p.pppoeProfile === initialData.profile);
-                    
-                    setSecret({ name: initialData.name, password: '', profile: linkedPlan?.id || '' });
-                    setCustomer({ 
-                        fullName: linkedCustomer?.fullName || '', 
-                        address: linkedCustomer?.address || '', 
-                        contactNumber: linkedCustomer?.contactNumber || '', 
-                        email: linkedCustomer?.email || '' 
-                    });
-                } else {
-                    setSecret({ name: '', password: '', profile: plans.length > 0 ? plans[0].id : '' });
-                    setCustomer({ fullName: '', address: '', contactNumber: '', email: '' });
-                }
-            }
-        }, [isOpen, initialData, plans, customers]);
-
-        if (!isOpen) return null;
-        
-        const handleSubmit = (e: React.FormEvent) => {
-            e.preventDefault();
-            const selectedPlan = plans.find(p => p.id === secret.profile);
-            
-            const secretPayload: PppSecretData = {
-                name: secret.name,
-                service: 'pppoe',
-                profile: initialData?.profile || 'default', // Default to original profile
-                comment: initialData?.comment || '',
-                disabled: initialData?.disabled || 'false',
-            };
-
-            if (selectedPlan) {
-                secretPayload.profile = selectedPlan.pppoeProfile;
-            }
-
-            if (secret.password) {
-                secretPayload.password = secret.password;
-            }
-            onSave(secretPayload, customer);
-        }
-
-        return (
-            <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-                <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-                    <div className="p-6 overflow-y-auto">
-                         <h3 className="text-xl font-bold mb-4">{initialData ? `Edit User: ${initialData.name}` : 'Add New User'}</h3>
-                         <div className="space-y-4">
-                            <div><label>Username</label><input type="text" value={secret.name} onChange={e => setSecret(s => ({...s, name: e.target.value}))} disabled={!!initialData} required className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700 disabled:opacity-50" /></div>
-                            <div className="relative"><label>Password</label><input type={showPass ? 'text' : 'password'} value={secret.password} onChange={e => setSecret(s => ({...s, password: e.target.value}))} placeholder={initialData ? "Leave blank to keep old" : ""} required={!initialData} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /><button type="button" onClick={() => setShowPass(!showPass)} className="absolute right-3 top-9">{showPass ? <EyeSlashIcon className="w-5 h-5"/> : <EyeIcon className="w-5 h-5"/>}</button></div>
-                            <div><label>Billing Plan</label><select value={secret.profile} onChange={e => setSecret(s => ({...s, profile: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700">
-                                <option value="">-- No Change --</option>
-                                {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                            </select></div>
-                            <hr className="my-4 border-slate-200 dark:border-slate-700" />
-                            <h4 className="font-semibold">Customer Information (Optional)</h4>
-                            <div><label>Full Name</label><input type="text" value={customer.fullName} onChange={e => setCustomer(c => ({...c, fullName: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
-                            <div><label>Full Address</label><input type="text" value={customer.address} onChange={e => setCustomer(c => ({...c, address: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div><label>Contact Number</label><input type="text" value={customer.contactNumber} onChange={e => setCustomer(c => ({...c, contactNumber: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
-                                <div><label>Email</label><input type="email" value={customer.email} onChange={e => setCustomer(c => ({...c, email: e.target.value}))} className="mt-1 w-full p-2 rounded-md bg-slate-100 dark:bg-slate-700" /></div>
-                            </div>
-                         </div>
-                    </div>
-                     <div className="bg-slate-50 dark:bg-slate-900/50 px-6 py-3 flex justify-end gap-3 flex-shrink-0"><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={isSubmitting}>Save</button></div>
-                </form>
-                </div>
-            </div>
-        )
-    };
-    
     if (isLoading) return <div className="flex justify-center p-8"><Loader /></div>;
     if (error) return <div className="p-4 text-red-600">{error}</div>;
 
     return (
         <div>
-            <UserFormModal isOpen={isUserModalOpen} onClose={() => setUserModalOpen(false)} onSave={handleSaveUser} initialData={selectedSecret} />
+            {/* FIX: Pass isSubmitting prop to modal */}
+            <UserFormModal 
+                isOpen={isUserModalOpen} 
+                onClose={() => setUserModalOpen(false)} 
+                onSave={handleSaveUser} 
+                initialData={selectedSecret} 
+                plans={plans} 
+                customers={customers}
+                isSubmitting={isSubmitting}
+            />
             <PaymentModal isOpen={isPaymentModalOpen} onClose={() => setPaymentModalOpen(false)} secret={selectedSecret} plans={plans} profiles={profiles} onSave={handlePayment} companySettings={companySettings} />
 
              <div className="flex justify-end mb-4">
@@ -450,7 +479,8 @@ const ServersManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sele
         }
     };
     
-    const ServerFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData }) => {
+    // FIX: Pass isSubmitting to disable save button during submission
+    const ServerFormModal: React.FC<any> = ({ isOpen, onClose, onSave, initialData, isSubmitting }) => {
         const [server, setServer] = useState<PppServerData>({ 'service-name': '', interface: '', 'default-profile': '', authentication: ['pap', 'chap', 'mschap1', 'mschap2'], disabled: 'false' });
         
         useEffect(() => {
@@ -518,7 +548,8 @@ const ServersManager: React.FC<{ selectedRouter: RouterConfigWithId }> = ({ sele
 
     return (
         <div>
-            <ServerFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingServer} />
+            {/* FIX: Pass isSubmitting prop to modal */}
+            <ServerFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} initialData={editingServer} isSubmitting={isSubmitting} />
             <div className="flex justify-end mb-4"><button onClick={() => { setEditingServer(null); setIsModalOpen(true); }} className="bg-[--color-primary-600] text-white font-bold py-2 px-4 rounded-lg">{t('pppoe.add_new_server')}</button></div>
             <div className="bg-white dark:bg-slate-800 rounded-lg shadow-md overflow-hidden">
                 <table className="w-full text-sm"><thead className="text-xs uppercase bg-slate-50 dark:bg-slate-900/50">
